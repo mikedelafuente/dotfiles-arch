@@ -220,6 +220,12 @@ bash "$DF_SCRIPT_DIR/setup-node.sh"
 # Setup GitHub CLI and Copilot CLI
 bash "$DF_SCRIPT_DIR/setup-github-cli.sh"
 
+# Setup Hyprland UI
+bash "$DF_SCRIPT_DIR/setup-hyprland.sh"
+
+# Link dotfiles
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh"
+
 # --------------------------
 # Clean Up
 # --------------------------
