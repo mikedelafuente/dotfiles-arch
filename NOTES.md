@@ -1,5 +1,17 @@
 # Install Notes
 
+To save the config to persistent storage, mount a USB drive:
+
+```shell
+mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb;
+```
+
+You can use that same medium to replicate the installation by runn from the usb stick
+
+```shell
+mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb && archinstall --config /mnt/usb/user_configuration.json --creds /mnt/usb/user_credentials.json;
+```
+
 To get Arch up and running into Hyperland run:
 ./post_install.sh
 
