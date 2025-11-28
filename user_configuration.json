@@ -60,7 +60,8 @@
         "github-cli",
         "tldr",
         "fastfetch",
-        "zoxide"
+        "zoxide",
+        "neovim"
     ],
     "parallel_downloads": 0,
     "profile_config": {

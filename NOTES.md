@@ -18,6 +18,12 @@ Alternately, you can leverage the presaved file on http://archconfig.weekendproj
 archinstall --config-url http://archconfig.weekendproject.app/
 ```
 
+You need to set:
+- Disk Configuration
+- Hostname
+- Authentication
+
+
 You can get some extra information about what drives were inserted using `dmesg`
 
 You can unmount via `umount /mnt/usb`

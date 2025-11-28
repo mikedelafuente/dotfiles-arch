@@ -109,6 +109,38 @@ fi
 DF_SCRIPT_DIR="$CURRENT_FILE_DIR"
 
 # --------------------------
+# Allow multilib in pacman
+# --------------------------
+
+PACMAN_CONF="/etc/pacman.conf"
+PACMAN_CHANGES_MADE=false
+
+if [ ! -f "$PACMAN_CONF" ]; then
+    echo "Error: $PACMAN_CONF not found."
+    exit 1
+fi
+
+if grep -q "^\[multilib\]" "$PACMAN_CONF"; then
+    echo "[multilib] is already enabled in $PACMAN_CONF"
+else
+    if grep -q "^#\[multilib\]" "$PACMAN_CONF"; then
+        sudo sed -i '/^#\[multilib\]/{ s/^#// n s/^#// }' "$PACMAN_CONF"
+        echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
+        PACMAN_CHANGES_MADE=true
+    else
+        echo "[multilib] section not found in $PACMAN_CONF"
+    fi
+fi
+
+if [ "$PACMAN_CHANGES_MADE" = true ]; then
+    echo "Running pacman -Syu to update package database..."
+    sudo pacman -Syu
+fi
+
+# To check the display Manager
+# 
+
+# --------------------------
 # Update System Packages
 # --------------------------
 
@@ -120,10 +152,10 @@ CURRENT_TIME=$(date +%s)
 TIME_DIFF=$((CURRENT_TIME - LAST_PACMAN_UPDATE))
 
 # If more than 1 day (86400 seconds) has passed since the last update, perform update
-if [ "$TIME_DIFF" -lt 86400 ]; then
+if [ "$TIME_DIFF" -lt 86400 ] && [ "$PACMAN_CHANGES_MADE" = false ]; then
     print_info_message "Last Pacman update was less than a day ago. Skipping update."
 else
-    print_info_message "Last Pacman update was more than a day ago. Performing update."
+    print_info_message "Last Pacman update was more than a day ago or changes to pacman.conf was made. Performing update."
     sudo pacman -Sy #|| true
     # Write a file to ~/.last_pacman_update with the current timestamp
     echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_update"
