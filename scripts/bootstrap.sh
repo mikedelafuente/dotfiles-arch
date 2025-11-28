@@ -183,7 +183,7 @@ fi
 		cd "$USER_HOME_DIR" || exit 1
 		git clone https://aur.archlinux.org/yay.git
 		cd yay || exit 1
-		sudo pacman -S --needed base-devel
+		sudo pacman -S --needed --noconfirm base-devel
 		makepkg -si
 		cd "$USER_HOME_DIR" || exit 1
 		rm -rf yay

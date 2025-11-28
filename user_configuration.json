@@ -61,7 +61,9 @@
         "tldr",
         "fastfetch",
         "zoxide",
-        "neovim"
+        "neovim",
+        "nodejs",
+        "npm"
     ],
     "parallel_downloads": 0,
     "profile_config": {
