@@ -17,57 +17,8 @@
                 "type": "Timeshift"
             }
         },
-        "config_type": "default_layout",
-       "lvm_config": {
-            "config_type": "default",
-            "vol_groups": [
-                {
-                    "lvm_pvs": [
-                        "af7d7ddc-ae40-4987-bf67-63ab950c8d5d"
-                    ],
-                    "name": "ArchinstallVg",
-                    "volumes": [
-                        {
-                            "btrfs": [
-                                {
-                                    "mountpoint": "/",
-                                    "name": "@"
-                                },
-                                {
-                                    "mountpoint": "/home",
-                                    "name": "@home"
-                                },
-                                {
-                                    "mountpoint": "/var/log",
-                                    "name": "@log"
-                                },
-                                {
-                                    "mountpoint": "/var/cache/pacman/pkg",
-                                    "name": "@pkg"
-                                }
-                            ],
-                            "fs_type": "btrfs",
-                            "length": {
-                                "sector_size": {
-                                    "unit": "B",
-                                    "value": 512
-                                },
-                                "unit": "GiB",
-                                "value": 20
-                            },
-                            "mount_options": [
-                                "compress=zstd"
-                            ],
-                            "mountpoint": "/",
-                            "name": "root",
-                            "obj_id": "d5279656-6ac9-48ce-839f-618523302fb5",
-                            "status": "create"
-                        }
-                    ]
-                }
-            ]
-        }
-    },
+        "config_type": "default_layout"
+   },
     "hostname": "builder0",
     "kernels": [
         "linux"
