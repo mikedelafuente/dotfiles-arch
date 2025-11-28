@@ -180,10 +180,13 @@ fi
 {
 	if ! command -v yay &> /dev/null; then
 		echo "Installing yay"
+		cd "$USER_HOME_DIR" || exit 1
 		git clone https://aur.archlinux.org/yay.git
-		cd ~/yay
-		sudo pacman -S base-devel
+		cd yay || exit 1
+		sudo pacman -S --needed base-devel
 		makepkg -si
+		cd "$USER_HOME_DIR" || exit 1
+		rm -rf yay
 	fi
 }
 
