@@ -23,6 +23,8 @@ sudo sed -i '/^#\[multilib\]/{
 
 echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
 
+# To check the display Manager
+# 
 
 # Update pacman
 sudo pacman -Syu

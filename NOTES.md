@@ -9,8 +9,14 @@ mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb;
 You can use that same medium to replicate the installation by runn from the usb stick
 
 ```shell
-mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb && archinstall --config /mnt/usb/user_configuration.json --creds /mnt/usb/user_credentials.json;
+mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb && archinstall --config /mnt/usb/dotfiles-arch/user_configuration.json --creds /mnt/usb/dotfiles-arch/user_credentials.json;
 ```
+
+You can get some extra information about what drives were inserted using `dmesg`
+
+You can unmount via `umount /mnt/usb`
+
+
 
 To get Arch up and running into Hyperland run:
 ./post_install.sh
