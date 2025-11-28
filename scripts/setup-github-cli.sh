@@ -66,7 +66,7 @@ else
     fi
     
     # Install GitHub Copilot CLI globally
-    npm install -g @githubnext/github-copilot-cli
+    sudo npm install -g @githubnext/github-copilot-cli
     
     if command -v github-copilot-cli &> /dev/null; then
         print_success_message "GitHub Copilot CLI installed successfully!"
