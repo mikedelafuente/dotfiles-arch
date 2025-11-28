@@ -8,18 +8,14 @@
         }
     },
     "archinstall-language": "English",
-    "auth_config": {},
+    "auth_config": null,
     "bootloader": "Grub",
     "custom_commands": [],
     "disk_config": {
-        "btrfs_options": {
-            "snapshot_config": {
-                "type": "Timeshift"
-            }
-        },
-        "config_type": "default_layout"
+        "config_type": "default_layout",
+        "device_modifications": []
    },
-    "hostname": "builder0",
+    "hostname": null,
     "kernels": [
         "linux"
     ],
