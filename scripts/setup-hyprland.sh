@@ -24,7 +24,7 @@ fi
 # --------------------------
 # Install Waybar & font awesome
 # --------------------------
-sudo pacman -S waybar otf-font-awesome hyprpaper hyprshot swaync firefox --noconfirm
+sudo pacman -S waybar otf-font-awesome hyprpaper hyprshot hyprlock hypridle swaync firefox --noconfirm
 
 
 

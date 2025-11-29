@@ -29,7 +29,7 @@ fi
 print_tool_setup_start "Essential Packages"
 
 # make sure to call these out these installed tools in the .bashrc aliases and functions as well
-ESSENTIAL_PACKAGES=(git curl wget xsel fzf ripgrep fd bat htop ncdu tree jq tmux net-tools btop duf stow shellcheck github-cli tldr fastfetch zoxide)
+ESSENTIAL_PACKAGES=(git curl wget xsel fzf ripgrep fd bat htop ncdu tree jq tmux net-tools btop duf stow shellcheck github-cli tldr fastfetch zoxide linux-firmware-intel)
 print_line_break "Installing essential packages"
 
 for package in "${ESSENTIAL_PACKAGES[@]}"; do
