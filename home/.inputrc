@@ -1,0 +1,19 @@
+# ============================================================================
+# Readline Configuration (.inputrc)
+# ============================================================================
+# Controls behavior of command line editing and completion
+# See: man readline
+# ============================================================================
+
+
+
+# -------------------------
+# Mode-specific Settings
+# -------------------------
+
+# Settings for Emacs mode
+$if mode=emacs
+    # Meta key bindings (Alt+key)
+    "\e\C-h": backward-kill-word  # Alt+Ctrl+H - delete word backward
+    "\e\C-?": backward-kill-word  # Alt+Backspace - delete word backward
+$endif

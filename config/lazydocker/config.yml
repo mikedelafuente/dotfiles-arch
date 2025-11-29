@@ -1,0 +1,21 @@
+version: '1.0'
+settings:
+  theme: "dark"
+  refreshInterval: 5
+  showImages: true
+  showContainers: true
+  showVolumes: true
+  showNetworks: true
+  showImages: true
+  showBuilds: true
+  showLogs: true
+  showStats: true
+  showServices: true
+  showSecrets: true
+  showConfigs: true
+  showOrphans: true
+  showStopped: true
+  showAll: false
+  autoRefresh: true
+  autoRefreshInterval: 10
+  defaultView: "containers"
