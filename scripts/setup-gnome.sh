@@ -45,8 +45,16 @@ yay -S --noconfirm --needed \
 # --------------------------
 # Change how sound power works in order to stop popping
 # --------------------------
-print_info_message "Disabling audio power saving to prevent popping sounds"
-echo "options snd_hda_intel power_save=0" | sudo tee /etc/modprobe.d/audio_disable_powersave.conf > /dev/null
+
+# Only disable audio power saving on desktops (systems without batteries)
+if [ -d /sys/class/power_supply/BAT* ] 2>/dev/null || [ -d /sys/class/power_supply/battery ] 2>/dev/null; then
+    print_info_message "Battery detected - keeping audio power saving enabled for better battery life"
+    print_info_message "If you experience audio popping, you can manually disable with:"
+    print_info_message "  echo 'options snd_hda_intel power_save=0' | sudo tee /etc/modprobe.d/audio_disable_powersave.conf"
+else
+    print_info_message "No battery detected (desktop system) - disabling audio power saving to prevent popping sounds"
+    echo "options snd_hda_intel power_save=0" | sudo tee /etc/modprobe.d/audio_disable_powersave.conf > /dev/null
+fi
 
 # --------------------------
 # Install Catppuccin GTK Theme
