@@ -20,7 +20,7 @@ else
     # Format: "window_name:command:split_command:split_percentage"
     # split_percentage is optional (e.g., "80" means main pane gets 80%)
     LAYOUT=(
-        "nvim:nvim:bash:80"
+        "nvim:nvim:bash:10"
         "lazygit:lazygit"
         "claude:claude"
     )
@@ -68,6 +68,9 @@ echo "Creating new session '$SESSION_NAME' for $TARGET_DIR"
 # Create new tmux session (detached)
 tmux new-session -d -s "$SESSION_NAME" -c "$TARGET_DIR"
 
+# Get the pane-base-index setting from tmux (usually 0 or 1)
+pane_base_index=$(tmux show-option -gv pane-base-index 2>/dev/null || echo "0")
+
 # Create windows based on layout configuration
 first_window=true
 current_window=""
@@ -104,11 +107,17 @@ for layout_spec in "${LAYOUT[@]}"; do
         # Create horizontal split (top-bottom) in current window
         tmux split-window -t "$SESSION_NAME:$current_window" -v $pane_height -c "$TARGET_DIR"
 
-        # Send command to the bottom pane (pane 1 in this window)
-        tmux send-keys -t "$SESSION_NAME:$current_window.1" "$split_cmd" C-m
+        # Calculate pane indices based on pane-base-index
+        # If pane_base_index=1, panes are 1 and 2
+        # If pane_base_index=0, panes are 0 and 1
+        first_pane=$pane_base_index
+        second_pane=$((pane_base_index + 1))
+
+        # Send command to the bottom pane (second pane)
+        tmux send-keys -t "$SESSION_NAME:$current_window.$second_pane" "$split_cmd" C-m
 
         # Focus on the first pane (top pane with main command)
-        tmux select-pane -t "$SESSION_NAME:$current_window.0"
+        tmux select-pane -t "$SESSION_NAME:$current_window.$first_pane"
     fi
 done
 
