@@ -152,7 +152,7 @@ fi
 print_info_message "Setting up wallpaper rotation script"
 mkdir -p "$(dirname "$WALLPAPER_SCRIPT")"
 
-WALLPAPER_SCRIPT_SOURCE="$SCRIPT_DIR/../home/.local/bin/rotate-wallpaper.sh"
+WALLPAPER_SCRIPT_SOURCE="$CURRENT_FILE_DIR/../home/.local/bin/rotate-wallpaper.sh"
 
 # Remove existing file or symlink
 if [ -L "$WALLPAPER_SCRIPT" ] || [ -f "$WALLPAPER_SCRIPT" ]; then
@@ -223,7 +223,7 @@ CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-key
 # Set the custom keybinding
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH name 'Rotate Wallpaper'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh &"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH binding '<Super>w'
 
 # --------------------------
