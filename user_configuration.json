@@ -28,7 +28,9 @@
         "custom_repositories": [],
         "custom_servers": [],
         "mirror_regions": {},
-        "optional_repositories": []
+        "optional_repositories": [
+            "multilib"
+        ]
     },
     "network_config": {
         "type": "nm"
