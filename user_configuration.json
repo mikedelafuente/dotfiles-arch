@@ -70,7 +70,7 @@
     "parallel_downloads": 0,
     "profile_config": {
         "gfx_driver": "Nvidia (open kernel module for newer GPUs, Turing+)",
-        "greeter": "ly",
+        "greeter": "gdm",
         "profile": {
             "custom_settings": {
                 "GNOME": {},

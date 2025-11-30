@@ -5,7 +5,7 @@
 #
 # Determine if we are running with sudo, and if so get the actual user's home directory
 if [ "$(whoami)" != "${SUDO_USER:-$(whoami)}" ]; then
-    USER_HOME_DIR=$(eval echo ~${SUDO_USER})
+    USER_HOME_DIR=$(eval echo "~${SUDO_USER}")
 else
     USER_HOME_DIR="$HOME"
 fi
@@ -21,7 +21,6 @@ if [ -r "$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config" ]; then
 else
   echo "Configuration file not found. Setting based on System User."
   FULL_NAME=""$(getent passwd "$(whoami)" | cut -d ':' -f 5 | cut -d ',' -f 1)""
-  DOTNET_CORE_SDK_VERSION="9.0"
 fi
 
 # Prompt for full name
@@ -228,7 +227,7 @@ bash "$DF_SCRIPT_DIR/setup-github-cli.sh"
 bash "$DF_SCRIPT_DIR/setup-python.sh"
 
 # Setup Fonts
-# bash "$DF_SCRIPT_DIR/setup-fonts.sh"
+bash "$DF_SCRIPT_DIR/setup-fonts.sh"
 
 # Setup Bash
 # bash "$DF_SCRIPT_DIR/setup-bash.sh"
