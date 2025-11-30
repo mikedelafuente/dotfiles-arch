@@ -30,10 +30,10 @@ print_tool_setup_start "Kitty"
 # Install Kitty
 # --------------------------
 
-# Install Kitty using yay
+# Install Kitty using pacman
 if ! command -v kitty &> /dev/null; then
-    print_info_message "Installing Kitty via yay"
-    yay -S --needed --noconfirm kitty
+    print_info_message "Installing Kitty via pacman"
+    sudo pacman -S --needed --noconfirm kitty
 else
     print_info_message "Kitty is already installed. Skipping installation."
 fi

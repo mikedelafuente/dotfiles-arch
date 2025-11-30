@@ -33,7 +33,7 @@ else
     print_info_message "Installing Go from official Arch repositories"
 
     # Install Golang
-    yay -S --needed --noconfirm go
+    sudo pacman -S --needed --noconfirm go
 fi
 
 # Print Golang version
@@ -47,9 +47,9 @@ EXTRA_GO_PACKAGES=(
 )
 
 for package in "${EXTRA_GO_PACKAGES[@]}"; do
-    if ! yay -Qi "$package" &> /dev/null; then
+    if ! pacman -Qi "$package" &> /dev/null; then
         print_info_message "Installing $package"
-        yay -S --needed --noconfirm "$package"
+        sudo pacman -S --needed --noconfirm "$package"
     else
         print_info_message "$package is already installed. Skipping."
     fi

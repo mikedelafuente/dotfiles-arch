@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Git and SSH Keys for Fedora KDE
+# Setup Git and SSH Keys for Arch Linux
 # --------------------------
 
 # --------------------------
@@ -56,10 +56,10 @@ print_tool_setup_start "Git"
 # Ensure Git is Installed
 # --------------------------
 
-# Install Git if not already installed (usually pre-installed on Fedora)
+# Install Git if not already installed
 if ! command -v git &> /dev/null; then
-    print_info_message "Git not found. Installing Git via DNF"
-    sudo pacman -S git --noconfirm
+    print_info_message "Git not found. Installing Git via pacman"
+    sudo pacman -S --needed --noconfirm git
 else
     print_info_message "Git is already installed (version: $(git --version))"
 fi
@@ -120,8 +120,8 @@ fi
 # --------------------------
 print_info_message "Checking for lazygit installation"
 if ! command -v lazygit &> /dev/null; then
-    print_info_message "lazygit not found. Installing lazygit via dnf"
-    sudo pacman -S lazygit --noconfirm
+    print_info_message "lazygit not found. Installing lazygit via pacman"
+    sudo pacman -S --needed --noconfirm lazygit
 else
     print_info_message "lazygit is already installed (version: $(lazygit --version))"
 fi

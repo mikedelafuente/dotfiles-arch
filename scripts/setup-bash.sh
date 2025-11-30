@@ -57,8 +57,8 @@ fi
 
 # Install Starship prompt for Bash
 if ! command -v starship &> /dev/null; then
-    print_info_message "Installing Starship prompt for Bash via yay"
-    yay -S --needed --noconfirm starship
+    print_info_message "Installing Starship prompt for Bash via pacman"
+    sudo pacman -S --needed --noconfirm starship
 else
     print_info_message "Starship prompt is already installed. Skipping installation."
 fi

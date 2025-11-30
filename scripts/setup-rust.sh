@@ -47,10 +47,10 @@ print_tool_setup_start "Rust and Cargo"
 
 # Check if Rust is already installed
 if ! command -v cargo &> /dev/null; then
-    print_info_message "Installing rustup via yay"
+    print_info_message "Installing rustup via pacman"
 
     # Install rustup from Arch repositories
-    yay -S --needed --noconfirm rustup
+    sudo pacman -S --needed --noconfirm rustup
 
     # Run rustup-init to complete the installation
     print_info_message "Running rustup-init to install Rust toolchain"

@@ -33,10 +33,10 @@ ESSENTIAL_PACKAGES=(git curl wget xsel fzf ripgrep fd bat htop ncdu tree jq tmux
 print_line_break "Installing essential packages"
 
 for package in "${ESSENTIAL_PACKAGES[@]}"; do
-    # Use rpm -q to check if package is actually installed (more reliable than dnf list installed)
+    # Check if package is installed using pacman
     if ! pacman -Q "$package" &> /dev/null; then
         print_info_message "Installing $package"
-        sudo pacman -S "$package" --noconfirm
+        sudo pacman -S --needed --noconfirm "$package"
         
         # Verify installation succeeded
         if pacman -Q "$package" &> /dev/null; then

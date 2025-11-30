@@ -47,7 +47,7 @@ if [ ! -d "$USER_HOME_DIR/.nvm" ]; then
     # Ensure curl is installed (required for NVM installation)
     if ! command -v curl &> /dev/null; then
         print_info_message "Installing curl (required for NVM installation)"
-        yay -S --noconfirm --needed curl
+        sudo pacman -S --needed --noconfirm curl
     fi
     
     # Download and run the NVM installation script

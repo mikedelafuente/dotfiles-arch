@@ -42,20 +42,20 @@ declare -A NERD_FONTS=(
 
 FONTS_UPDATED=false
 
-print_info_message "Installing Nerd Fonts via yay from AUR"
+print_info_message "Installing Nerd Fonts from official Arch repositories"
 
 # Iterate through the array and install each font
 for FONT_NAME in "${!NERD_FONTS[@]}"; do
     PACKAGE_NAME="${NERD_FONTS[$FONT_NAME]}"
 
     # Check if package is already installed
-    if yay -Qi "$PACKAGE_NAME" &> /dev/null; then
+    if pacman -Qi "$PACKAGE_NAME" &> /dev/null; then
         print_info_message "$FONT_NAME Nerd Font ($PACKAGE_NAME) already installed. Skipping."
     else
         print_info_message "Installing $FONT_NAME Nerd Font ($PACKAGE_NAME)"
 
-        # Install font via yay (--needed skips if already installed, --noconfirm for non-interactive)
-        if yay -S --needed --noconfirm "$PACKAGE_NAME"; then
+        # Install font via pacman (--needed skips if already installed, --noconfirm for non-interactive)
+        if sudo pacman -S --needed --noconfirm "$PACKAGE_NAME"; then
             print_info_message "$FONT_NAME Nerd Font installed successfully"
             FONTS_UPDATED=true
         else

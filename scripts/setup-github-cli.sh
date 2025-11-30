@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------
-# GitHub CLI and Copilot CLI Setup for Fedora
+# GitHub CLI and Copilot CLI Setup for Arch Linux
 # -------------------------
 
 
@@ -37,8 +37,8 @@ if command -v gh &> /dev/null; then
     gh --version
 else
     print_action_message "Installing GitHub CLI (gh)..."
-    
-    sudo pacman -S github-cli
+
+    sudo pacman -S --needed --noconfirm github-cli
     
     if command -v gh &> /dev/null; then
         print_success_message "GitHub CLI installed successfully!"

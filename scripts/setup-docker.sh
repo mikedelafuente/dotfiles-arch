@@ -32,10 +32,10 @@ print_tool_setup_start "Docker"
 
 # Uninstall old versions of Docker and Podman packages if they exist
 print_info_message "Removing old Docker/Podman versions if present"
-yay -R --noconfirm docker \
-                   docker-compose \
-                   podman \
-                   podman-docker 2>/dev/null || true
+sudo pacman -R --noconfirm docker \
+                           docker-compose \
+                           podman \
+                           podman-docker 2>/dev/null || true
 
 # --------------------------
 # Check if Docker is Already Installed
@@ -56,7 +56,7 @@ fi
 
 # Install Docker Engine and related packages from official Arch repos
 print_info_message "Installing Docker Engine, CLI, and plugins"
-yay -S --noconfirm --needed docker docker-compose docker-buildx
+sudo pacman -S --needed --noconfirm docker docker-compose docker-buildx
 # --------------------------
 # Configure and Start Docker Service
 # --------------------------
@@ -85,8 +85,8 @@ sudo usermod -aG docker "$TARGET_USER"
 # --------------------------
 
 if ! command -v lazydocker &> /dev/null; then
-    print_info_message "Installing lazydocker from AUR"
-    yay -S --noconfirm --needed lazydocker
+    print_info_message "Installing lazydocker from official repos"
+    sudo pacman -S --needed --noconfirm lazydocker
 else
     print_info_message "lazydocker is already installed. Skipping installation."
 fi

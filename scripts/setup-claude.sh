@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Alacritty Terminal for Fedora KDE
+# Setup Claude Code CLI for Arch Linux
 # --------------------------
 
 # --------------------------

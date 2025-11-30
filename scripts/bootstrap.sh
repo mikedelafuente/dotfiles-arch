@@ -170,7 +170,7 @@ if [ "$TIME_DIFF" -lt 86400 ]; then
 else
     print_info_message "Last Pacman upgrade was more than a day ago. Performing upgrade."
     sudo pacman -Su
-    # Write a file to ~/.last_dnf_upgrade with the current timestamp
+    # Write a file to ~/.last_pacman_upgrade with the current timestamp
     echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_upgrade"
 fi
 

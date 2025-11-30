@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------
-# Link Dotfiles Script for Fedora KDE
+# Link Dotfiles Script for Arch Linux
 # This script creates symbolic links from the dotfiles repository to your home directory
 # -------------------------
 

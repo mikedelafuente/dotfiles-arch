@@ -43,7 +43,7 @@ if ! command -v nvim &> /dev/null; then
     print_info_message "Neovim is not installed. Installing Neovim."
 
     # Install Neovim from Arch repositories
-    yay -S --needed --noconfirm neovim
+    sudo pacman -S --needed --noconfirm neovim
 else
     print_info_message "Neovim is already installed. Skipping installation."
 fi
@@ -60,14 +60,14 @@ print_info_message "Installing dependencies for Neovim plugins"
 # Install fd and ripgrep (required by Telescope)
 if ! command -v fd &> /dev/null; then
     print_info_message "Installing fd"
-    yay -S --needed --noconfirm fd
+    sudo pacman -S --needed --noconfirm fd
 else
     print_info_message "fd is already installed."
 fi
 
 if ! command -v rg &> /dev/null; then
     print_info_message "Installing ripgrep"
-    yay -S --needed --noconfirm ripgrep
+    sudo pacman -S --needed --noconfirm ripgrep
 else
     print_info_message "ripgrep is already installed."
 fi
@@ -75,14 +75,14 @@ fi
 # Install gcc and make (required for telescope-fzf-native and treesitter)
 if ! command -v gcc &> /dev/null; then
     print_info_message "Installing gcc"
-    yay -S --needed --noconfirm gcc
+    sudo pacman -S --needed --noconfirm gcc
 else
     print_info_message "gcc is already installed."
 fi
 
 if ! command -v make &> /dev/null; then
     print_info_message "Installing make"
-    yay -S --needed --noconfirm make
+    sudo pacman -S --needed --noconfirm make
 else
     print_info_message "make is already installed."
 fi
@@ -99,7 +99,7 @@ fi
 # Install Python support for Neovim
 if ! pacman -Qi python-pynvim &> /dev/null; then
     print_info_message "Installing python-pynvim for Python support in Neovim"
-    yay -S --needed --noconfirm python-pynvim
+    sudo pacman -S --needed --noconfirm python-pynvim
 else
     print_info_message "python-pynvim is already installed."
 fi

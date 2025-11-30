@@ -33,7 +33,7 @@ else
     print_info_message "Installing Python from official Arch repositories"
 
     # Install Python
-    yay -S --noconfirm python
+    sudo pacman -S --needed --noconfirm python
 fi
 
 # Print Python version
@@ -44,7 +44,7 @@ if command -v pip3 &> /dev/null; then
     print_info_message "pip is already installed. Skipping installation."
 else
     print_info_message "Installing pip for Python"
-    yay -S --noconfirm python-pip
+    sudo pacman -S --needed --noconfirm python-pip
 fi
 
 print_tool_setup_complete "Python"

@@ -58,15 +58,15 @@ if ! command -v steam &> /dev/null; then
     print_info_message "Installing Steam from multilib repository"
 
     # Install Steam
-    yay -S --noconfirm --needed steam
+    sudo pacman -S --needed --noconfirm steam
 
     print_info_message "Steam installed successfully"
     print_info_message "You can launch Steam from your application menu or run: steam"
     echo ""
     print_info_message "To update Steam in the future, run:"
-    print_info_message "  yay -S steam"
+    print_info_message "  sudo pacman -S steam"
     print_info_message "Or update all packages with:"
-    print_info_message "  yay -Syu"
+    print_info_message "  sudo pacman -Syu"
     echo ""
     print_info_message "Note: Steam may require additional setup for optimal gaming:"
     print_info_message "  - Enable Proton for Windows games in Steam settings"
