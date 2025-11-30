@@ -43,6 +43,12 @@ yay -S --noconfirm --needed \
     dconf-editor
 
 # --------------------------
+# Change how sound power works in order to stop popping
+# --------------------------
+print_info_message "Disabling audio power saving to prevent popping sounds"
+echo "options snd_hda_intel power_save=0" | sudo tee /etc/modprobe.d/audio_disable_powersave.conf > /dev/null
+
+# --------------------------
 # Install Catppuccin GTK Theme
 # --------------------------
 
