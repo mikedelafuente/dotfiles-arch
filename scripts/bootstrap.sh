@@ -259,6 +259,9 @@ bash "$DF_SCRIPT_DIR/setup-node.sh"
 # Install Claude Code CLI
 bash "$DF_SCRIPT_DIR/setup-claude.sh"
 
+# Setup Code Command (development environment launcher)
+bash "$DF_SCRIPT_DIR/setup-code.sh"
+
 # Install PHP
 bash "$DF_SCRIPT_DIR/setup-php.sh"
 

@@ -253,6 +253,10 @@ gsettings set org.gnome.shell.extensions.pop-shell gap-outer 4
 gsettings set org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
 gsettings set org.gnome.shell.extensions.pop-shell active-hint true
 
+# Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher)
+print_info_message "Clearing Pop Shell keybindings that conflict with Hyprland-style shortcuts"
+gsettings set org.gnome.shell.extensions.pop-shell tile-enter "[]"
+
 # --------------------------
 # Clear Conflicting Default Keybindings
 # --------------------------

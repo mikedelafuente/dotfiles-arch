@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# code - Open a development environment in kitty + tmux
+# Usage: code [directory]
+#   directory: Path to project directory (defaults to current directory)
+
+set -e
+
+# Configuration
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/code/config.sh"
+DEFAULT_SESSION_NAME="dev"
+
+# Load configuration if it exists
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+else
+    # Default configuration (used if config file doesn't exist)
+    TERMINAL="kitty"
+    SESSION_NAME="${SESSION_NAME:-$DEFAULT_SESSION_NAME}"
+
+    # Default layout: array of window definitions
+    # Format: "window_name:command:split_command:split_percentage"
+    # split_percentage is optional (e.g., "80" means main pane gets 80%)
+    LAYOUT=(
+        "nvim:nvim:bash:80"
+        "lazygit:lazygit"
+        "claude:claude"
+    )
+fi
+
+# Parse arguments
+TARGET_DIR="${1:-.}"
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)" # Get absolute path
+
+# Check if required tools are installed
+check_dependency() {
+    if ! command -v "$1" &> /dev/null; then
+        echo "Error: $1 is not installed"
+        exit 1
+    fi
+}
+
+check_dependency tmux
+check_dependency "$TERMINAL"
+
+# Check if session already exists
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "Session '$SESSION_NAME' already exists."
+    read -p "Attach to existing session? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ -n "$TMUX" ]]; then
+            tmux switch-client -t "$SESSION_NAME"
+        else
+            exec "$TERMINAL" -e tmux attach-session -t "$SESSION_NAME"
+        fi
+        exit 0
+    else
+        echo "Exiting without attaching."
+        exit 0
+    fi
+fi
+
+# Create new tmux session (detached)
+tmux new-session -d -s "$SESSION_NAME" -c "$TARGET_DIR"
+
+# Get the base-index setting from tmux (usually 0 or 1)
+base_index=$(tmux show-option -gv base-index 2>/dev/null || echo "0")
+
+# Create windows based on layout configuration
+window_index=$base_index
+first_window=true
+
+for layout_spec in "${LAYOUT[@]}"; do
+    IFS=':' read -r window_name command split_cmd split_pct <<< "$layout_spec"
+
+    if $first_window; then
+        # Use the first window created by new-session
+        tmux rename-window -t "$SESSION_NAME:$window_index" "$window_name"
+        first_window=false
+    else
+        # Create new window
+        tmux new-window -t "$SESSION_NAME:$window_index" -n "$window_name" -c "$TARGET_DIR"
+    fi
+
+    # Send command to the window
+    if [[ -n "$command" ]]; then
+        tmux send-keys -t "$SESSION_NAME:$window_index" "$command" C-m
+    fi
+
+    # Create split if specified
+    if [[ -n "$split_cmd" ]]; then
+        # Determine split percentage (default to 50-50 if not specified)
+        if [[ -n "$split_pct" ]]; then
+            # Calculate the size for the main pane
+            pane_height="-p $split_pct"
+        else
+            pane_height=""
+        fi
+
+        # Create horizontal split (top-bottom)
+        tmux split-window -t "$SESSION_NAME:$window_index" -v $pane_height -c "$TARGET_DIR"
+
+        # Send command to the split pane
+        tmux send-keys -t "$SESSION_NAME:$window_index.1" "$split_cmd" C-m
+
+        # Focus on the first pane (main pane)
+        tmux select-pane -t "$SESSION_NAME:$window_index.0"
+    fi
+
+    ((window_index++))
+done
+
+# Select the first window
+tmux select-window -t "$SESSION_NAME:$base_index"
+
+# Attach to the session in kitty
+if [[ -n "$TMUX" ]]; then
+    # If already in tmux, switch to the new session
+    tmux switch-client -t "$SESSION_NAME"
+else
+    # Launch kitty with tmux attached
+    exec "$TERMINAL" -e tmux attach-session -t "$SESSION_NAME"
+fi
