@@ -4,8 +4,9 @@
 # Terminal to use (default: kitty)
 TERMINAL="kitty"
 
-# Session name for tmux (default: dev)
-SESSION_NAME="dev"
+# NOTE: Session names are automatically generated from the directory name.
+# This allows you to have multiple repos open simultaneously, each with their own session.
+# Example: 'code ~/repos/dotfiles-arch' creates session 'dotfiles-arch'
 
 # Layout configuration
 # Each line defines a tmux window with the format:
