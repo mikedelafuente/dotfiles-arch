@@ -229,6 +229,179 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH binding '<Super>w'
 
 # --------------------------
+# Install and Configure Pop Shell for Tiling Window Management
+# --------------------------
+
+print_info_message "Installing Pop Shell for tiling window management"
+yay -S --noconfirm --needed gnome-shell-extension-pop-shell-git
+
+# Enable Pop Shell extension
+print_info_message "Enabling Pop Shell extension"
+gnome-extensions enable pop-shell@system76.com 2>/dev/null || print_warning_message "Pop Shell will be enabled after GNOME Shell restart"
+
+# Configure Pop Shell settings
+print_info_message "Configuring Pop Shell tiling behavior"
+
+# Enable tiling by default
+gsettings set org.gnome.shell.extensions.pop-shell tile-by-default true
+
+# Configure gaps (optional - adjust to your preference)
+gsettings set org.gnome.shell.extensions.pop-shell gap-inner 4
+gsettings set org.gnome.shell.extensions.pop-shell gap-outer 4
+
+# Configure hints (turn off or on based on preference)
+gsettings set org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
+gsettings set org.gnome.shell.extensions.pop-shell active-hint true
+
+# --------------------------
+# Clear Conflicting Default Keybindings
+# --------------------------
+
+print_info_message "Clearing GNOME default keybindings that conflict with Hyprland-style workflow"
+
+# Disable Super+number app launcher keybindings (these launch favorite apps by default)
+gsettings set org.gnome.shell.keybindings switch-to-application-1 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-2 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-3 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-4 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-5 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-6 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-7 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-8 "[]"
+gsettings set org.gnome.shell.keybindings switch-to-application-9 "[]"
+
+# Disable other potentially conflicting keybindings
+gsettings set org.gnome.shell.keybindings focus-active-notification "[]"
+gsettings set org.gnome.shell.keybindings toggle-message-tray "[]"
+
+# Clear Super+Space from input source switching (this is usually the default)
+gsettings set org.gnome.desktop.wm.keybindings switch-input-source "[]"
+gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "[]"
+
+# --------------------------
+# Configure Workspace Keybindings (Hyprland-like)
+# --------------------------
+
+print_info_message "Configuring workspace switching keybindings (Super+1-9)"
+
+# Switch to workspace 1-9 with Super+[number]
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-1 "['<Super>1']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-2 "['<Super>2']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-3 "['<Super>3']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-4 "['<Super>4']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-5 "['<Super>5']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-6 "['<Super>6']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-7 "['<Super>7']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-8 "['<Super>8']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-9 "['<Super>9']"
+
+print_info_message "Configuring window movement keybindings (Super+Shift+1-9)"
+
+# Move window to workspace 1-9 with Super+Shift+[number]
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-1 "['<Super><Shift>1']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-2 "['<Super><Shift>2']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-3 "['<Super><Shift>3']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-4 "['<Super><Shift>4']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-5 "['<Super><Shift>5']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-6 "['<Super><Shift>6']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-7 "['<Super><Shift>7']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-8 "['<Super><Shift>8']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-9 "['<Super><Shift>9']"
+
+# --------------------------
+# Configure Additional Window Management Keybindings
+# --------------------------
+
+print_info_message "Configuring additional window management shortcuts"
+
+# Enable static workspaces (disable dynamic workspaces)
+gsettings set org.gnome.mutter dynamic-workspaces false
+gsettings set org.gnome.desktop.wm.preferences num-workspaces 9
+
+# Close window with Super+Q (Hyprland-like)
+gsettings set org.gnome.desktop.wm.keybindings close "['<Super>q', '<Alt>F4']"
+
+# Toggle fullscreen with Super+F
+gsettings set org.gnome.desktop.wm.keybindings toggle-fullscreen "['<Super>f']"
+
+# Maximize/unmaximize toggle
+gsettings set org.gnome.desktop.wm.keybindings toggle-maximized "['<Super>m']"
+
+# Window focus switching
+gsettings set org.gnome.desktop.wm.keybindings switch-windows "['<Alt>Tab']"
+gsettings set org.gnome.desktop.wm.keybindings switch-windows-backward "['<Shift><Alt>Tab']"
+
+# Additional navigation left/right through workspaces
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-left "['<Super><Alt>Left']"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-right "['<Super><Alt>Right']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-left "['<Super><Shift><Alt>Left']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-right "['<Super><Shift><Alt>Right']"
+
+# --------------------------
+# Configure Application Launch Keybindings (Hyprland-like)
+# --------------------------
+
+print_info_message "Configuring Hyprland-style application launcher shortcuts"
+
+# Super+Return for terminal (using kitty if available, fallback to gnome-terminal)
+CUSTOM_KB_TERMINAL="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL name 'Launch Terminal'
+if command -v kitty &> /dev/null; then
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL command 'kitty'
+else
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL command 'gnome-terminal'
+fi
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL binding '<Super>Return'
+
+# Super+E for file manager
+CUSTOM_KB_FILES="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_FILES name 'Launch File Manager'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_FILES command 'nautilus'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_FILES binding '<Super>e'
+
+# Super+B for browser (Firefox)
+CUSTOM_KB_BROWSER="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER name 'Launch Browser'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER command 'firefox'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER binding '<Super>b'
+
+# Update the custom keybindings list to include all custom shortcuts
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH', '$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_FILES', '$CUSTOM_KB_BROWSER']"
+
+# Configure Super+Space for app launcher (GNOME overview with app grid)
+gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>space']"
+
+# Disable default Super key behavior (opening activities overview on single press)
+gsettings set org.gnome.mutter overlay-key ''
+
+# Clear other default overlay shortcuts that might conflict
+gsettings set org.gnome.shell.keybindings toggle-overview "[]"
+
+print_info_message ""
+print_success_message "Hyprland-style keybindings configured!"
+print_info_message ""
+print_info_message "Workspace Management:"
+print_info_message "  - Switch to workspace: Super+1 through Super+9"
+print_info_message "  - Move window to workspace: Super+Shift+1 through Super+Shift+9"
+print_info_message "  - Switch workspace left/right: Super+Alt+Left/Right"
+print_info_message "  - Move window left/right: Super+Shift+Alt+Left/Right"
+print_info_message ""
+print_info_message "Window Management:"
+print_info_message "  - Close window: Super+Q"
+print_info_message "  - Toggle fullscreen: Super+F"
+print_info_message "  - Toggle maximize: Super+M"
+print_info_message "  - Pop Shell toggle tiling: Super+Y"
+print_info_message "  - Switch windows: Alt+Tab"
+print_info_message ""
+print_info_message "Application Launchers:"
+print_info_message "  - App Launcher: Super+Space"
+print_info_message "  - Terminal: Super+Return"
+print_info_message "  - File Manager: Super+E"
+print_info_message "  - Browser (Firefox): Super+B"
+print_info_message "  - Rotate Wallpaper: Super+W"
+print_info_message ""
+
+# --------------------------
 # Installation Complete
 # --------------------------
 
