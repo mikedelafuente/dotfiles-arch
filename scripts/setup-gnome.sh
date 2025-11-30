@@ -129,36 +129,94 @@ else
 fi
 
 # --------------------------
-# Install Catppuccin Wallpapers (Optional)
+# Setup Catppuccin Wallpapers with Auto-Rotation
 # --------------------------
 
-WALLPAPER_DIR="$USER_HOME_DIR/Pictures/Wallpapers/Catppuccin"
-if [ ! -d "$WALLPAPER_DIR" ]; then
-    print_info_message "Downloading Catppuccin wallpapers"
-    mkdir -p "$WALLPAPER_DIR"
+print_info_message "Setting up Catppuccin wallpapers with auto-rotation"
 
-    # Download some Catppuccin wallpapers
-    WALLPAPER_URLS=(
-        "https://raw.githubusercontent.com/catppuccin/wallpapers/main/minimalistic/catppuccin_triangle.png"
-        "https://raw.githubusercontent.com/catppuccin/wallpapers/main/os/arch.png"
-    )
+WALLPAPER_REPO_DIR="$USER_HOME_DIR/.local/share/catppuccin-wallpapers"
+WALLPAPER_SCRIPT="$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh"
+AUTOSTART_DIR="$USER_HOME_DIR/.config/autostart"
+AUTOSTART_FILE="$AUTOSTART_DIR/rotate-wallpaper.desktop"
 
-    for url in "${WALLPAPER_URLS[@]}"; do
-        filename=$(basename "$url")
-        if wget -O "$WALLPAPER_DIR/$filename" "$url" 2>/dev/null; then
-            print_info_message "Downloaded wallpaper: $filename"
-        fi
-    done
-
-    # Set wallpaper if downloaded successfully
-    if [ -f "$WALLPAPER_DIR/catppuccin_triangle.png" ]; then
-        gsettings set org.gnome.desktop.background picture-uri "file://$WALLPAPER_DIR/catppuccin_triangle.png"
-        gsettings set org.gnome.desktop.background picture-uri-dark "file://$WALLPAPER_DIR/catppuccin_triangle.png"
-        print_info_message "Wallpaper set to Catppuccin theme"
-    fi
+# Clone wallpaper repository if it doesn't exist
+if [ ! -d "$WALLPAPER_REPO_DIR" ]; then
+    print_info_message "Cloning Catppuccin wallpapers repository"
+    git clone --depth 1 https://github.com/zhichaoh/catppuccin-wallpapers.git "$WALLPAPER_REPO_DIR"
 else
-    print_info_message "Catppuccin wallpapers directory already exists"
+    print_info_message "Catppuccin wallpapers already cloned. Updating..."
+    cd "$WALLPAPER_REPO_DIR" && git pull 2>/dev/null || true
 fi
+
+# Create wallpaper rotation script
+print_info_message "Creating wallpaper rotation script"
+mkdir -p "$(dirname "$WALLPAPER_SCRIPT")"
+
+cat > "$WALLPAPER_SCRIPT" << 'WALLPAPER_SCRIPT_EOF'
+#!/bin/bash
+#
+# Catppuccin Wallpaper Rotator
+# Randomly selects a wallpaper from the landscapes folder on each login
+#
+
+WALLPAPER_DIR="$HOME/.local/share/catppuccin-wallpapers/landscapes"
+
+# Check if wallpaper directory exists
+if [ ! -d "$WALLPAPER_DIR" ]; then
+    echo "Wallpaper directory not found: $WALLPAPER_DIR"
+    exit 1
+fi
+
+# Find all image files in the landscapes directory
+mapfile -t WALLPAPERS < <(find "$WALLPAPER_DIR" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) 2>/dev/null)
+
+# Check if any wallpapers were found
+if [ ${#WALLPAPERS[@]} -eq 0 ]; then
+    echo "No wallpapers found in $WALLPAPER_DIR"
+    exit 1
+fi
+
+# Select a random wallpaper
+RANDOM_WALLPAPER="${WALLPAPERS[$RANDOM % ${#WALLPAPERS[@]}]}"
+
+# Set the wallpaper using gsettings
+gsettings set org.gnome.desktop.background picture-uri "file://$RANDOM_WALLPAPER"
+gsettings set org.gnome.desktop.background picture-uri-dark "file://$RANDOM_WALLPAPER"
+
+echo "Wallpaper set to: $(basename "$RANDOM_WALLPAPER")"
+WALLPAPER_SCRIPT_EOF
+
+chmod +x "$WALLPAPER_SCRIPT"
+print_info_message "Wallpaper rotation script created at: $WALLPAPER_SCRIPT"
+
+# Create autostart entry for wallpaper rotation
+print_info_message "Setting up wallpaper rotation on login"
+mkdir -p "$AUTOSTART_DIR"
+
+cat > "$AUTOSTART_FILE" << 'AUTOSTART_EOF'
+[Desktop Entry]
+Type=Application
+Name=Rotate Wallpaper
+Comment=Randomly rotate Catppuccin wallpaper on login
+Exec=/bin/bash -c "$HOME/.local/bin/rotate-wallpaper.sh"
+Terminal=false
+Hidden=false
+X-GNOME-Autostart-enabled=true
+AUTOSTART_EOF
+
+print_info_message "Autostart entry created at: $AUTOSTART_FILE"
+
+# Run the wallpaper rotation script immediately
+print_info_message "Setting initial random wallpaper"
+bash "$WALLPAPER_SCRIPT"
+
+print_info_message ""
+print_info_message "Wallpaper rotation configured successfully!"
+print_info_message "  - Wallpapers location: $WALLPAPER_REPO_DIR/landscapes/"
+print_info_message "  - Rotation script: $WALLPAPER_SCRIPT"
+print_info_message "  - A random wallpaper will be set on each login"
+print_info_message ""
+print_info_message "To manually change wallpaper, run: $WALLPAPER_SCRIPT"
 
 # --------------------------
 # Additional Theme Tweaks
