@@ -34,7 +34,7 @@ print_tool_setup_start "NVM and Node.js"
 # Install NVM (Node Version Manager)
 # --------------------------
 
-# NVM is the recommended way to install Node.js on Fedora because:
+# NVM is the recommended way to install Node.js on Arch because:
 # 1. Allows multiple Node.js versions simultaneously
 # 2. Per-user installation (no sudo required for package installs)
 # 3. Easy version switching with 'nvm use'
@@ -47,7 +47,7 @@ if [ ! -d "$USER_HOME_DIR/.nvm" ]; then
     # Ensure curl is installed (required for NVM installation)
     if ! command -v curl &> /dev/null; then
         print_info_message "Installing curl (required for NVM installation)"
-        sudo pacman -S curl --noconfirm
+        yay -S --noconfirm --needed curl
     fi
     
     # Download and run the NVM installation script

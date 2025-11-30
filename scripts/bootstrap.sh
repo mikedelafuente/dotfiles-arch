@@ -230,67 +230,55 @@ bash "$DF_SCRIPT_DIR/setup-python.sh"
 bash "$DF_SCRIPT_DIR/setup-fonts.sh"
 
 # Setup Bash
-# bash "$DF_SCRIPT_DIR/setup-bash.sh"
+bash "$DF_SCRIPT_DIR/setup-bash.sh"
 
 # Before setting up Alacritty, ensure Rust is installed
-# bash "$DF_SCRIPT_DIR/setup-rust.sh"
+bash "$DF_SCRIPT_DIR/setup-rust.sh"
 
 # Setup Go (Golang)
-# bash "$DF_SCRIPT_DIR/setup-golang.sh"
+bash "$DF_SCRIPT_DIR/setup-golang.sh"
 
-# Before setting up Alacritty, ensure that VS Code is installed
-# bash "$DF_SCRIPT_DIR/setup-vscode.sh"
+# Setup Kitty with Catpuccin theme
+bash "$DF_SCRIPT_DIR/setup-kitty.sh"
 
 # Setup TablePlus for database management
-# bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
-
-# Setup a terminal emulator - Alacritty in this case
-# bash "$DF_SCRIPT_DIR/setup-alacritty.sh"
+bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
 
 # Setup Neovim and Lazyvim - This needs to run after python setup
-# bash "$DF_SCRIPT_DIR/setup-neovim.sh"
+bash "$DF_SCRIPT_DIR/setup-neovim.sh"
 
 # Setup Mullvad VPN
-# bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
-
-# Setup NVIDIA drivers
-# bash "$DF_SCRIPT_DIR/setup-nvidia.sh"
+bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
 
 # Run the setup-docker.sh script to set up Docker
-# bash "$DF_SCRIPT_DIR/setup-docker.sh"
+bash "$DF_SCRIPT_DIR/setup-docker.sh"
 
 # Install Node.js and npm
-# bash "$DF_SCRIPT_DIR/setup-node.sh"
+bash "$DF_SCRIPT_DIR/setup-node.sh"
 
 # Install Claude Code CLI
 bash "$DF_SCRIPT_DIR/setup-claude.sh"
 
-# Install .NET SDK and Rider
-# bash "$DF_SCRIPT_DIR/setup-dotnet-rider.sh" "$DOTNET_CORE_SDK_VERSION"
-
 # Install PHP
-# bash "$DF_SCRIPT_DIR/setup-php.sh"
-
-# Install Godot 4 Mono
-# bash "$DF_SCRIPT_DIR/setup-godot.sh"
+bash "$DF_SCRIPT_DIR/setup-php.sh"
 
 # Install Postman
-# bash "$DF_SCRIPT_DIR/setup-postman.sh"
+bash "$DF_SCRIPT_DIR/setup-postman.sh"
 
 # Install Steam
-# bash "$DF_SCRIPT_DIR/setup-steam.sh"
+bash "$DF_SCRIPT_DIR/setup-steam.sh"
 
 # Install Discord
-# bash "$DF_SCRIPT_DIR/setup-discord.sh"
+bash "$DF_SCRIPT_DIR/setup-discord.sh"
 
 # Install Spotify
-# bash "$DF_SCRIPT_DIR/setup-spotify.sh"
+bash "$DF_SCRIPT_DIR/setup-spotify.sh"
 
 # Install Obsidian
-# bash "$DF_SCRIPT_DIR/setup-obsidian.sh"
+bash "$DF_SCRIPT_DIR/setup-obsidian.sh"
 
 # Install Zoom
-# bash "$DF_SCRIPT_DIR/setup-zoom.sh"
+bash "$DF_SCRIPT_DIR/setup-zoom.sh"
 
 # Setup Hyprland UI
 bash "$DF_SCRIPT_DIR/setup-hyprland.sh"
