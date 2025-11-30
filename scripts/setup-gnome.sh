@@ -148,46 +148,24 @@ else
     cd "$WALLPAPER_REPO_DIR" && git pull 2>/dev/null || true
 fi
 
-# Create wallpaper rotation script
-print_info_message "Creating wallpaper rotation script"
+# Symlink wallpaper rotation script from dotfiles repo
+print_info_message "Setting up wallpaper rotation script"
 mkdir -p "$(dirname "$WALLPAPER_SCRIPT")"
 
-cat > "$WALLPAPER_SCRIPT" << 'WALLPAPER_SCRIPT_EOF'
-#!/bin/bash
-#
-# Catppuccin Wallpaper Rotator
-# Randomly selects a wallpaper from the landscapes folder on each login
-#
+WALLPAPER_SCRIPT_SOURCE="$SCRIPT_DIR/../home/.local/bin/rotate-wallpaper.sh"
 
-WALLPAPER_DIR="$HOME/.local/share/catppuccin-wallpapers/landscapes"
-
-# Check if wallpaper directory exists
-if [ ! -d "$WALLPAPER_DIR" ]; then
-    echo "Wallpaper directory not found: $WALLPAPER_DIR"
-    exit 1
+# Remove existing file or symlink
+if [ -L "$WALLPAPER_SCRIPT" ] || [ -f "$WALLPAPER_SCRIPT" ]; then
+    rm -f "$WALLPAPER_SCRIPT"
 fi
 
-# Find all image files in the landscapes directory
-mapfile -t WALLPAPERS < <(find "$WALLPAPER_DIR" -type f \( -name "*.png" -o -name "*.jpg" -o -name "*.jpeg" \) 2>/dev/null)
-
-# Check if any wallpapers were found
-if [ ${#WALLPAPERS[@]} -eq 0 ]; then
-    echo "No wallpapers found in $WALLPAPER_DIR"
-    exit 1
+# Create symlink to dotfiles repo
+if [ -f "$WALLPAPER_SCRIPT_SOURCE" ]; then
+    ln -sf "$WALLPAPER_SCRIPT_SOURCE" "$WALLPAPER_SCRIPT"
+    print_info_message "Wallpaper rotation script symlinked from dotfiles repo"
+else
+    print_warning_message "Wallpaper rotation script not found in dotfiles repo"
 fi
-
-# Select a random wallpaper
-RANDOM_WALLPAPER="${WALLPAPERS[$RANDOM % ${#WALLPAPERS[@]}]}"
-
-# Set the wallpaper using gsettings
-gsettings set org.gnome.desktop.background picture-uri "file://$RANDOM_WALLPAPER"
-gsettings set org.gnome.desktop.background picture-uri-dark "file://$RANDOM_WALLPAPER"
-
-echo "Wallpaper set to: $(basename "$RANDOM_WALLPAPER")"
-WALLPAPER_SCRIPT_EOF
-
-chmod +x "$WALLPAPER_SCRIPT"
-print_info_message "Wallpaper rotation script created at: $WALLPAPER_SCRIPT"
 
 # Create autostart entry for wallpaper rotation
 print_info_message "Setting up wallpaper rotation on login"
