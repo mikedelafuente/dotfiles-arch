@@ -2,10 +2,11 @@
 [user]
 	email = mike.delafuente@gmail.com
 	name = Mike de la Fuente
-# Please adapt and uncomment the following lines:
-#	name = Mike de la Fuente
-#	email = mike.delafuente@gmail.com
 [core]
 	editor = nvim
 [init]
 	defaultBranch = main
+[credential "https://github.com"]
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = !/usr/bin/gh auth git-credential

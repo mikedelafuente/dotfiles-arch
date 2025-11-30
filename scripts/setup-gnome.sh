@@ -212,6 +212,10 @@ gsettings set org.gnome.desktop.interface clock-show-weekday true
 # Show battery percentage
 gsettings set org.gnome.desktop.interface show-battery-percentage true
 
+# Set Firefox as default browser
+print_info_message "Setting Firefox as default browser"
+xdg-settings set default-web-browser firefox.desktop
+
 # --------------------------
 # Installation Complete
 # --------------------------
