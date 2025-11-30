@@ -262,6 +262,9 @@ bash "$DF_SCRIPT_DIR/setup-claude.sh"
 # Install PHP
 bash "$DF_SCRIPT_DIR/setup-php.sh"
 
+# Install Ruby on Rails
+bash "$DF_SCRIPT_DIR/setup-ruby.sh"
+
 # Install Postman
 bash "$DF_SCRIPT_DIR/setup-postman.sh"
 
