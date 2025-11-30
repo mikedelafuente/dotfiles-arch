@@ -12,21 +12,21 @@ TERMINAL="kitty"
 # Each line defines a tmux window with the format:
 # "window_name:command:split_command:split_percentage"
 #
-# - window_name: Name of the tmux window
-# - command: Command to run in the main pane (optional, leave empty for shell)
-# - split_command: Command to run in a split pane (optional, omit for no split)
-# - split_percentage: Percentage of screen for main pane (optional, default 50)
-#
-# Examples:
+# For simple 1 or 2 pane layouts:
 #   "editor:nvim"                    - Single pane running nvim
-#   "editor:nvim:bash:80"            - nvim (80%) with bash shell (20%) below
-#   "shell:::"                       - Just a shell, no command
-#   "git:lazygit"                    - Single pane running lazygit
+#   "editor:nvim:bash:90"            - nvim (90%) with bash shell (10%) below
+#
+# For 3-pane layout (left column split, right column full height):
+#   "window_name:left_cmd,right_cmd:bottom_cmd:top_pct:right_pct"
+#   - top_pct: Percentage of LEFT side height for top pane
+#   - right_pct: Percentage of TOTAL width for right pane
+#   Example: "code:nvim,claude:bash:85:35" creates:
+#     - Left side (65% width): nvim (top 85%) + bash (bottom 15%)
+#     - Right side (35% width): claude (full height)
 #
 LAYOUT=(
-    "nvim:nvim:bash:90"      # Window 1: nvim (90%) with terminal (10%) below
-    "lazygit:lazygit"        # Window 2: lazygit for git operations
-    "claude:claude"          # Window 3: claude code CLI
+    "code:nvim,claude:bash:85:35"  # Window 1: nvim (85% height) + bash (15%) on left (65% width), claude on right (35% width)
+    "lazygit:lazygit"              # Window 2: lazygit for git operations
 )
 
 # Additional layout examples (uncomment and modify as needed):
