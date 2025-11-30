@@ -33,15 +33,15 @@ palette = 'catppuccin_mocha'
 
 [palettes.catppuccin_mocha]
 color_fg0 = '#cdd6f4'
-color_bg1 = '#45475a'
-color_bg3 = '#585b70'
-color_blue = '#89b4fa'
-color_aqua = '#94e2d5'
-color_green = '#a6e3a1'
-color_orange = '#fab387'
-color_purple = '#cba6f7'
-color_red = '#f38ba8'
-color_yellow = '#f9e2af'
+color_bg1 = '#3a3d4a'
+color_bg3 = '#4a4d5a'
+color_blue = '#5a6f8a'
+color_aqua = '#5a7a75'
+color_green = '#6a7a60'
+color_orange = '#8a6a5a'
+color_purple = '#7a6a8a'
+color_red = '#8a5a6a'
+color_yellow = '#8a7a5a'
 
 [os]
 disabled = false

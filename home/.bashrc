@@ -392,3 +392,4 @@ if [ -d "$HOME/.config/herd-lite/bin" ]; then
 fi
 
 export PATH="$PATH:/home/dela/.config/composer/vendor/bin"
+export PATH="$PATH:/home/dela/.config/composer/vendor/bin"
