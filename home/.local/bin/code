@@ -1,30 +1,10 @@
 #!/bin/bash
 
-# code - Open a development environment in kitty + tmux
+# code - Open a development environment using tmuxinator
 # Usage: code [directory]
 #   directory: Path to project directory (defaults to current directory)
 
 set -e
-
-# Configuration
-CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/code/config.sh"
-
-# Load configuration if it exists
-if [[ -f "$CONFIG_FILE" ]]; then
-    source "$CONFIG_FILE"
-else
-    # Default configuration (used if config file doesn't exist)
-    TERMINAL="kitty"
-
-    # Default layout: array of window definitions
-    # Format: "window_name:command:split_command:split_percentage"
-    # split_percentage is optional (e.g., "80" means main pane gets 80%)
-    LAYOUT=(
-        "nvim:nvim:bash:10"
-        "lazygit:lazygit"
-        "claude:claude"
-    )
-fi
 
 # Parse arguments
 TARGET_DIR="${1:-.}"
@@ -46,144 +26,25 @@ if [[ -z "$SESSION_NAME" || "$SESSION_NAME" =~ ^_+$ ]]; then
     SESSION_NAME="dev_$(echo "$TARGET_DIR" | md5sum | cut -c1-8)"
 fi
 
-# Check if required tools are installed
-check_dependency() {
-    if ! command -v "$1" &> /dev/null; then
-        echo "Error: $1 is not installed"
-        exit 1
-    fi
-}
-
-check_dependency tmux
-check_dependency "$TERMINAL"
-
 # Kill any existing session with the same name (always start fresh)
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
     echo "Killing existing session '$SESSION_NAME'"
     tmux kill-session -t "$SESSION_NAME"
 fi
 
-echo "Creating new session '$SESSION_NAME' for $TARGET_DIR"
+echo "Starting tmuxinator session '$SESSION_NAME' for $TARGET_DIR"
 
-# Create new tmux session (detached)
-tmux new-session -d -s "$SESSION_NAME" -c "$TARGET_DIR"
+# Set environment variables for tmuxinator template
+export TMUX_SESSION_NAME="$SESSION_NAME"
+export TMUX_PROJECT_ROOT="$TARGET_DIR"
 
-# Get the pane-base-index setting from tmux (usually 0 or 1)
-pane_base_index=$(tmux show-option -gv pane-base-index 2>/dev/null || echo "0")
-
-# Create windows based on layout configuration
-first_window=true
-current_window=""
-
-for layout_spec in "${LAYOUT[@]}"; do
-    IFS=':' read -r window_name command split_cmd split_pct_1 split_pct_2 <<< "$layout_spec"
-
-    if $first_window; then
-        # Use the first window created by new-session
-        current_window=$(tmux display-message -t "$SESSION_NAME" -p '#I')
-        tmux rename-window -t "$SESSION_NAME:$current_window" "$window_name"
-        first_window=false
-    else
-        # Create new window at the end of the window list
-        tmux new-window -t "$SESSION_NAME" -n "$window_name" -c "$TARGET_DIR"
-        current_window=$(tmux display-message -t "$SESSION_NAME" -p '#I')
-    fi
-
-    # Check if this is a 3-pane layout (command contains comma)
-    if [[ "$command" == *,* ]]; then
-        # 3-pane layout: "window_name:left_cmd,right_cmd:bottom_cmd:top_pct:right_pct"
-        IFS=',' read -r left_cmd right_cmd <<< "$command"
-        bottom_cmd="$split_cmd"
-        top_pct="$split_pct_1"
-        right_pct="$split_pct_2"
-
-        # Start with left command in the full window
-        if [[ -n "$left_cmd" ]]; then
-            tmux send-keys -t "$SESSION_NAME:$current_window" "$left_cmd" C-m
-        fi
-
-        # Split vertically (left|right) to create right pane
-        # NOTE: -p applies to the NEW pane (right), so pass right_pct directly
-        if [[ -n "$right_pct" ]]; then
-            tmux split-window -t "$SESSION_NAME:$current_window" -h -p "$right_pct" -c "$TARGET_DIR"
-        else
-            tmux split-window -t "$SESSION_NAME:$current_window" -h -c "$TARGET_DIR"
-        fi
-
-        # Send command to right pane
-        right_pane=$((pane_base_index + 1))
-        if [[ -n "$right_cmd" ]]; then
-            tmux send-keys -t "$SESSION_NAME:$current_window.$right_pane" "$right_cmd" C-m
-        fi
-
-        # Select left pane and split it horizontally (top/bottom)
-        left_pane=$pane_base_index
-        tmux select-pane -t "$SESSION_NAME:$current_window.$left_pane"
-
-        if [[ -n "$bottom_cmd" ]]; then
-            # Calculate bottom pane percentage
-            if [[ -n "$top_pct" ]]; then
-                bottom_pct=$((100 - top_pct))
-                tmux split-window -t "$SESSION_NAME:$current_window.$left_pane" -v -p "$bottom_pct" -c "$TARGET_DIR"
-            else
-                tmux split-window -t "$SESSION_NAME:$current_window.$left_pane" -v -c "$TARGET_DIR"
-            fi
-
-            # Send command to bottom pane
-            bottom_pane=$((pane_base_index + 2))
-            tmux send-keys -t "$SESSION_NAME:$current_window.$bottom_pane" "$bottom_cmd" C-m
-        fi
-
-        # Focus back on top-left pane (the left_cmd pane)
-        tmux select-pane -t "$SESSION_NAME:$current_window.$left_pane"
-
-    else
-        # Simple 1 or 2-pane layout
-        # Send command to the current window
-        if [[ -n "$command" ]]; then
-            tmux send-keys -t "$SESSION_NAME:$current_window" "$command" C-m
-        fi
-
-        # Create split if specified
-        if [[ -n "$split_cmd" ]]; then
-            # Determine split percentage (default to 50-50 if not specified)
-            # NOTE: split_pct_1 is the percentage for the MAIN pane (top)
-            # tmux -p flag applies to the NEW pane (bottom), so we need to invert it
-            if [[ -n "$split_pct_1" ]]; then
-                # If main pane should be 90%, new pane should be 10%
-                new_pane_pct=$((100 - split_pct_1))
-                pane_height="-p $new_pane_pct"
-            else
-                pane_height=""
-            fi
-
-            # Create horizontal split (top-bottom) in current window
-            tmux split-window -t "$SESSION_NAME:$current_window" -v $pane_height -c "$TARGET_DIR"
-
-            # Calculate pane indices based on pane-base-index
-            # If pane_base_index=1, panes are 1 and 2
-            # If pane_base_index=0, panes are 0 and 1
-            first_pane=$pane_base_index
-            second_pane=$((pane_base_index + 1))
-
-            # Send command to the bottom pane (second pane)
-            tmux send-keys -t "$SESSION_NAME:$current_window.$second_pane" "$split_cmd" C-m
-
-            # Focus on the first pane (top pane with main command)
-            tmux select-pane -t "$SESSION_NAME:$current_window.$first_pane"
-        fi
-    fi
-done
-
-# Select the first window (^ is tmux shorthand for first window)
-tmux select-window -t "$SESSION_NAME:^"
-
-# Attach to the session in kitty
+# Start tmuxinator with the code template
+# Use the config from ~/.config/tmuxinator/code.yml
 if [[ -n "$TMUX" ]]; then
-    # If already in tmux, switch to the new session
-    tmux switch-client -t "$SESSION_NAME"
+    # Already in tmux, start detached and switch
+    tmuxinator start code -n "$SESSION_NAME" # --no-attach
+   # tmux switch-client -t "$SESSION_NAME"
 else
-    # Launch kitty with tmux attached
-    # When tmux exits (window closes), automatically kill the session
-    exec "$TERMINAL" -e bash -c "tmux attach-session -t '$SESSION_NAME'; tmux kill-session -t '$SESSION_NAME' 2>/dev/null || true"
+    # Not in tmux, start and attach
+    exec kitty -e tmuxinator start code -n "$SESSION_NAME"
 fi

@@ -28,7 +28,7 @@ print_tool_setup_start "Code Command (Development Environment Launcher)"
 # Check Dependencies
 # --------------------------
 
-DEPENDENCIES=(tmux lazygit)
+DEPENDENCIES=(tmux lazygit tmuxinator)
 MISSING_DEPS=()
 
 for dep in "${DEPENDENCIES[@]}"; do
@@ -47,6 +47,9 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
                 ;;
             lazygit)
                 sudo pacman -S --needed --noconfirm lazygit
+                ;;
+            tmuxinator)
+                yay -S --needed --noconfirm tmuxinator
                 ;;
         esac
 
@@ -84,7 +87,7 @@ if [ -f "$CODE_SCRIPT" ]; then
     print_success_message "Made code script executable"
 else
     print_error_message "Code script not found at $CODE_SCRIPT"
-    exit 1
+    # exit 1
 fi
 
 # --------------------------
@@ -94,6 +97,7 @@ fi
 print_line_break "Setup Complete"
 print_info_message "The 'code' command will be available after linking dotfiles"
 print_info_message "Usage: code [directory]"
-print_info_message "Configuration: ~/.config/code/config.sh"
+print_info_message "Configuration: ~/.config/tmuxinator/code.yml"
+print_info_message "See also: ~/.config/code/README.md for customization guide"
 
 print_tool_setup_complete "Code Command"
