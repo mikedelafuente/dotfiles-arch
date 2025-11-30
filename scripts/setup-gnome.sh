@@ -216,6 +216,16 @@ gsettings set org.gnome.desktop.interface show-battery-percentage true
 print_info_message "Setting Firefox as default browser"
 xdg-settings set default-web-browser firefox.desktop
 
+# Set up keyboard shortcut for wallpaper rotation (Super+W)
+print_info_message "Setting up keyboard shortcut for wallpaper rotation (Super+W)"
+CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
+
+# Set the custom keybinding
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH name 'Rotate Wallpaper'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH binding '<Super>w'
+
 # --------------------------
 # Installation Complete
 # --------------------------
