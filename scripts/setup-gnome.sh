@@ -223,7 +223,8 @@ CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-key
 # Set the custom keybinding
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH name 'Rotate Wallpaper'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh &"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "nohup $USER_HOME_DIR/.local/bin/rotate-wallpaper.sh >/dev/null 2>&1 &"
+# gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh &"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH binding '<Super>w'
 
 # --------------------------
