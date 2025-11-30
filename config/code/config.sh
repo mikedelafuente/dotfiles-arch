@@ -24,7 +24,7 @@ TERMINAL="kitty"
 #   "git:lazygit"                    - Single pane running lazygit
 #
 LAYOUT=(
-    "nvim:nvim:bash:80"      # Window 1: nvim (80%) with terminal (20%) below
+    "nvim:nvim:bash:90"      # Window 1: nvim (90%) with terminal (10%) below
     "lazygit:lazygit"        # Window 2: lazygit for git operations
     "claude:claude"          # Window 3: claude code CLI
 )

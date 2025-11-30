@@ -30,6 +30,13 @@ fi
 TARGET_DIR="${1:-.}"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)" # Get absolute path
 
+# Verify this is a git repository
+if [[ ! -d "$TARGET_DIR/.git" ]]; then
+    echo "Error: $TARGET_DIR is not a git repository"
+    echo "The 'code' command should only be used from the base of a git repository."
+    exit 1
+fi
+
 # Generate unique session name from directory
 # Use basename of directory, sanitize for tmux session name (no dots, spaces, or colons)
 SESSION_NAME=$(basename "$TARGET_DIR" | tr '.' '_' | tr ' ' '_' | tr ':' '_')
@@ -50,17 +57,10 @@ check_dependency() {
 check_dependency tmux
 check_dependency "$TERMINAL"
 
-# Check if session already exists - if so, switch to it
+# Kill any existing session with the same name (always start fresh)
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-    echo "Switching to existing session '$SESSION_NAME' for $TARGET_DIR"
-    if [[ -n "$TMUX" ]]; then
-        # Already in tmux, switch to the session
-        tmux switch-client -t "$SESSION_NAME"
-    else
-        # Not in tmux, attach via terminal
-        exec "$TERMINAL" -e tmux attach-session -t "$SESSION_NAME"
-    fi
-    exit 0
+    echo "Killing existing session '$SESSION_NAME'"
+    tmux kill-session -t "$SESSION_NAME"
 fi
 
 echo "Creating new session '$SESSION_NAME' for $TARGET_DIR"
@@ -97,9 +97,12 @@ for layout_spec in "${LAYOUT[@]}"; do
     # Create split if specified
     if [[ -n "$split_cmd" ]]; then
         # Determine split percentage (default to 50-50 if not specified)
+        # NOTE: split_pct is the percentage for the MAIN pane (top)
+        # tmux -p flag applies to the NEW pane (bottom), so we need to invert it
         if [[ -n "$split_pct" ]]; then
-            # Calculate the size for the main pane
-            pane_height="-p $split_pct"
+            # If main pane should be 90%, new pane should be 10%
+            new_pane_pct=$((100 - split_pct))
+            pane_height="-p $new_pane_pct"
         else
             pane_height=""
         fi
@@ -130,5 +133,6 @@ if [[ -n "$TMUX" ]]; then
     tmux switch-client -t "$SESSION_NAME"
 else
     # Launch kitty with tmux attached
-    exec "$TERMINAL" -e tmux attach-session -t "$SESSION_NAME"
+    # When tmux exits (window closes), automatically kill the session
+    exec "$TERMINAL" -e bash -c "tmux attach-session -t '$SESSION_NAME'; tmux kill-session -t '$SESSION_NAME' 2>/dev/null || true"
 fi
