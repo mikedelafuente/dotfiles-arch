@@ -58,7 +58,11 @@ if ! command -v cargo &> /dev/null; then
 
     # Source the cargo environment for immediate use
     # shellcheck source=/dev/null
-    source "$USER_HOME_DIR/.cargo/env"
+    # Source cargo env only if it exists
+    if [ -f "$USER_HOME_DIR/.cargo/env" ]; then
+      # shellcheck disable=SC1090
+      source "$USER_HOME_DIR/.cargo/env"
+    fi 
 
     print_info_message "Rust installed successfully"
     print_info_message "Rust version: $(rustc --version)"
