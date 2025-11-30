@@ -280,8 +280,21 @@ bash "$DF_SCRIPT_DIR/setup-obsidian.sh"
 # Install Zoom
 bash "$DF_SCRIPT_DIR/setup-zoom.sh"
 
-# Setup Hyprland UI
-bash "$DF_SCRIPT_DIR/setup-hyprland.sh"
+# Setup GNOME with Catppuccin theme (if GNOME is installed)
+if pacman -Q gnome-shell &> /dev/null; then
+    print_info_message "GNOME is installed. Running GNOME setup..."
+    bash "$DF_SCRIPT_DIR/setup-gnome.sh"
+else
+    print_info_message "GNOME is not installed. Skipping GNOME setup."
+fi
+
+# Setup Hyprland UI (if Hyprland is installed)
+if pacman -Q hyprland &> /dev/null; then
+    print_info_message "Hyprland is installed. Running Hyprland setup..."
+    bash "$DF_SCRIPT_DIR/setup-hyprland.sh"
+else
+    print_info_message "Hyprland is not installed. Skipping Hyprland setup."
+fi
 
 # Link dotfiles
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh"

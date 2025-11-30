@@ -1,6 +1,11 @@
 # $HOME/.config/alacritty/alacritty.toml
+# Catppuccin Mocha Theme
+
 [general]
 live_config_reload = true
+
+# Import Catppuccin Mocha theme
+import = ["~/.config/alacritty/catppuccin-mocha.toml"]
 
 [font]
 size = 12.0

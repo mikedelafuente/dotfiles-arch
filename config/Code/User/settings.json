@@ -12,7 +12,7 @@
         "**/.DS_Store": true,
         "**/node_modules": true
     },
-    "workbench.colorTheme": "Default Dark+",
+    "workbench.colorTheme": "Catppuccin Mocha",
     "git.enableSmartCommit": true,
     "git.confirmSync": false,
     "github.copilot.nextEditSuggestions.enabled": true,

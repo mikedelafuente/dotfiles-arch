@@ -6,22 +6,39 @@
 return {
   -- Color scheme
   {
-    "folke/tokyonight.nvim",
+    "catppuccin/nvim",
+    name = "catppuccin",
     lazy = false,
     priority = 1000,
     config = function()
-      require("tokyonight").setup({
-        style = "night",  -- storm, moon, night, day
-        transparent = false,
-        terminal_colors = true,
+      require("catppuccin").setup({
+        flavour = "mocha",  -- latte, frappe, macchiato, mocha
+        transparent_background = false,
+        term_colors = true,
         styles = {
-          comments = { italic = true },
-          keywords = { italic = true },
+          comments = { "italic" },
+          conditionals = { "italic" },
+          loops = {},
           functions = {},
+          keywords = {},
+          strings = {},
           variables = {},
+          numbers = {},
+          booleans = {},
+          properties = {},
+          types = {},
+          operators = {},
+        },
+        integrations = {
+          cmp = true,
+          gitsigns = true,
+          nvimtree = true,
+          treesitter = true,
+          telescope = true,
+          which_key = true,
         },
       })
-      vim.cmd([[colorscheme tokyonight]])
+      vim.cmd([[colorscheme catppuccin]])
     end,
   },
 
@@ -81,7 +98,7 @@ return {
     event = "VeryLazy",
     opts = {
       options = {
-        theme = "tokyonight",
+        theme = "catppuccin",
         component_separators = { left = "", right = "" },
         section_separators = { left = "", right = "" },
         disabled_filetypes = { "alpha", "dashboard" },
