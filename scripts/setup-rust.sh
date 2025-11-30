@@ -52,9 +52,9 @@ if ! command -v cargo &> /dev/null; then
     # Install rustup from Arch repositories
     sudo pacman -S --needed --noconfirm rustup
 
-    # Run rustup-init to complete the installation
-    print_info_message "Running rustup-init to install Rust toolchain"
-    rustup-init -y --default-toolchain stable
+    # Install stable toolchain and set as default
+    print_info_message "Installing stable Rust toolchain"
+    rustup default stable
 
     # Source the cargo environment for immediate use
     # shellcheck source=/dev/null

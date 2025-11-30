@@ -95,9 +95,6 @@ gsettings set org.gnome.desktop.interface icon-theme "Papirus-Dark"
 # Enable dark mode
 gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 
-# Set dark theme for legacy applications
-gsettings set org.gnome.desktop.interface gtk-application-prefer-dark-theme true
-
 # Set cursor theme (optional - using Adwaita dark)
 gsettings set org.gnome.desktop.interface cursor-theme "Adwaita"
 

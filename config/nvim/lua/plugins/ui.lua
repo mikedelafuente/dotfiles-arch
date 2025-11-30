@@ -46,49 +46,61 @@ return {
   {
     "nvim-tree/nvim-tree.lua",
     dependencies = { "nvim-tree/nvim-web-devicons" },
-    cmd = { "NvimTreeToggle", "NvimTreeFocus" },
+    lazy = false,
     keys = {
       { "<leader>e", "<cmd>NvimTreeToggle<cr>", desc = "Toggle file explorer" },
     },
-    opts = {
-      disable_netrw = true,
-      hijack_cursor = true,
-      sync_root_with_cwd = true,
-      update_focused_file = {
-        enable = true,
-        update_root = false,
-      },
-      view = {
-        width = 30,
-        preserve_window_proportions = true,
-      },
-      renderer = {
-        root_folder_label = false,
-        highlight_git = true,
-        indent_markers = { enable = true },
-        icons = {
-          show = {
-            file = true,
-            folder = true,
-            folder_arrow = true,
-            git = true,
+    config = function()
+      require("nvim-tree").setup({
+        disable_netrw = true,
+        hijack_cursor = true,
+        sync_root_with_cwd = true,
+        update_focused_file = {
+          enable = true,
+          update_root = false,
+        },
+        view = {
+          width = 30,
+          preserve_window_proportions = true,
+        },
+        renderer = {
+          root_folder_label = false,
+          highlight_git = true,
+          indent_markers = { enable = true },
+          icons = {
+            show = {
+              file = true,
+              folder = true,
+              folder_arrow = true,
+              git = true,
+            },
           },
         },
-      },
-      actions = {
-        open_file = {
-          quit_on_open = false,
+        actions = {
+          open_file = {
+            quit_on_open = false,
+          },
         },
-      },
-      filters = {
-        dotfiles = false,
-        custom = { ".DS_Store" },
-      },
-      git = {
-        enable = true,
-        ignore = false,
-      },
-    },
+        filters = {
+          dotfiles = false,
+          custom = { ".DS_Store" },
+        },
+        git = {
+          enable = true,
+          ignore = false,
+        },
+      })
+
+      -- Open file tree on startup
+      vim.api.nvim_create_autocmd("VimEnter", {
+        callback = function()
+          -- Only open if no file arguments were passed
+          if vim.fn.argc() == 0 then
+            require("nvim-tree.api").tree.open()
+          end
+        end,
+      })
+    end,
   },
 
   -- Statusline
