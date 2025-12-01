@@ -243,6 +243,36 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH binding '<Super>w'
 
 # --------------------------
+# Install Caffeine for Preventing Sleep During Media Playback
+# --------------------------
+
+print_info_message "Installing Caffeine to prevent sleep during active use"
+
+# Install caffeine-ng (works across desktop environments and has better GNOME integration)
+yay -S --noconfirm --needed caffeine-ng
+
+# Configure power settings to ensure media playback inhibits sleep
+print_info_message "Configuring power management for media playback"
+
+# GNOME automatically detects media playback via MPRIS and inhibits both sleep AND screen blanking
+# These settings allow sleep/screen blank when truly idle, but respect inhibitors (like media playback)
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-timeout 0  # Never sleep on AC power when idle
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-timeout 1800  # Sleep after 30min on battery
+
+# Screen blanking (MPRIS-aware players will prevent this during playback)
+# Set to 20 minutes so screen blanks when you walk away, but videos keep screen on
+gsettings set org.gnome.desktop.session idle-delay 1200  # Blank screen after 20 minutes of inactivity (but NOT during video playback)
+
+print_info_message ""
+print_info_message "Sleep and screen blanking prevention configured!"
+print_info_message "  - GNOME automatically detects video playback via MPRIS"
+print_info_message "  - During video playback: screen stays on, system doesn't sleep"
+print_info_message "  - When idle (no video): screen blanks after 20min, system sleeps per power settings"
+print_info_message "  - Supported players: Firefox, Chrome, VLC, mpv, celluloid, and most modern media apps"
+print_info_message "  - Caffeine-ng provides a system tray icon for manual override when needed"
+print_info_message ""
+
+# --------------------------
 # Install and Configure Pop Shell for Tiling Window Management
 # --------------------------
 
