@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Import Common Header 
+# Import Common Header
 # --------------------------
 
 # add header file
@@ -17,90 +17,122 @@ else
 fi
 
 # --------------------------
-# End Import Common Header 
+# End Import Common Header
 # --------------------------
 
 print_tool_setup_start "Ruby on Rails"
 
 # --------------------------
-# Install Ruby on Rails
+# Install Ruby
 # --------------------------
 
 # Check if Ruby is already installed
 if command -v ruby &> /dev/null; then
-    print_info_message "Ruby is already installed. Skipping installation."
+    print_info_message "Ruby is already installed: $(ruby --version)"
 else
     print_info_message "Installing Ruby from official Arch repositories"
-
-    # Install Ruby
     sudo pacman -S --needed --noconfirm ruby
+    print_info_message "Ruby installed: $(ruby --version)"
 fi
 
-# Print Ruby version
-print_info_message "Ruby version: $(ruby --version)"
+# --------------------------
+# Setup Ruby Gem PATH Early
+# --------------------------
 
-# Install bundler if not already installed
-if command -v bundle &> /dev/null; then
-    print_info_message "Bundler is already installed. Skipping installation."
+# Get Ruby version and setup gem bin directory path BEFORE checking for gems
+RUBY_VERSION=$(ruby -e 'puts RbConfig::CONFIG["ruby_version"]' 2>/dev/null)
+GEM_BIN_DIR="$USER_HOME_DIR/.local/share/gem/ruby/$RUBY_VERSION/bin"
+
+# Add gem bin directory to PATH for this session if it exists
+if [ -d "$GEM_BIN_DIR" ]; then
+    if ! echo "$PATH" | grep -q "$GEM_BIN_DIR"; then
+        print_info_message "Adding gem bin directory to PATH: $GEM_BIN_DIR"
+        export PATH="$GEM_BIN_DIR:$PATH"
+    fi
+fi
+
+# --------------------------
+# Install Bundler
+# --------------------------
+
+# Check if bundler is already installed (check both command and gem list)
+if gem list -i '^bundler$' &> /dev/null; then
+    print_info_message "Bundler is already installed: $(bundle --version 2>/dev/null || echo 'installed')"
 else
     print_info_message "Installing Bundler gem to user directory"
-    gem install --user-install bundler
+    gem install --user-install bundler --no-document
+    print_success_message "Bundler installed successfully"
 fi
 
-# Install Rails dependencies
+# --------------------------
+# Install Rails Dependencies
+# --------------------------
+
 print_info_message "Installing Rails dependencies"
 
 # Node.js (JavaScript runtime for Rails asset pipeline)
 if command -v node &> /dev/null; then
-    print_info_message "Node.js is already installed. Skipping installation."
+    print_info_message "Node.js is already installed: $(node --version)"
 else
     print_info_message "Installing Node.js"
     sudo pacman -S --needed --noconfirm nodejs npm
 fi
 
 # Additional build dependencies for native gems
-print_info_message "Installing build dependencies for Ruby gems"
-sudo pacman -S --needed --noconfirm base-devel
+if pacman -Q base-devel &> /dev/null; then
+    print_info_message "Build dependencies already installed"
+else
+    print_info_message "Installing build dependencies for Ruby gems"
+    sudo pacman -S --needed --noconfirm base-devel
+fi
 
 # SQLite (default Rails database for development)
 if pacman -Q sqlite &> /dev/null; then
-    print_info_message "SQLite is already installed. Skipping installation."
+    print_info_message "SQLite is already installed"
 else
     print_info_message "Installing SQLite"
     sudo pacman -S --needed --noconfirm sqlite
 fi
 
-# Install Rails if not already installed
-if command -v rails &> /dev/null; then
-    print_info_message "Rails is already installed."
-    print_info_message "Rails version: $(rails --version)"
+# --------------------------
+# Install Rails
+# --------------------------
+
+# Check if Rails is already installed (check both command and gem list)
+if gem list -i '^rails$' &> /dev/null; then
+    print_info_message "Rails is already installed: $(rails --version 2>/dev/null || echo 'installed')"
 else
-    print_info_message "Installing Rails gem to user directory"
-    gem install --user-install rails
+    print_info_message "Installing Rails gem to user directory (this may take a few minutes)"
+    gem install --user-install rails --no-document
     print_success_message "Rails installed successfully"
-    print_info_message "Rails version: $(rails --version)"
+
+    # Verify installation
+    if command -v rails &> /dev/null; then
+        print_info_message "Rails version: $(rails --version)"
+    else
+        print_warning_message "Rails installed but not in PATH. You may need to restart your shell."
+    fi
 fi
 
-# Ensure user gem bin directory is in PATH
-RUBY_VERSION=$(ruby -e 'puts RbConfig::CONFIG["ruby_version"]')
-GEM_BIN_DIR="$USER_HOME_DIR/.local/share/gem/ruby/$RUBY_VERSION/bin"
+# --------------------------
+# Configure PATH in Shell RC Files
+# --------------------------
 
-if [ -d "$GEM_BIN_DIR" ]; then
-    if ! echo "$PATH" | grep -q "$GEM_BIN_DIR"; then
-        print_info_message "Adding gem bin directory to PATH for this session"
-        export PATH="$GEM_BIN_DIR:$PATH"
-    fi
-
-    # Add to .bashrc if not already there
-    BASHRC="$USER_HOME_DIR/.bashrc"
-    if [ -f "$BASHRC" ] && ! grep -q "gem/ruby.*bin" "$BASHRC"; then
+# Add to .bashrc if not already there
+BASHRC="$USER_HOME_DIR/.bashrc"
+if [ -f "$BASHRC" ]; then
+    if ! grep -q "gem/ruby.*bin" "$BASHRC"; then
         print_info_message "Adding gem bin directory to ~/.bashrc"
-        echo "" >> "$BASHRC"
-        echo "# Ruby gem binaries" >> "$BASHRC"
-        echo "export PATH=\"\$HOME/.local/share/gem/ruby/$RUBY_VERSION/bin:\$PATH\"" >> "$BASHRC"
+        {
+            echo ""
+            echo "# Ruby gem binaries"
+            echo "if [ -d \"\$HOME/.local/share/gem/ruby/$RUBY_VERSION/bin\" ]; then"
+            echo "    export PATH=\"\$HOME/.local/share/gem/ruby/$RUBY_VERSION/bin:\$PATH\""
+            echo "fi"
+        } >> "$BASHRC"
+    else
+        print_info_message "Gem bin directory already configured in ~/.bashrc"
     fi
 fi
 
 print_tool_setup_complete "Ruby on Rails"
-
-
