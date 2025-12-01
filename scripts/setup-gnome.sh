@@ -143,74 +143,6 @@ else
 fi
 
 # --------------------------
-# Setup Catppuccin Wallpapers with Auto-Rotation
-# --------------------------
-
-print_info_message "Setting up Catppuccin wallpapers with auto-rotation"
-
-WALLPAPER_REPO_DIR="$USER_HOME_DIR/.local/share/catppuccin-wallpapers"
-WALLPAPER_SCRIPT="$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh"
-AUTOSTART_DIR="$USER_HOME_DIR/.config/autostart"
-AUTOSTART_FILE="$AUTOSTART_DIR/rotate-wallpaper.desktop"
-
-# Clone wallpaper repository if it doesn't exist
-if [ ! -d "$WALLPAPER_REPO_DIR" ]; then
-    print_info_message "Cloning Catppuccin wallpapers repository"
-    git clone --depth 1 https://github.com/zhichaoh/catppuccin-wallpapers.git "$WALLPAPER_REPO_DIR"
-else
-    print_info_message "Catppuccin wallpapers already cloned. Updating..."
-    cd "$WALLPAPER_REPO_DIR" && git pull 2>/dev/null || true
-fi
-
-# Symlink wallpaper rotation script from dotfiles repo
-print_info_message "Setting up wallpaper rotation script"
-mkdir -p "$(dirname "$WALLPAPER_SCRIPT")"
-
-WALLPAPER_SCRIPT_SOURCE="$CURRENT_FILE_DIR/../home/.local/bin/rotate-wallpaper.sh"
-
-# Remove existing file or symlink
-if [ -L "$WALLPAPER_SCRIPT" ] || [ -f "$WALLPAPER_SCRIPT" ]; then
-    rm -f "$WALLPAPER_SCRIPT"
-fi
-
-# Create symlink to dotfiles repo
-if [ -f "$WALLPAPER_SCRIPT_SOURCE" ]; then
-    ln -sf "$WALLPAPER_SCRIPT_SOURCE" "$WALLPAPER_SCRIPT"
-    print_info_message "Wallpaper rotation script symlinked from dotfiles repo"
-else
-    print_warning_message "Wallpaper rotation script not found in dotfiles repo"
-fi
-
-# Create autostart entry for wallpaper rotation
-print_info_message "Setting up wallpaper rotation on login"
-mkdir -p "$AUTOSTART_DIR"
-
-cat > "$AUTOSTART_FILE" << 'AUTOSTART_EOF'
-[Desktop Entry]
-Type=Application
-Name=Rotate Wallpaper
-Comment=Randomly rotate Catppuccin wallpaper on login
-Exec=/bin/bash -c "$HOME/.local/bin/rotate-wallpaper.sh"
-Terminal=false
-Hidden=false
-X-GNOME-Autostart-enabled=true
-AUTOSTART_EOF
-
-print_info_message "Autostart entry created at: $AUTOSTART_FILE"
-
-# Run the wallpaper rotation script immediately
-print_info_message "Setting initial random wallpaper"
-bash "$WALLPAPER_SCRIPT"
-
-print_info_message ""
-print_info_message "Wallpaper rotation configured successfully!"
-print_info_message "  - Wallpapers location: $WALLPAPER_REPO_DIR/landscapes/"
-print_info_message "  - Rotation script: $WALLPAPER_SCRIPT"
-print_info_message "  - A random wallpaper will be set on each login"
-print_info_message ""
-print_info_message "To manually change wallpaper, run: $WALLPAPER_SCRIPT"
-
-# --------------------------
 # Additional Theme Tweaks
 # --------------------------
 
@@ -230,17 +162,7 @@ gsettings set org.gnome.desktop.interface show-battery-percentage true
 print_info_message "Setting Firefox as default browser"
 xdg-settings set default-web-browser firefox.desktop
 
-# Set up keyboard shortcut for wallpaper rotation (Super+W)
-print_info_message "Setting up keyboard shortcut for wallpaper rotation (Super+W)"
 CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
-
-# Set the custom keybinding
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH']"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH name 'Rotate Wallpaper'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "nohup $USER_HOME_DIR/.local/bin/rotate-wallpaper.sh >/dev/null 2>&1 &"
-# gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "nohup $USER_HOME_DIR/.local/bin/rotate-wallpaper.sh >/dev/null 2>&1 &"
-# gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH command "$USER_HOME_DIR/.local/bin/rotate-wallpaper.sh &"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYBINDING_PATH binding '<Super>w'
 
 # --------------------------
 # Install Caffeine for Preventing Sleep During Media Playback
@@ -449,8 +371,6 @@ print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
 print_info_message "  - File Manager: Super+E"
 print_info_message "  - Browser (Firefox): Super+B"
-print_info_message "  - Rotate Wallpaper: Super+W"
-print_info_message ""
 
 # --------------------------
 # Installation Complete

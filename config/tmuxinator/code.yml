@@ -14,12 +14,12 @@ windows:
         - 
       pre:
         # Create the layout: nvim + bash on left, claude on right
-        - tmux split-window -h -p 20
+        - tmux split-window -h -p 20 # claude pane
         - tmux select-pane -t 1
-        - tmux split-window -v -p 10
+        - tmux split-window -v -p 10  # bash pane
         - tmux send-keys -t 1 'nvim' C-m
         - tmux send-keys -t 2 'bash' C-m
-        - tmux send-keys -t 3 'claude /resume' C-m
+        - tmux send-keys -t 3 'claude' C-m
         - tmux select-pane -t 1
   - lazygit:
       panes:
