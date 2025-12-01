@@ -393,3 +393,8 @@ fi
 
 export PATH="$PATH:/home/dela/.config/composer/vendor/bin"
 export PATH="$PATH:/home/dela/.config/composer/vendor/bin"
+
+# Ruby gem binaries
+if [ -d "$HOME/.local/share/gem/ruby/3.4.0/bin" ]; then
+    export PATH="$HOME/.local/share/gem/ruby/3.4.0/bin:$PATH"
+fi

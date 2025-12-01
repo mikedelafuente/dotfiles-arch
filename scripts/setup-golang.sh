@@ -40,20 +40,22 @@ fi
 print_info_message "Golang version: $(go version)"
 
 # Install any extra tooling considered standard for Go development on Arch
+EXTRA_GO_PACKAGES=("gopls")
 
-# gopls: Language server for Go (provides IDE features)
-EXTRA_GO_PACKAGES=(
-    "gopls"
-)
-
+# Batch check and install extra packages
+PACKAGES_TO_INSTALL=()
 for package in "${EXTRA_GO_PACKAGES[@]}"; do
-    if ! pacman -Qi "$package" &> /dev/null; then
-        print_info_message "Installing $package"
-        sudo pacman -S --needed --noconfirm "$package"
+    if ! pacman -Q "$package" &> /dev/null; then
+        PACKAGES_TO_INSTALL+=("$package")
     else
-        print_info_message "$package is already installed. Skipping."
+        print_info_message "$package is already installed"
     fi
 done
+
+if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
+    print_info_message "Installing Go development tools: ${PACKAGES_TO_INSTALL[*]}"
+    sudo pacman -S --needed --noconfirm "${PACKAGES_TO_INSTALL[@]}"
+fi
 
 print_tool_setup_complete "Go (golang)"
 

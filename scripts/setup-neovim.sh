@@ -57,51 +57,31 @@ print_info_message "Neovim version: $(nvim --version | head -n 1)"
 
 print_info_message "Installing dependencies for Neovim plugins"
 
-# Install fd and ripgrep (required by Telescope)
-if ! command -v fd &> /dev/null; then
-    print_info_message "Installing fd"
-    sudo pacman -S --needed --noconfirm fd
+# Batch check and install dependencies
+NEOVIM_DEPS=("fd" "ripgrep" "gcc" "make" "python-pynvim")
+DEPS_TO_INSTALL=()
+
+for dep in "${NEOVIM_DEPS[@]}"; do
+    if ! pacman -Q "$dep" &> /dev/null; then
+        DEPS_TO_INSTALL+=("$dep")
+    else
+        print_info_message "$dep is already installed"
+    fi
+done
+
+if [ ${#DEPS_TO_INSTALL[@]} -gt 0 ]; then
+    print_info_message "Installing ${#DEPS_TO_INSTALL[@]} dependency package(s): ${DEPS_TO_INSTALL[*]}"
+    sudo pacman -S --needed --noconfirm "${DEPS_TO_INSTALL[@]}"
 else
-    print_info_message "fd is already installed."
+    print_info_message "All Neovim dependencies are already installed"
 fi
 
-if ! command -v rg &> /dev/null; then
-    print_info_message "Installing ripgrep"
-    sudo pacman -S --needed --noconfirm ripgrep
-else
-    print_info_message "ripgrep is already installed."
-fi
-
-# Install gcc and make (required for telescope-fzf-native and treesitter)
-if ! command -v gcc &> /dev/null; then
-    print_info_message "Installing gcc"
-    sudo pacman -S --needed --noconfirm gcc
-else
-    print_info_message "gcc is already installed."
-fi
-
-if ! command -v make &> /dev/null; then
-    print_info_message "Installing make"
-    sudo pacman -S --needed --noconfirm make
-else
-    print_info_message "make is already installed."
-fi
-
-# Install Node.js (required for some LSP servers)
-# This should already be installed via setup-node.sh, but let's verify
+# Verify Node.js (required for some LSP servers, should be installed via setup-node.sh)
 if ! command -v node &> /dev/null; then
-  print_warning_message "Node.js is not installed. Some LSP servers may not work correctly."
-  print_info_message "Run setup-node.sh to install Node.js"
+    print_warning_message "Node.js is not installed. Some LSP servers may not work correctly."
+    print_info_message "Run setup-node.sh to install Node.js"
 else
-  print_info_message "Node.js is installed: $(node --version)"
-fi
-
-# Install Python support for Neovim
-if ! pacman -Qi python-pynvim &> /dev/null; then
-    print_info_message "Installing python-pynvim for Python support in Neovim"
-    sudo pacman -S --needed --noconfirm python-pynvim
-else
-    print_info_message "python-pynvim is already installed."
+    print_info_message "Node.js is installed: $(node --version)"
 fi
 
 # --------------------------

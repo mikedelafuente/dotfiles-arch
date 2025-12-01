@@ -40,29 +40,32 @@ declare -A NERD_FONTS=(
     ["Hack"]="ttf-hack-nerd"
 )
 
-FONTS_UPDATED=false
-
 print_info_message "Installing Nerd Fonts from official Arch repositories"
 
-# Iterate through the array and install each font
+# Batch check which fonts need to be installed
+FONTS_TO_INSTALL=()
 for FONT_NAME in "${!NERD_FONTS[@]}"; do
     PACKAGE_NAME="${NERD_FONTS[$FONT_NAME]}"
-
-    # Check if package is already installed
-    if pacman -Qi "$PACKAGE_NAME" &> /dev/null; then
-        print_info_message "$FONT_NAME Nerd Font ($PACKAGE_NAME) already installed. Skipping."
+    if pacman -Q "$PACKAGE_NAME" &> /dev/null; then
+        print_info_message "$FONT_NAME Nerd Font already installed"
     else
-        print_info_message "Installing $FONT_NAME Nerd Font ($PACKAGE_NAME)"
-
-        # Install font via pacman (--needed skips if already installed, --noconfirm for non-interactive)
-        if sudo pacman -S --needed --noconfirm "$PACKAGE_NAME"; then
-            print_info_message "$FONT_NAME Nerd Font installed successfully"
-            FONTS_UPDATED=true
-        else
-            print_error_message "Failed to install $FONT_NAME Nerd Font ($PACKAGE_NAME)"
-        fi
+        FONTS_TO_INSTALL+=("$PACKAGE_NAME")
     fi
 done
+
+# Batch install all missing fonts
+FONTS_UPDATED=false
+if [ ${#FONTS_TO_INSTALL[@]} -gt 0 ]; then
+    print_info_message "Installing ${#FONTS_TO_INSTALL[@]} font package(s): ${FONTS_TO_INSTALL[*]}"
+    if sudo pacman -S --needed --noconfirm "${FONTS_TO_INSTALL[@]}"; then
+        print_success_message "Fonts installed successfully"
+        FONTS_UPDATED=true
+    else
+        print_error_message "Some fonts failed to install"
+    fi
+else
+    print_info_message "All Nerd Fonts are already installed"
+fi
 
 # --------------------------
 # Refresh Font Cache

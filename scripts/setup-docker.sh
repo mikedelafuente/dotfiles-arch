@@ -27,27 +27,45 @@ fi
 print_tool_setup_start "Docker"
 
 # --------------------------
-# Remove Old Docker Versions
-# --------------------------
-
-# Uninstall old versions of Docker and Podman packages if they exist
-print_info_message "Removing old Docker/Podman versions if present"
-sudo pacman -R --noconfirm docker \
-                           docker-compose \
-                           podman \
-                           podman-docker 2>/dev/null || true
-
-# --------------------------
 # Check if Docker is Already Installed
 # --------------------------
 
 # Check to see if Docker is already installed and working
 if command -v docker >/dev/null 2>&1 && docker --version >/dev/null 2>&1; then
-  print_info_message "Docker is already installed. Skipping installation."
+  print_info_message "Docker is already installed and working."
+
+  # Ensure user is in docker group
+  if [ -n "${SUDO_USER-}" ]; then
+    TARGET_USER="$SUDO_USER"
+  else
+    TARGET_USER="$USER"
+  fi
+
+  if ! groups "$TARGET_USER" | grep -q docker; then
+    print_info_message "Adding user '$TARGET_USER' to docker group"
+    sudo usermod -aG docker "$TARGET_USER"
+    print_warning_message "You need to log out and log back in for group changes to take effect"
+  fi
+
   print_tool_setup_complete "Docker"
   exit 0
-else
-  print_info_message "Docker not found or not working. Proceeding with installation."
+fi
+
+# --------------------------
+# Remove Old Docker Versions (Only if Installing)
+# --------------------------
+
+# Uninstall old incompatible packages if they exist
+OLD_PACKAGES=()
+for pkg in docker-compose podman podman-docker; do
+  if pacman -Q "$pkg" &> /dev/null; then
+    OLD_PACKAGES+=("$pkg")
+  fi
+done
+
+if [ ${#OLD_PACKAGES[@]} -gt 0 ]; then
+  print_info_message "Removing old/conflicting packages: ${OLD_PACKAGES[*]}"
+  sudo pacman -R --noconfirm "${OLD_PACKAGES[@]}"
 fi
 
 # --------------------------

@@ -32,36 +32,37 @@ print_tool_setup_start "Essential Packages"
 ESSENTIAL_PACKAGES=(git curl wget xsel fzf ripgrep fd bat htop ncdu tree jq tmux net-tools btop duf stow shellcheck github-cli tldr fastfetch zoxide linux-firmware-intel)
 print_line_break "Installing essential packages"
 
+# Batch check which packages need to be installed
+PACKAGES_TO_INSTALL=()
 for package in "${ESSENTIAL_PACKAGES[@]}"; do
-    # Check if package is installed using pacman
     if ! pacman -Q "$package" &> /dev/null; then
-        print_info_message "Installing $package"
-        sudo pacman -S --needed --noconfirm "$package"
-        
-        # Verify installation succeeded
-        if pacman -Q "$package" &> /dev/null; then
-            print_info_message "$package installed successfully"
-            
-            # Post-installation hooks for packages that need special initialization
-            case "$package" in
-                zoxide)
-                    print_info_message "Initializing zoxide for current session"
-                    if command -v zoxide &> /dev/null; then
-                        eval "$(zoxide init bash)"
-                    fi
-                    ;;
-                # Add more special cases here as needed
-                # example)
-                #     print_info_message "Running special setup for example"
-                #     special_command_here
-                #     ;;
-            esac
-        else
-            print_info_message "Warning: $package installation may have failed"
-        fi
+        PACKAGES_TO_INSTALL+=("$package")
     else
-        print_info_message "$package is already installed. Skipping installation."
+        print_info_message "$package is already installed."
     fi
 done
+
+# Batch install all missing packages in one command
+if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
+    print_info_message "Installing ${#PACKAGES_TO_INSTALL[@]} package(s): ${PACKAGES_TO_INSTALL[*]}"
+    sudo pacman -S --needed --noconfirm "${PACKAGES_TO_INSTALL[@]}"
+
+    # Verify installations
+    for package in "${PACKAGES_TO_INSTALL[@]}"; do
+        if pacman -Q "$package" &> /dev/null; then
+            print_info_message "$package installed successfully"
+        else
+            print_warning_message "$package installation may have failed"
+        fi
+    done
+else
+    print_info_message "All essential packages are already installed."
+fi
+
+# Post-installation hooks for packages that need special initialization
+if pacman -Q zoxide &> /dev/null && command -v zoxide &> /dev/null; then
+    print_info_message "Initializing zoxide for current session"
+    eval "$(zoxide init bash)"
+fi
 
 print_tool_setup_complete "Essential Packages"
