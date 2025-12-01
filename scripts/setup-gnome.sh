@@ -422,6 +422,9 @@ gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>spac
 # Disable default Super key behavior (opening activities overview on single press)
 gsettings set org.gnome.mutter overlay-key ''
 
+# Disable hot corners (prevents Activities overview from triggering on hover in top-left corner)
+gsettings set org.gnome.desktop.interface enable-hot-corners false
+
 # Clear other default overlay shortcuts that might conflict
 gsettings set org.gnome.shell.keybindings toggle-overview "[]"
 
