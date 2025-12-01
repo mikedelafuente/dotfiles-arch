@@ -84,8 +84,22 @@ fi
 # Run a sudo command early to prompt for the password
 sudo -v
 
+# Keep sudo alive in the background for the duration of the script
+# This prevents multiple password prompts during a long bootstrap process
+{
+    while true; do
+        sudo -n true
+        sleep 60
+        kill -0 "$$" 2>/dev/null || exit
+    done
+} &
+SUDO_KEEPALIVE_PID=$!
+
+# Ensure we kill the keepalive process when the script exits
+trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
+
 # --------------------------
-# Import Common Header 
+# Import Common Header
 # --------------------------
 
 # Add header file
@@ -133,7 +147,7 @@ fi
 
 if [ "$PACMAN_CHANGES_MADE" = true ]; then
     echo "Running pacman -Syu to update package database..."
-    sudo pacman -Syu
+    sudo pacman -Syu --noconfirm
 fi
 
 # To check the display Manager
@@ -155,7 +169,7 @@ if [ "$TIME_DIFF" -lt 86400 ] && [ "$PACMAN_CHANGES_MADE" = false ]; then
     print_info_message "Last Pacman update was less than a day ago. Skipping update."
 else
     print_info_message "Last Pacman update was more than a day ago or changes to pacman.conf was made. Performing update."
-    sudo pacman -Sy #|| true
+    sudo pacman -Sy --noconfirm #|| true
     # Write a file to ~/.last_pacman_update with the current timestamp
     echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_update"
 fi
@@ -169,7 +183,7 @@ if [ "$TIME_DIFF" -lt 86400 ]; then
     print_info_message "Last Pacman upgrade was less than a day ago. Skipping upgrade."
 else
     print_info_message "Last Pacman upgrade was more than a day ago. Performing upgrade."
-    sudo pacman -Su
+    sudo pacman -Su --noconfirm
     # Write a file to ~/.last_pacman_upgrade with the current timestamp
     echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_upgrade"
 fi
@@ -183,7 +197,7 @@ fi
 		git clone https://aur.archlinux.org/yay.git
 		cd yay || exit 1
 		sudo pacman -S --needed --noconfirm base-devel
-		makepkg -si
+		makepkg -si --noconfirm
 		cd "$USER_HOME_DIR" || exit 1
 		rm -rf yay
 	fi
@@ -200,7 +214,7 @@ else
     print_info_message "Last Yay update was more than a day ago. Performing update."
     # Write a file to ~/.last_flatpak_update with the current timestamp
     echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_yay_update"
-    yay -Syu
+    yay -Syu --noconfirm
 fi
 
 # --------------------------
@@ -315,7 +329,7 @@ ORPHANED_PACKAGES=$(pacman -Qtdq)
 if [ -n "$ORPHANED_PACKAGES" ]; then
     # The variable is not empty, meaning there are orphaned packages.
     echo "Found orphaned packages. Removing them now..."
-    sudo pacman -Rns $ORPHANED_PACKAGES
+    sudo pacman -Rns --noconfirm $ORPHANED_PACKAGES
 else
     # The variable is empty, meaning there are no orphaned packages.
     echo "No orphaned packages found."

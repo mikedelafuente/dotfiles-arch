@@ -44,7 +44,7 @@ if command -v bundle &> /dev/null; then
     print_info_message "Bundler is already installed. Skipping installation."
 else
     print_info_message "Installing Bundler gem"
-    gem install bundler
+    sudo gem install bundler
 fi
 
 # Install Rails dependencies
@@ -76,7 +76,7 @@ if command -v rails &> /dev/null; then
     print_info_message "Rails version: $(rails --version)"
 else
     print_info_message "Installing Rails gem"
-    gem install rails
+    sudo gem install rails
     print_success_message "Rails installed successfully"
     print_info_message "Rails version: $(rails --version)"
 fi
