@@ -43,8 +43,8 @@ print_info_message "Ruby version: $(ruby --version)"
 if command -v bundle &> /dev/null; then
     print_info_message "Bundler is already installed. Skipping installation."
 else
-    print_info_message "Installing Bundler gem"
-    sudo gem install bundler
+    print_info_message "Installing Bundler gem to user directory"
+    gem install --user-install bundler
 fi
 
 # Install Rails dependencies
@@ -75,10 +75,30 @@ if command -v rails &> /dev/null; then
     print_info_message "Rails is already installed."
     print_info_message "Rails version: $(rails --version)"
 else
-    print_info_message "Installing Rails gem"
-    sudo gem install rails
+    print_info_message "Installing Rails gem to user directory"
+    gem install --user-install rails
     print_success_message "Rails installed successfully"
     print_info_message "Rails version: $(rails --version)"
+fi
+
+# Ensure user gem bin directory is in PATH
+RUBY_VERSION=$(ruby -e 'puts RbConfig::CONFIG["ruby_version"]')
+GEM_BIN_DIR="$USER_HOME_DIR/.local/share/gem/ruby/$RUBY_VERSION/bin"
+
+if [ -d "$GEM_BIN_DIR" ]; then
+    if ! echo "$PATH" | grep -q "$GEM_BIN_DIR"; then
+        print_info_message "Adding gem bin directory to PATH for this session"
+        export PATH="$GEM_BIN_DIR:$PATH"
+    fi
+
+    # Add to .bashrc if not already there
+    BASHRC="$USER_HOME_DIR/.bashrc"
+    if [ -f "$BASHRC" ] && ! grep -q "gem/ruby.*bin" "$BASHRC"; then
+        print_info_message "Adding gem bin directory to ~/.bashrc"
+        echo "" >> "$BASHRC"
+        echo "# Ruby gem binaries" >> "$BASHRC"
+        echo "export PATH=\"\$HOME/.local/share/gem/ruby/$RUBY_VERSION/bin:\$PATH\"" >> "$BASHRC"
+    fi
 fi
 
 print_tool_setup_complete "Ruby on Rails"
