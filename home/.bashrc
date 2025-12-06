@@ -18,12 +18,7 @@ fi
 
 
 # Give a small intro message upon starting a new shell that most developers use
-echo "Welcome $USER! Type 'aliases' to see custom aliases and key bindings."
-if command -v github-copilot-cli &> /dev/null; then
-    echo ""
-    echo "🤖 AI Assistant (GitHub Copilot CLI):"
-    echo "  ??        → Ask for any command help"
-fi
+# echo "Type 'aliases' to see custom aliases and key bindings."
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile

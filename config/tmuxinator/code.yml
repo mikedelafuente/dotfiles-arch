@@ -21,6 +21,12 @@ windows:
         - tmux send-keys -t 2 'bash' C-m
         - tmux send-keys -t 3 'claude' C-m
         - tmux select-pane -t 1
+  - mycli:
+      panes:
+        - mycli --user laravel laravel --password password
   - lazygit:
       panes:
-      - lazygit
+        - lazygit
+  - lazydocker:
+      panes:
+        - lazydocker

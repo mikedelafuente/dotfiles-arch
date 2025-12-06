@@ -28,7 +28,7 @@ print_tool_setup_start "Code Command (Development Environment Launcher)"
 # Check Dependencies
 # --------------------------
 
-DEPENDENCIES=(tmux lazygit tmuxinator)
+DEPENDENCIES=(tmux lazygit tmuxinator lazydocker mycli)
 MISSING_DEPS=()
 
 for dep in "${DEPENDENCIES[@]}"; do
@@ -50,6 +50,12 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
                 ;;
             tmuxinator)
                 yay -S --needed --noconfirm tmuxinator
+                ;;
+            lazydocker)
+                yay -S --needed --noconfirm laxydocker
+                ;;
+            mycli)
+                yay -S --needed --noconfirm mycli
                 ;;
         esac
 
