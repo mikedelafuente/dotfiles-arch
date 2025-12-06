@@ -42,6 +42,9 @@ keymap("v", "<A-k>", ":m '<-2<CR>gv=gv", { desc = "Move selection up" })
 -- Save file
 keymap("n", "<C-s>", "<cmd>w<CR>", { desc = "Save file" })
 
+-- Format document with LSP
+keymap("n", "<leader>lf", "<cmd>lua vim.lsp.buf.format()<CR>", { desc = "Format document" })
+
 -- ============================================================================
 -- Plugin-specific Mappings (defined here for reference)
 -- ============================================================================
