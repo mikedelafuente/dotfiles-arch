@@ -35,7 +35,7 @@ if command -v php &> /dev/null; then
     print_info_message "PHP is already installed. Skipping installation."
 else
     print_info_message "Installing PHP and common extensions"
-    sudo pacman -S --needed --noconfirm php php-gd php-intl php-sqlite
+    sudo pacman -S --needed --noconfirm php php-gd php-intl php-sqlite php-pgsql
 
     # Verify installation
     if command -v php &> /dev/null; then
@@ -66,6 +66,33 @@ else
     else
         print_warning_message "Composer installation failed."
     fi
+fi
+
+# --------------------------
+# Configure /etc/php/php.ini
+# --------------------------
+
+print_info_message "Configuring PHP extensions in /etc/php/php.ini"
+
+PHP_INI="/etc/php/php.ini"
+if [ -f "$PHP_INI" ]; then
+    # Extensions to enable
+    EXTENSIONS=(
+        "curl"
+        "iconv"
+        "mysqli"
+        "pdo_mysql"
+        "pdo_sqlite"
+        "sqlite3"
+    )
+
+    for ext in "${EXTENSIONS[@]}"; do
+        # Uncomment the extension line
+        sudo sed -i "/^;extension=${ext}/s/^;//" "$PHP_INI" || true
+    done
+    print_success_message "PHP extensions configured"
+else
+    print_warning_message "PHP configuration file not found: $PHP_INI"
 fi
 
 # --------------------------
