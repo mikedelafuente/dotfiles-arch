@@ -69,7 +69,6 @@ On first launch:
 | **nvim-lspconfig** | LSP configuration | `:LspInfo` |
 | **nvim-cmp** | Autocompletion | - |
 | **LuaSnip** | Snippet engine | - |
-| **copilot.vim** | AI code completion | `:Copilot setup` |
 
 ### Navigation & Search
 
@@ -170,17 +169,6 @@ On first launch:
 | `<C-b>` | Scroll docs up |
 | `<C-f>` | Scroll docs down |
 | `<C-e>` | Abort completion |
-
-### GitHub Copilot (AI Assistance)
-
-| Key | Action | Mode |
-|-----|--------|------|
-| `<Tab>` | Accept suggestion | Insert |
-| `<Alt-]>` | Next suggestion | Insert |
-| `<Alt-[>` | Previous suggestion | Insert |
-| `<Alt-\>` | Dismiss suggestion | Insert |
-
-**Setup:** Run `:Copilot setup` on first use and authenticate with your GitHub account.
 
 ### Git (Gitsigns)
 
