@@ -38,6 +38,9 @@ return {
     -- LSP Config: Quickstart configs for Neovim LSP
     {
         "neovim/nvim-lspconfig",
+        event = {
+            "BufReadPre",
+            "BufNewFile" },
         dependencies = {
             "williamboman/mason.nvim",
             "williamboman/mason-lspconfig.nvim",
@@ -52,14 +55,14 @@ return {
             mason_lspconfig.setup({
                 -- Automatically install these LSP servers
                 ensure_installed = {
-                    "lua_ls", -- Lua
-                    "pyright", -- Python
-                    "ts_ls", -- TypeScript/JavaScript
+                    "lua_ls",        -- Lua
+                    "pyright",       -- Python
+                    "ts_ls",         -- TypeScript/JavaScript
                     "rust_analyzer", -- Rust
-                    "gopls", -- Go
-                    "bashls", -- Bash
-                    "intelephense", -- PHP
-                    "psalm", -- PHP static analysis
+                    "gopls",         -- Go
+                    "bashls",        -- Bash
+                    "intelephense",  -- PHP
+                    "psalm",         -- PHP static analysis
                     -- Note: omnisharp (C#) needs to be installed manually via Mason
                 },
                 automatic_installation = true,
