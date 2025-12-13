@@ -59,6 +59,7 @@ return {
           "gopls",          -- Go
           "bashls",         -- Bash
           "intelephense",   -- PHP
+          "psalm",          -- PHP static analysis
           -- Note: omnisharp (C#) needs to be installed manually via Mason
         },
         automatic_installation = true,
@@ -137,7 +138,33 @@ return {
         },
         gopls = {},
         bashls = {},
-        intelephense = {},
+        intelephense = {
+          settings = {
+            intelephense = {
+              diagnostics = {
+                enable = true,
+                undefinedSymbols = true,
+                undefinedVariables = true,
+                undefinedMethods = true,
+                undefinedClassConstants = true,
+                undefinedFunctions = true,
+                undefinedTypes = true,
+                undefinedConstants = true,
+                argumentCount = true,
+              },
+            },
+          },
+        },
+        psalm = {
+          settings = {
+            psalm = {
+              enableCodeActions = true,
+              hoistAnalysis = false,
+              symbolsToIgnore = {},
+              hideInlayHints = {},
+            },
+          },
+        },
       }
 
       -- Setup all servers using vim.lsp.config (Neovim 0.11+)
@@ -154,7 +181,7 @@ return {
       -- Auto-start LSP servers for configured filetypes
       vim.api.nvim_create_autocmd("FileType", {
         callback = function(args)
-          -- Map filetypes to LSP servers
+          -- Map filetypes to LSP servers (can be string or table of strings for multiple servers)
           local filetype_servers = {
             lua = "lua_ls",
             python = "pyright",
@@ -166,12 +193,22 @@ return {
             go = "gopls",
             sh = "bashls",
             bash = "bashls",
-            php = "intelephense",
+            php = { "intelephense", "psalm" },
           }
-          
-          local server = filetype_servers[args.match]
-          if server and servers[server] then
-            vim.lsp.enable(server)
+
+          local server_list = filetype_servers[args.match]
+          if not server_list then return end
+
+          -- Handle both single server string and multiple servers table
+          if type(server_list) == "string" then
+            server_list = { server_list }
+          end
+
+          -- Enable all configured servers for this filetype
+          for _, server in ipairs(server_list) do
+            if servers[server] then
+              vim.lsp.enable(server)
+            end
           end
         end,
       })
