@@ -267,6 +267,9 @@ bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
 # Run the setup-docker.sh script to set up Docker
 bash "$DF_SCRIPT_DIR/setup-docker.sh"
 
+# Setup Minikube (Kubernetes cluster manager)
+bash "$DF_SCRIPT_DIR/setup-minikube.sh"
+
 # Install Claude Code CLI
 bash "$DF_SCRIPT_DIR/setup-claude.sh"
 
