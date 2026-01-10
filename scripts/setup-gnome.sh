@@ -165,13 +165,8 @@ xdg-settings set default-web-browser firefox.desktop
 CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
 
 # --------------------------
-# Install Caffeine for Preventing Sleep During Media Playback
+# Configure Power Management for Media Playback
 # --------------------------
-
-print_info_message "Installing Caffeine to prevent sleep during active use"
-
-# Install caffeine-ng (works across desktop environments and has better GNOME integration)
-yay -S --noconfirm --needed caffeine-ng
 
 # Configure power settings to ensure media playback inhibits sleep
 print_info_message "Configuring power management for media playback"
@@ -191,7 +186,6 @@ print_info_message "  - GNOME automatically detects video playback via MPRIS"
 print_info_message "  - During video playback: screen stays on, system doesn't sleep"
 print_info_message "  - When idle (no video): screen blanks after 20min, system sleeps per power settings"
 print_info_message "  - Supported players: Firefox, Chrome, VLC, mpv, celluloid, and most modern media apps"
-print_info_message "  - Caffeine-ng provides a system tray icon for manual override when needed"
 print_info_message ""
 
 # --------------------------
