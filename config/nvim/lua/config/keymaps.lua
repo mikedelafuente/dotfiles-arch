@@ -12,6 +12,10 @@ local keymap = vim.keymap.set
 -- Clear search highlighting with <Esc>
 keymap("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "Clear search highlighting" })
 
+-- Exit insert mode quickly (alternative to Esc)
+keymap("i", "jj", "<Esc>", { desc = "Exit insert mode" })
+keymap("i", "jk", "<Esc>", { desc = "Exit insert mode" })
+
 -- Better window navigation
 keymap("n", "<C-h>", "<C-w>h", { desc = "Move to left window" })
 keymap("n", "<C-j>", "<C-w>j", { desc = "Move to bottom window" })
