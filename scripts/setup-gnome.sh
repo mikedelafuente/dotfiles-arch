@@ -307,11 +307,11 @@ gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-right "['<Super
 
 print_info_message "Configuring Hyprland-style application launcher shortcuts"
 
-# Super+Return for terminal (using kitty if available, fallback to gnome-terminal)
+# Super+Return for terminal (using ghostty if available, fallback to gnome-terminal)
 CUSTOM_KB_TERMINAL="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL name 'Launch Terminal'
-if command -v kitty &> /dev/null; then
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL command 'kitty'
+if command -v ghostty &> /dev/null; then
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL command 'ghostty'
 else
     gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL command 'gnome-terminal'
 fi

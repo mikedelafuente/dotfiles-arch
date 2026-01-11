@@ -29,7 +29,7 @@ dotfiles-arch/
 │   └── ...
 ├── config/                        # Application config directories
 │   ├── nvim/                     # Neovim configuration (LazyVim)
-│   ├── kitty/                    # Kitty terminal config
+│   ├── ghostty/                  # Ghostty terminal config
 │   ├── hypr/                     # Hyprland config
 │   ├── alacritty/                # Alacritty terminal config
 │   └── ...

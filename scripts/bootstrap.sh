@@ -252,9 +252,6 @@ bash "$DF_SCRIPT_DIR/setup-rust.sh"
 # Setup Go (Golang)
 bash "$DF_SCRIPT_DIR/setup-golang.sh"
 
-# Setup Kitty with Catpuccin theme
-bash "$DF_SCRIPT_DIR/setup-kitty.sh"
-
 # Setup Ghostty with Catppuccin theme
 bash "$DF_SCRIPT_DIR/setup-ghostty.sh"
 

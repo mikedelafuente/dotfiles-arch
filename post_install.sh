@@ -34,8 +34,9 @@ sudo pacman -Syu
 sudo pacman -S nvidia-open nvidia-utils nvidia-settings --needed --noconfirm
 
 # Install Desktop Environment (Hyperland + Plasma)
-# kitty is a prereq for hyperland
-sudo pacman -S kitty --noconfirm
+# A terminal emulator is needed for hyperland
+# Alacritty is used as a fallback; ghostty will be installed by bootstrap.sh
+sudo pacman -S alacritty --noconfirm
 
 sudo pacman -S hyprland --noconfirm
 
