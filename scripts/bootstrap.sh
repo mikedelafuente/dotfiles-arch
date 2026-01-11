@@ -255,6 +255,9 @@ bash "$DF_SCRIPT_DIR/setup-golang.sh"
 # Setup Kitty with Catpuccin theme
 bash "$DF_SCRIPT_DIR/setup-kitty.sh"
 
+# Setup Ghostty with Catppuccin theme
+bash "$DF_SCRIPT_DIR/setup-ghostty.sh"
+
 # Setup TablePlus for database management
 bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
 
