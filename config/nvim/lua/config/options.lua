@@ -55,3 +55,13 @@ opt.completeopt = "menu,menuone,noselect"  -- Completion options
 -- Set leader key (must be set before plugins load)
 vim.g.mapleader = " "       -- Space as leader key
 vim.g.maplocalleader = " "
+
+-- Filetype-specific settings
+-- Enable line wrapping for Markdown files
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = "markdown",
+  callback = function()
+    vim.opt_local.wrap = true
+    vim.opt_local.linebreak = true  -- Break at word boundaries
+  end,
+})
