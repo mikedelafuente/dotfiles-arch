@@ -291,6 +291,9 @@ bash "$DF_SCRIPT_DIR/setup-steam.sh"
 # Install Discord
 bash "$DF_SCRIPT_DIR/setup-discord.sh"
 
+# Setup ZSA Moonlander keyboard (udev rules and Keymapp)
+bash "$DF_SCRIPT_DIR/setup-moonlander.sh"
+
 # Install Spotify
 bash "$DF_SCRIPT_DIR/setup-spotify.sh"
 

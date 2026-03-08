@@ -6,15 +6,6 @@
 # Use custom .inputrc for readline settings (tab completion, key bindings, etc.)
 export INPUTRC=~/.inputrc
 
-# ----------------
-# Source - https://stackoverflow.com/a
-# Posted by jogarcia, modified by community. See post 'Timeline' for change history
-# Retrieved 2025-11-16, License - CC BY-SA 4.0
-if command -v tmux &> /dev/null && [ -n "$PS1" ] && [[ ! "$TERM" =~ screen ]] && [[ ! "$TERM" =~ tmux ]] && [ -z "$TMUX" ]; then
-    echo "Starting tmux..."
-    tmux
-fi
-# ----------------
 
 
 # Give a small intro message upon starting a new shell that most developers use
@@ -357,11 +348,6 @@ export LSCOLORS=GxFxCxDxBxegedabagacad
 # Load additional scripts if they exist
 if [ -f "$HOME/.bash_aliases" ]; then
     . "$HOME/.bash_aliases"
-fi
-
-# Initialize Starship prompt if installed
-if command -v starship &> /dev/null; then
-    eval "$(starship init bash)"
 fi
 
 # User-specific shell configuration for bash

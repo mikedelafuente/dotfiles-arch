@@ -51,17 +51,5 @@ else
     print_info_message "Bash is already the default shell. Skipping change."
 fi
 
-# --------------------------
-# Install Starship Prompt
-# --------------------------
-
-# Install Starship prompt for Bash
-if ! command -v starship &> /dev/null; then
-    print_info_message "Installing Starship prompt for Bash via pacman"
-    sudo pacman -S --needed --noconfirm starship
-else
-    print_info_message "Starship prompt is already installed. Skipping installation."
-fi
-
 print_tool_setup_complete "Bash"
 
