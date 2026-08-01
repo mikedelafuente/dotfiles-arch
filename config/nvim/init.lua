@@ -1,6 +1,5 @@
--- ============================================================================-- bootstrap lazy.nvim, LazyVim and your plugins
-
--- Neovim Configurationrequire("config.lazy")
+-- ============================================================================
+-- Neovim Configuration
 -- ============================================================================
 -- A clean, beginner-friendly Neovim setup with LSP support for multiple languages
 --
@@ -25,6 +24,6 @@
 -- ============================================================================
 
 -- Load configuration modules
-require("config.options")   -- Vim options (line numbers, tabs, etc.)
-require("config.lazy")      -- Plugin manager setup
-require("config.keymaps")   -- Key mappings (loaded after plugins)
+require("config.options") -- Vim options (line numbers, tabs, etc.)
+require("config.lazy") -- Plugin manager setup
+require("config.keymaps") -- Key mappings (loaded after plugins)

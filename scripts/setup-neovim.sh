@@ -58,7 +58,7 @@ print_info_message "Neovim version: $(nvim --version | head -n 1)"
 print_info_message "Installing dependencies for Neovim plugins"
 
 # Batch check and install dependencies
-NEOVIM_DEPS=("fd" "ripgrep" "gcc" "make" "python-pynvim")
+NEOVIM_DEPS=("fd" "ripgrep" "gcc" "make" "python-pynvim" "tree-sitter-cli")
 DEPS_TO_INSTALL=()
 
 for dep in "${NEOVIM_DEPS[@]}"; do
@@ -89,10 +89,10 @@ fi
 # --------------------------
 
 print_info_message "Neovim configuration files are managed in the dotfiles repository"
-print_info_message "Location: $(dirname "$CURRENT_FILE_DIR")/.config/nvim"
+print_info_message "Location: $(cd "$CURRENT_FILE_DIR/.." && pwd)/config/nvim"
 print_info_message "The link-dotfiles.sh script will symlink these files to ~/.config/nvim"
 
-# Note: The actual configuration files are in .config/nvim/ and will be linked
+# Note: The actual configuration files are in config/nvim/ and will be linked
 # by the link-dotfiles.sh script. This keeps them version controlled.
 
 print_action_message "Neovim setup complete!"
