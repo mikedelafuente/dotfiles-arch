@@ -1,5 +1,7 @@
 # Install Notes
 
+Start here for the big picture: [README.md](README.md). After time away: [REFRESHER.md](REFRESHER.md).
+
 Target ISO: [archlinux-2026.07.01](https://fastly.mirror.pkgbuild.com/iso/2026.07.01/) (ships **archinstall 4.4**).
 `user_configuration.json` is written for that schema (`bootloader_config`, `pacman_config`, zram `swap` object, nested `disk_encryption`).
 

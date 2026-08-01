@@ -240,22 +240,39 @@ sudo pacman -S --needed --noconfirm gnome-shell-extension-appindicator
 print_info_message "Installing GPaste clipboard manager"
 sudo pacman -S --needed --noconfirm gpaste
 
-# Enable Pop Shell extension
-print_info_message "Enabling Pop Shell extension"
-gnome-extensions enable pop-shell@system76.com 2>/dev/null || print_warning_message "Pop Shell will be enabled after GNOME Shell restart"
+# Ensure extension UUIDs are present in org.gnome.shell enabled-extensions.
+# gnome-extensions enable alone often no-ops outside an interactive session.
+ensure_gnome_extension_enabled() {
+  local uuid="$1"
+  gnome-extensions enable "$uuid" 2>/dev/null || true
+  python3 - "$uuid" <<'PY'
+import ast, subprocess, sys
+uuid = sys.argv[1]
+raw = subprocess.check_output(
+    ["gsettings", "get", "org.gnome.shell", "enabled-extensions"], text=True
+).strip()
+if raw.startswith("@as"):
+    raw = raw.split(None, 1)[1]
+exts = list(ast.literal_eval(raw))
+if uuid not in exts:
+    exts.append(uuid)
+    out = "[" + ", ".join(f"'{e}'" for e in exts) + "]"
+    subprocess.check_call(["gsettings", "set", "org.gnome.shell", "enabled-extensions", out])
+    print(f"added {uuid}")
+else:
+    print(f"already enabled: {uuid}")
+PY
+}
 
-print_info_message "Enabling No Overview extension"
-if ! gnome-extensions enable no-overview@fthx 2>/dev/null; then
-  print_warning_message "No Overview will be enabled after GNOME Shell restart (uuid: no-overview@fthx)"
-fi
-
-print_info_message "Enabling AppIndicator extension"
-gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com 2>/dev/null \
-  || print_warning_message "AppIndicator will be enabled after GNOME Shell restart"
-
-print_info_message "Enabling GPaste clipboard extension"
-gnome-extensions enable GPaste@gnome-shell-extensions.gnome.org 2>/dev/null \
-  || print_warning_message "GPaste extension will be enabled after GNOME Shell restart"
+print_info_message "Enabling GNOME Shell extensions (Pop Shell, No Overview, AppIndicator, GPaste)"
+# Pop Shell AUR builds often lag GNOME major versions; allow loading anyway.
+gsettings set org.gnome.shell disable-extension-version-validation true 2>/dev/null || true
+ensure_gnome_extension_enabled "pop-shell@system76.com"
+ensure_gnome_extension_enabled "no-overview@fthx"
+ensure_gnome_extension_enabled "appindicatorsupport@rgcjonas.gmail.com"
+ensure_gnome_extension_enabled "GPaste@gnome-shell-extensions.gnome.org"
+print_info_message "enabled-extensions=$(gsettings get org.gnome.shell enabled-extensions)"
+print_warning_message "New system extensions need a log out/in before GNOME Shell discovers them."
 
 # Start GPaste daemon and tune history
 systemctl --user enable --now org.gnome.GPaste.service 2>/dev/null \
@@ -264,14 +281,21 @@ systemctl --user enable --now org.gnome.GPaste.service 2>/dev/null \
 gsettings set org.gnome.GPaste images-support true 2>/dev/null || true
 gsettings set org.gnome.GPaste max-history-size 100 2>/dev/null || true
 gsettings set org.gnome.GPaste max-displayed-history-size 20 2>/dev/null || true
-# Super+V opens clipboard history (common QoL binding)
-gsettings set org.gnome.GPaste show-history '<Super>v' 2>/dev/null || true
+# Extension-owned accelerator left empty — Super+V is a custom media-keys
+# binding to `gpaste-client show-history` so it works even when the extension
+# shortcut handler has not loaded yet.
+gsettings set org.gnome.GPaste show-history '' 2>/dev/null || true
 
 # Configure Pop Shell settings
 print_info_message "Configuring Pop Shell tiling behavior"
 
 # Enable tiling by default
 gsettings set org.gnome.shell.extensions.pop-shell tile-by-default true
+
+# Explicitly bind Super+Y (toggle auto-tiling for the workspace)
+gsettings set org.gnome.shell.extensions.pop-shell toggle-tiling "['<Super>y']"
+# Float / unfloat focused window
+gsettings set org.gnome.shell.extensions.pop-shell toggle-floating "['<Super>g']"
 
 # Configure gaps (optional - adjust to your preference)
 gsettings set org.gnome.shell.extensions.pop-shell gap-inner 4
@@ -281,9 +305,10 @@ gsettings set org.gnome.shell.extensions.pop-shell gap-outer 4
 gsettings set org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
 gsettings set org.gnome.shell.extensions.pop-shell active-hint true
 
-# Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher)
+# Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher).
+# Rebind tile adjustment mode to Super+Escape instead.
 print_info_message "Clearing Pop Shell keybindings that conflict with our shortcuts"
-gsettings set org.gnome.shell.extensions.pop-shell tile-enter "[]"
+gsettings set org.gnome.shell.extensions.pop-shell tile-enter "['<Super>Escape']"
 
 # Super+Ctrl+Left/Right: snap/tile on the current monitor (Mutter defaults)
 gsettings set org.gnome.mutter.keybindings toggle-tiled-left "['<Primary><Super>Left']"
@@ -417,8 +442,16 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER command "$BROWSER_COMMAND"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER binding '<Super>b'
 
+# Super+V clipboard history via gpaste-client (works even if the shell extension
+# shortcut handler has not loaded yet; safe alongside GPaste show-history)
+CUSTOM_KB_CLIPBOARD="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom4/"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_CLIPBOARD name 'Clipboard History'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_CLIPBOARD command 'gpaste-client show-history'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_CLIPBOARD binding '<Super>v'
+
 # Update the custom keybindings list (no empty custom0; Super+E uses built-in Home)
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_BROWSER']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \
+  "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_BROWSER', '$CUSTOM_KB_CLIPBOARD']"
 
 # Configure Super+Space for app launcher (GNOME overview with app grid)
 gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>space']"
@@ -447,7 +480,9 @@ print_info_message "  - Toggle fullscreen: Super+F"
 print_info_message "  - Toggle maximize: Super+M"
 print_info_message "  - Tile left/right (this monitor): Super+Ctrl+Left/Right"
 print_info_message "  - Move window to other monitor: Super+Ctrl+Up/Down"
-print_info_message "  - Pop Shell toggle tiling: Super+Y"
+print_info_message "  - Pop Shell toggle auto-tiling: Super+Y"
+print_info_message "  - Pop Shell float focused window: Super+G"
+print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"
 print_info_message "  - Switch windows: Alt+Tab"
 print_info_message ""
 print_info_message "Application Launchers:"
@@ -456,6 +491,8 @@ print_info_message "  - Terminal: Super+Return"
 print_info_message "  - File Explorer: Super+E"
 print_info_message "  - Browser: Super+B"
 print_info_message "  - Clipboard history (GPaste): Super+V"
+print_info_message ""
+print_warning_message "If Super+V / Super+Y still do nothing: log out and back in so GNOME reloads extensions."
 
 # --------------------------
 # Installation Complete

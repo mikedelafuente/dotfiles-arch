@@ -118,6 +118,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 
 ## Important files
 
+- `README.md` / `REFRESHER.md` — human starting point and short memory jogger
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
 - `scripts/setup-gnome.sh` — theme, Pop Shell, keybindings, GPaste, AppIndicator, No Overview
 - `scripts/setup-herdr.sh` — Herdr + Claude/Cursor integrations
