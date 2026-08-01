@@ -1,4 +1,7 @@
 {
+    "archinstall-language": "English",
+    "version": "4.4",
+    "script": "guided",
     "app_config": {
         "audio_config": {
             "audio": "pipewire"
@@ -7,14 +10,100 @@
             "enabled": true
         }
     },
-    "archinstall-language": "English",
     "auth_config": null,
-    "bootloader": "Grub",
+    "bootloader_config": {
+        "bootloader": "Grub",
+        "uki": false,
+        "removable": false
+    },
     "custom_commands": [],
     "disk_config": {
         "config_type": "default_layout",
-        "device_modifications": []
-   },
+        "btrfs_options": {
+            "snapshot_config": {
+                "type": "Snapper"
+            }
+        },
+        "disk_encryption": {
+            "encryption_type": "luks",
+            "partitions": [
+                "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            ],
+            "lvm_volumes": []
+        },
+        "device_modifications": [
+            {
+                "device": "/dev/nvme0n1",
+                "partitions": [
+                    {
+                        "btrfs": [],
+                        "dev_path": null,
+                        "flags": [
+                            "boot",
+                            "esp"
+                        ],
+                        "fs_type": "fat32",
+                        "size": {
+                            "sector_size": null,
+                            "unit": "GiB",
+                            "value": 1
+                        },
+                        "mount_options": [],
+                        "mountpoint": "/boot",
+                        "obj_id": "f0e1d2c3-b4a5-9687-0910-111213141516",
+                        "start": {
+                            "sector_size": null,
+                            "unit": "MiB",
+                            "value": 1
+                        },
+                        "status": "create",
+                        "type": "primary"
+                    },
+                    {
+                        "btrfs": [
+                            {
+                                "name": "@",
+                                "mountpoint": "/"
+                            },
+                            {
+                                "name": "@home",
+                                "mountpoint": "/home"
+                            },
+                            {
+                                "name": "@log",
+                                "mountpoint": "/var/log"
+                            },
+                            {
+                                "name": "@pkg",
+                                "mountpoint": "/var/cache/pacman/pkg"
+                            }
+                        ],
+                        "dev_path": null,
+                        "flags": [],
+                        "fs_type": "btrfs",
+                        "size": {
+                            "sector_size": null,
+                            "unit": "Percent",
+                            "value": 100
+                        },
+                        "mount_options": [
+                            "compress=zstd"
+                        ],
+                        "mountpoint": null,
+                        "obj_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        "start": {
+                            "sector_size": null,
+                            "unit": "MiB",
+                            "value": 1025
+                        },
+                        "status": "create",
+                        "type": "primary"
+                    }
+                ],
+                "wipe": true
+            }
+        ]
+    },
     "hostname": null,
     "kernels": [
         "linux"
@@ -65,29 +154,30 @@
         "zoxide",
         "neovim",
         "nodejs",
-        "npm"
+        "npm",
+        "kitty"
     ],
-    "parallel_downloads": 0,
+    "pacman_config": {
+        "parallel_downloads": 5,
+        "color": true
+    },
     "profile_config": {
         "gfx_driver": "Nvidia (open kernel module for newer GPUs, Turing+)",
         "greeter": "gdm",
         "profile": {
             "custom_settings": {
-                "GNOME": {},
-                "Hyprland": {
-                    "seat_access": "polkit"
-                }
+                "GNOME": {}
             },
             "details": [
-                "Hyprland",
                 "GNOME"
             ],
             "main": "Desktop"
         }
     },
-    "script": null,
     "services": [],
-    "swap": true,
-    "timezone": "US/Arizona",
-    "version": "3.0.11"
+    "swap": {
+        "enabled": true,
+        "algorithm": "zstd"
+    },
+    "timezone": "US/Arizona"
 }

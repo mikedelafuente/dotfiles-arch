@@ -46,5 +46,5 @@ if [[ -n "$TMUX" ]]; then
    # tmux switch-client -t "$SESSION_NAME"
 else
     # Not in tmux, start and attach
-    exec ghostty -e tmuxinator start code -n "$SESSION_NAME"
+    exec kitty tmuxinator start code -n "$SESSION_NAME"
 fi

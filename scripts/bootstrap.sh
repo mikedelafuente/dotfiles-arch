@@ -246,14 +246,14 @@ bash "$DF_SCRIPT_DIR/setup-fonts.sh"
 # Setup Bash
 bash "$DF_SCRIPT_DIR/setup-bash.sh"
 
-# Before setting up Alacritty, ensure Rust is installed
+# Ensure Rust is installed
 bash "$DF_SCRIPT_DIR/setup-rust.sh"
 
 # Setup Go (Golang)
 bash "$DF_SCRIPT_DIR/setup-golang.sh"
 
-# Setup Ghostty with Catppuccin theme
-bash "$DF_SCRIPT_DIR/setup-ghostty.sh"
+# Setup Kitty as the default terminal
+bash "$DF_SCRIPT_DIR/setup-kitty.sh"
 
 # Setup TablePlus for database management
 bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
@@ -309,14 +309,6 @@ if pacman -Q gnome-shell &> /dev/null; then
     bash "$DF_SCRIPT_DIR/setup-gnome.sh"
 else
     print_info_message "GNOME is not installed. Skipping GNOME setup."
-fi
-
-# Setup Hyprland UI (if Hyprland is installed)
-if pacman -Q hyprland &> /dev/null; then
-    print_info_message "Hyprland is installed. Running Hyprland setup..."
-    bash "$DF_SCRIPT_DIR/setup-hyprland.sh"
-else
-    print_info_message "Hyprland is not installed. Skipping Hyprland setup."
 fi
 
 # Link dotfiles

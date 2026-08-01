@@ -43,8 +43,8 @@ coverage/
 /pkg/
 # Ignore JetBrains IDE files
 *.iml
-# Ignore Alacritty log files
-alacritty.log
+# Ignore Kitty session/log files
+kitty-*.log
 # Ignore VS Code settings files
 .vscode/settings.json
 # Ignore Pop!_OS specific files

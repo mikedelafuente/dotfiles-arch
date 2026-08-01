@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Update pacman so the /etc/pacman.conf has multilib uncommented
-#swaylock with sddm and hyprland
 
 # Define the path to pacman.conf
 PACMAN_CONF="/etc/pacman.conf"
@@ -23,22 +22,14 @@ sudo sed -i '/^#\[multilib\]/{
 
 echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
 
-# To check the display Manager
-# 
-
 # Update pacman
 sudo pacman -Syu
 
-# Install Display Manager
-# None needed for Hyperland
+# Install NVIDIA drivers (open kernel module for Turing+)
 sudo pacman -S nvidia-open nvidia-utils nvidia-settings --needed --noconfirm
 
-# Install Desktop Environment (Hyperland + Plasma)
-# A terminal emulator is needed for hyperland
-# Alacritty is used as a fallback; ghostty will be installed by bootstrap.sh
-sudo pacman -S alacritty --noconfirm
-
-sudo pacman -S hyprland --noconfirm
+# Install Kitty as the default terminal
+sudo pacman -S kitty --needed --noconfirm
 
 sudo pacman -S git base-devel linux-headers --needed --noconfirm
 

@@ -1,5 +1,8 @@
 # Install Notes
 
+Target ISO: [archlinux-2026.07.01](https://fastly.mirror.pkgbuild.com/iso/2026.07.01/) (ships **archinstall 4.4**).
+`user_configuration.json` is written for that schema (`bootloader_config`, `pacman_config`, zram `swap` object, nested `disk_encryption`).
+
 To save the config to persistent storage, mount a USB drive:
 
 ```shell
@@ -19,17 +22,35 @@ archinstall --config-url http://archconfig.weekendproject.app/
 ```
 
 You need to set:
-- Disk Configuration
+- Disk device path in `user_configuration.json` (`disk_config.device_modifications[0].device`)
 - Hostname
-- Authentication
+- Authentication (including the LUKS encryption password in credentials)
 
+## Disk layout (preconfigured)
+
+`user_configuration.json` uses archinstall's default single-disk layout with:
+
+- **Filesystem**: btrfs on the root partition, FAT32 EFI at `/boot` (1 GiB)
+- **Subvolumes**: `@` (/), `@home` (/home), `@log` (/var/log), `@pkg` (/var/cache/pacman/pkg)
+- **Snapshots**: Snapper
+- **Encryption**: LUKS on the root/btrfs partition
+
+Before installing, set `device` to your target disk (e.g. `/dev/nvme0n1` or `/dev/sda`). Confirm with `lsblk` / `dmesg`. The layout wipes the selected disk.
 
 You can get some extra information about what drives were inserted using `dmesg`
 
 You can unmount via `umount /mnt/usb`
 
+## After install
 
+GNOME + GDM are installed by archinstall. For NVIDIA drivers, Kitty, and multilib:
 
-To get Arch up and running into Hyperland run:
+```shell
 ./post_install.sh
+```
 
+Then run bootstrap for the rest of the developer tooling:
+
+```shell
+bash scripts/bootstrap.sh
+```
