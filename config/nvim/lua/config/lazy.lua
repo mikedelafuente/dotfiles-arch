@@ -22,7 +22,7 @@ require("lazy").setup("plugins", {
     lazy = false,  -- Load plugins eagerly by default
   },
   install = {
-    colorscheme = { "tokyonight", "habamax" },
+    colorscheme = { "catppuccin-mocha", "habamax" },
   },
   checker = {
     enabled = true,   -- Automatically check for plugin updates

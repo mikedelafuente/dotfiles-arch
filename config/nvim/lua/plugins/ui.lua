@@ -36,9 +36,10 @@ return {
           treesitter = true,
           telescope = true,
           which_key = true,
+          lualine = true,
         },
       })
-      vim.cmd([[colorscheme catppuccin]])
+      vim.cmd([[colorscheme catppuccin-mocha]])
     end,
   },
 
@@ -106,11 +107,15 @@ return {
   -- Statusline
   {
     "nvim-lualine/lualine.nvim",
-    dependencies = { "nvim-tree/nvim-web-devicons" },
+    dependencies = {
+      "nvim-tree/nvim-web-devicons",
+      "catppuccin",
+    },
     event = "VeryLazy",
     opts = {
       options = {
-        theme = "catppuccin",
+        -- Catppuccin renamed this from "catppuccin" → flavour-specific names
+        theme = "catppuccin-mocha",
         component_separators = { left = "", right = "" },
         section_separators = { left = "", right = "" },
         disabled_filetypes = { "alpha", "dashboard" },
