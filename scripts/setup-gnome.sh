@@ -227,9 +227,18 @@ print_info_message ""
 print_info_message "Installing Pop Shell for tiling window management"
 yay -S --noconfirm --needed gnome-shell-extension-pop-shell-git
 
+# Skip GNOME Activities overview at login (land on workspace 1 / desktop)
+print_info_message "Installing No Overview extension (skip workspace picker at login)"
+yay -S --noconfirm --needed gnome-shell-extension-no-overview
+
 # Enable Pop Shell extension
 print_info_message "Enabling Pop Shell extension"
 gnome-extensions enable pop-shell@system76.com 2>/dev/null || print_warning_message "Pop Shell will be enabled after GNOME Shell restart"
+
+print_info_message "Enabling No Overview extension"
+if ! gnome-extensions enable no-overview@fthx 2>/dev/null; then
+  print_warning_message "No Overview will be enabled after GNOME Shell restart (uuid: no-overview@fthx)"
+fi
 
 # Configure Pop Shell settings
 print_info_message "Configuring Pop Shell tiling behavior"

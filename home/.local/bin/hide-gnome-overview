@@ -1,0 +1,15 @@
+#!/bin/bash
+# Dismiss GNOME Activities overview after login so session starts on workspace 1.
+# Used as a fallback alongside gnome-shell-extension-no-overview.
+
+for _ in $(seq 1 20); do
+  if busctl --user set-property org.gnome.Shell /org/gnome/Shell org.gnome.Shell OverviewActive b false 2>/dev/null; then
+    active="$(busctl --user get-property org.gnome.Shell /org/gnome/Shell org.gnome.Shell OverviewActive 2>/dev/null | awk '{print $2}')"
+    if [[ "$active" == "false" ]]; then
+      exit 0
+    fi
+  fi
+  sleep 0.25
+done
+
+exit 0

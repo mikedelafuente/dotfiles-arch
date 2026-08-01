@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Hide GNOME Overview at Startup
+Comment=Skip the workspace/Activities picker and land on workspace 1
+Exec=/bin/sh -c 'exec "$HOME/.local/bin/hide-gnome-overview"'
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
