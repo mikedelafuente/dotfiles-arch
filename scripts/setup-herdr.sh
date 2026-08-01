@@ -44,14 +44,30 @@ fi
 
 print_info_message "Herdr version: $(herdr --version 2>/dev/null || herdr -V 2>/dev/null || echo unknown)"
 
-# Install Claude integration when Claude Code is available
-if command -v claude &> /dev/null; then
+# Ensure Cursor config dir exists (required by Herdr's cursor integration install)
+mkdir -p "${CURSOR_CONFIG_DIR:-$USER_HOME_DIR/.cursor}"
+
+# Official Herdr integrations for agents we install by default
+if command -v claude &>/dev/null; then
     print_info_message "Installing Herdr Claude integration"
     herdr integration install claude 2>/dev/null \
         || print_warning_message "Could not install Claude integration (run later: herdr integration install claude)"
 fi
 
+# Cursor Agent CLI — Herdr looks for `cursor-agent` on PATH (also provided as `agent`)
+if command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; then
+    print_info_message "Installing Herdr Cursor Agent integration"
+    herdr integration install cursor 2>/dev/null \
+        || print_warning_message "Could not install Cursor integration (run later: herdr integration install cursor)"
+else
+    print_info_message "cursor-agent not on PATH yet — skip Herdr Cursor integration (re-run setup-herdr.sh after Cursor Agent CLI is installed)"
+fi
+
+print_info_message "Installed integrations:"
+herdr integration status 2>/dev/null | grep -E 'current|outdated' || true
+
 print_info_message "Config: ~/.config/herdr/config.toml (Catppuccin theme via linked dotfiles)"
 print_info_message "Usage: herdr   (attach/create session); prefix+q detaches"
+print_info_message "Agents: herdr agent start <name> -- cursor   (or claude)"
 
 print_tool_setup_complete "Herdr"

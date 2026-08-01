@@ -58,10 +58,18 @@ alias zi='zoxide query -i'  # Interactive selection
 alias zq='zoxide query'      # Query without changing directory
 
 # File Operations
-alias ls='ls --color=auto'
-alias la='ls -la'
-alias ll='ls -lh'
-alias l='ls -CF'
+if command -v eza &>/dev/null; then
+    alias ls='eza --group-directories-first --icons=auto'
+    alias la='eza -la --group-directories-first --icons=auto'
+    alias ll='eza -lh --group-directories-first --icons=auto'
+    alias l='eza --group-directories-first --icons=auto'
+    alias lt='eza --tree --level=2 --group-directories-first --icons=auto'
+else
+    alias ls='ls --color=auto'
+    alias la='ls -la'
+    alias ll='ls -lh'
+    alias l='ls -CF'
+fi
 alias grep='grep --color=auto'
 alias mkdir='mkdir -pv'
 alias cp='cp -i'
@@ -205,6 +213,7 @@ aliases() {
             "btop:Resource monitor (better than htop)"
             "curl:Transfer data from/to servers"
             "duf:Better disk usage utility (modern df)"
+            "eza:Modern ls with icons (aliases: ls, ll, la, lt)"
             "fastfetch:System information display (neofetch successor)"
             "fd:Fast alternative to find (fd command)"
             "fzf:Fuzzy finder for command-line"
@@ -216,12 +225,14 @@ aliases() {
             "netstat:Network utilities (netstat, ifconfig)"
             "ripgrep:Fast recursive search (rg command)"
             "shellcheck:Shell script analysis tool"
+            "starship:Cross-shell prompt (Catppuccin)"
             "stow:Symlink farm manager for dotfiles"
             "tldr:Simplified man pages with examples"
             "herdr:Agent-friendly terminal multiplexer"
             "tree:Display directory structure as tree"
             "wget:Download files from the web"
-            "xsel:Clipboard manipulation tool"
+            "wl-copy:Wayland clipboard (wl-clipboard)"
+            "xsel:X11 clipboard helper"
             "zoxide:Smart cd - learns your navigation habits - current aliases z, zi, zq"
         )
         
@@ -234,6 +245,12 @@ aliases() {
                     printf "  %-12s → %s\n" "$tool" "$desc"
                 else
                     printf "  \033[0;31m%-12s\033[0m → %s\n" "MISSING" "$tool" "$desc"
+                fi
+            elif [ "$tool" = "wl-copy" ]; then
+                if command -v wl-copy &> /dev/null; then
+                    printf "  %-12s → %s\n" "wl-clipboard" "$desc"
+                else
+                    printf "  \033[0;31m%-12s\033[0m → %s\n" "MISSING" "wl-clipboard" "$desc"
                 fi
             else
                 if command -v "$tool" &> /dev/null; then
@@ -324,6 +341,11 @@ export NVM_DIR="$HOME/.config/nvm"
 # Initialize zoxide if installed
 if command -v zoxide &> /dev/null; then
     eval "$(zoxide init bash)"
+fi
+
+# Starship prompt (config: ~/.config/starship.toml)
+if command -v starship &>/dev/null; then
+    eval "$(starship init bash)"
 fi
 
 # Herd Lite PHP environment variables if installed

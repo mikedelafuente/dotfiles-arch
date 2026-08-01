@@ -158,6 +158,9 @@ gsettings set org.gnome.desktop.interface clock-show-weekday true
 # Show battery percentage
 gsettings set org.gnome.desktop.interface show-battery-percentage true
 
+# Touchpad: never use tap-to-click (physical click only)
+gsettings set org.gnome.desktop.peripherals.touchpad tap-to-click false
+
 # Default browser + Super+B launcher (work=Chrome, personal=Firefox)
 BOOTSTRAP_CONFIG_FILE="$USER_HOME_DIR/.config/dotfiles-arch/.dotfiles_bootstrap_config"
 SETUP_PROFILE=""
@@ -194,8 +197,6 @@ print_info_message "Setting default browser to $DEFAULT_BROWSER_DESKTOP ($BROWSE
 xdg-settings set default-web-browser "$DEFAULT_BROWSER_DESKTOP" 2>/dev/null \
   || print_warning_message "Could not set default browser via xdg-settings"
 
-CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
-
 # --------------------------
 # Configure Power Management for Media Playback
 # --------------------------
@@ -231,6 +232,14 @@ yay -S --noconfirm --needed gnome-shell-extension-pop-shell-git
 print_info_message "Installing No Overview extension (skip workspace picker at login)"
 yay -S --noconfirm --needed gnome-shell-extension-no-overview
 
+# AppIndicators for tray icons (Slack, Discord, Spotify, etc.)
+print_info_message "Installing AppIndicator extension"
+sudo pacman -S --needed --noconfirm gnome-shell-extension-appindicator
+
+# GPaste clipboard history (GNOME-native)
+print_info_message "Installing GPaste clipboard manager"
+sudo pacman -S --needed --noconfirm gpaste
+
 # Enable Pop Shell extension
 print_info_message "Enabling Pop Shell extension"
 gnome-extensions enable pop-shell@system76.com 2>/dev/null || print_warning_message "Pop Shell will be enabled after GNOME Shell restart"
@@ -239,6 +248,24 @@ print_info_message "Enabling No Overview extension"
 if ! gnome-extensions enable no-overview@fthx 2>/dev/null; then
   print_warning_message "No Overview will be enabled after GNOME Shell restart (uuid: no-overview@fthx)"
 fi
+
+print_info_message "Enabling AppIndicator extension"
+gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com 2>/dev/null \
+  || print_warning_message "AppIndicator will be enabled after GNOME Shell restart"
+
+print_info_message "Enabling GPaste clipboard extension"
+gnome-extensions enable GPaste@gnome-shell-extensions.gnome.org 2>/dev/null \
+  || print_warning_message "GPaste extension will be enabled after GNOME Shell restart"
+
+# Start GPaste daemon and tune history
+systemctl --user enable --now org.gnome.GPaste.service 2>/dev/null \
+  || gpaste-client daemon-reexec 2>/dev/null \
+  || print_warning_message "Start GPaste later with: systemctl --user enable --now org.gnome.GPaste.service"
+gsettings set org.gnome.GPaste images-support true 2>/dev/null || true
+gsettings set org.gnome.GPaste max-history-size 100 2>/dev/null || true
+gsettings set org.gnome.GPaste max-displayed-history-size 20 2>/dev/null || true
+# Super+V opens clipboard history (common QoL binding)
+gsettings set org.gnome.GPaste show-history '<Super>v' 2>/dev/null || true
 
 # Configure Pop Shell settings
 print_info_message "Configuring Pop Shell tiling behavior"
@@ -390,8 +417,8 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER command "$BROWSER_COMMAND"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER binding '<Super>b'
 
-# Update the custom keybindings list (Super+E uses built-in Home, not a custom binding)
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH', '$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_BROWSER']"
+# Update the custom keybindings list (no empty custom0; Super+E uses built-in Home)
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_BROWSER']"
 
 # Configure Super+Space for app launcher (GNOME overview with app grid)
 gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>space']"
@@ -427,7 +454,8 @@ print_info_message "Application Launchers:"
 print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
 print_info_message "  - File Explorer: Super+E"
-print_info_message "  - Browser (Firefox): Super+B"
+print_info_message "  - Browser: Super+B"
+print_info_message "  - Clipboard history (GPaste): Super+V"
 
 # --------------------------
 # Installation Complete

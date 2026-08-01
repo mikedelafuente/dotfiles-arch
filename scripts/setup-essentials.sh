@@ -29,7 +29,33 @@ fi
 print_tool_setup_start "Essential Packages"
 
 # make sure to call these out these installed tools in the .bashrc aliases and functions as well
-ESSENTIAL_PACKAGES=(git curl wget xsel fzf ripgrep fd bat htop ncdu tree jq net-tools btop duf stow shellcheck github-cli tldr fastfetch zoxide linux-firmware-intel)
+ESSENTIAL_PACKAGES=(
+    git
+    curl
+    wget
+    xsel
+    wl-clipboard
+    eza
+    starship
+    fzf
+    ripgrep
+    fd
+    bat
+    htop
+    ncdu
+    tree
+    jq
+    net-tools
+    btop
+    duf
+    stow
+    shellcheck
+    github-cli
+    tldr
+    fastfetch
+    zoxide
+    linux-firmware-intel
+)
 print_line_break "Installing essential packages"
 
 # Batch check which packages need to be installed

@@ -20,3 +20,6 @@ delay_seconds = 1
 
 [keys]
 prefix = "ctrl+b"
+
+[ui]
+agent_panel_sort = "spaces"
