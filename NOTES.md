@@ -94,7 +94,7 @@ After install, NVIDIA packages are **not** forced:
 
 - `post_install.sh` / `scripts/setup-nvidia.sh` detect existing NVIDIA packages (from archinstall) and/or an NVIDIA GPU
 - You are prompted; the choice is saved as `INSTALL_NVIDIA` in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
-- Bootstrap and sync reuse that preference (`false` skips installing nvidia-open)
+- Bootstrap and sync reuse that preference (`false` skips installing nvidia-open-dkms)
 
 ## After install
 

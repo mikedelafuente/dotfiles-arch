@@ -79,7 +79,13 @@ fi
 # shellcheck source=/dev/null
 source "$(dirname -- "${BASH_SOURCE[0]}")/fn-lib.sh" 2>/dev/null || true
 if ! declare -F has_nvidia_packages >/dev/null 2>&1; then
-  has_nvidia_packages() { pacman -Qq nvidia-open nvidia-open-dkms nvidia nvidia-dkms nvidia-utils 2>/dev/null | grep -q .; }
+  has_nvidia_packages() {
+    local pkg
+    for pkg in nvidia-open nvidia-open-dkms nvidia nvidia-dkms nvidia-lts nvidia-open-lts nvidia-utils; do
+      pacman -Q "$pkg" &>/dev/null && return 0
+    done
+    return 1
+  }
   has_nvidia_hardware() { command -v lspci &>/dev/null && lspci -nn 2>/dev/null | grep -qiE 'NVIDIA.*(VGA|3D|Display)|VGA.*NVIDIA'; }
 fi
 
@@ -94,7 +100,7 @@ fi
 
 echo ""
 echo "NVIDIA drivers:"
-echo "  Install nvidia-open on this machine? (skip on AMD/Intel-only systems)"
+echo "  Install nvidia-open-dkms on this machine? (skip on AMD/Intel-only systems)"
 if has_nvidia_packages; then
   echo "  Detected: NVIDIA packages already installed (likely from archinstall)"
 fi

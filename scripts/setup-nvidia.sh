@@ -2,7 +2,7 @@
 # --------------------------
 # Setup NVIDIA drivers (optional)
 # --------------------------
-# Installs nvidia-open + utils only when this machine should use NVIDIA drivers.
+# Installs nvidia-open-dkms + utils when this machine should use NVIDIA drivers.
 #
 # Decision order:
 #   1. INSTALL_NVIDIA=true|false from env / bootstrap config (explicit)
@@ -40,15 +40,20 @@ fi
 print_tool_setup_start "NVIDIA drivers"
 
 PACKAGES_PRESENT=false
+DRIVER_PRESENT=false
 HARDWARE_PRESENT=false
 if has_nvidia_packages; then
   PACKAGES_PRESENT=true
+fi
+if [[ -n "$(nvidia_driver_packages)" ]]; then
+  DRIVER_PRESENT=true
 fi
 if has_nvidia_hardware; then
   HARDWARE_PRESENT=true
 fi
 
 print_info_message "NVIDIA packages installed: $PACKAGES_PRESENT"
+print_info_message "NVIDIA driver module present: $DRIVER_PRESENT$([ "$DRIVER_PRESENT" = true ] && printf ' (%s)' "$(nvidia_driver_packages | paste -sd, -)")"
 print_info_message "NVIDIA hardware detected:  $HARDWARE_PRESENT"
 
 should_install=""
@@ -76,7 +81,7 @@ if [ -z "$should_install" ]; then
     fi
   else
     echo ""
-    print_info_message "Install NVIDIA drivers (nvidia-open + utils)?"
+    print_info_message "Install NVIDIA drivers (nvidia-open-dkms + utils)?"
     print_info_message "  Prefer 'y' if archinstall selected an NVIDIA gfx driver or this machine has an NVIDIA GPU."
     print_info_message "  Prefer 'n' on AMD/Intel-only machines."
     read -rp "Install NVIDIA drivers? [y/N] (default: $DEFAULT): " NVIDIA_INPUT
@@ -109,12 +114,16 @@ if [ "$should_install" != true ]; then
   exit 0
 fi
 
-if [ "$PACKAGES_PRESENT" = true ]; then
-  print_info_message "NVIDIA packages already present — ensuring utils/settings/headers only (not changing driver flavor)"
+# Never swap driver flavors (nvidia-open vs nvidia-open-dkms conflict).
+if [ "$DRIVER_PRESENT" = true ]; then
+  print_info_message "NVIDIA kernel module already installed — leaving flavor alone, ensuring utils/settings/headers"
   sudo pacman -S --needed --noconfirm nvidia-utils nvidia-settings linux-headers
+elif [ "$PACKAGES_PRESENT" = true ]; then
+  print_info_message "NVIDIA utils present without a module package — installing nvidia-open-dkms"
+  sudo pacman -S --needed --noconfirm nvidia-open-dkms nvidia-utils nvidia-settings linux-headers
 else
-  print_action_message "Installing NVIDIA open kernel module drivers (Turing+)"
-  sudo pacman -S --needed --noconfirm nvidia-open nvidia-utils nvidia-settings linux-headers
+  print_action_message "Installing NVIDIA open DKMS drivers (Turing+)"
+  sudo pacman -S --needed --noconfirm nvidia-open-dkms nvidia-utils nvidia-settings linux-headers
 fi
 
 print_success_message "NVIDIA drivers ready"

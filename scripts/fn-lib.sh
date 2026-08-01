@@ -72,7 +72,38 @@ has_nvidia_hardware() {
   return 1
 }
 
-# True when Arch NVIDIA driver packages from archinstall / pacman are present.
+# True when an Arch NVIDIA driver stack is present (any common flavor).
 has_nvidia_packages() {
-  pacman -Qq nvidia-open nvidia-open-dkms nvidia nvidia-dkms nvidia-utils 2>/dev/null | grep -q .
+  local pkg
+  for pkg in \
+    nvidia-open \
+    nvidia-open-dkms \
+    nvidia \
+    nvidia-dkms \
+    nvidia-lts \
+    nvidia-open-lts \
+    nvidia-utils
+  do
+    if pacman -Q "$pkg" &>/dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Print installed NVIDIA driver module package name(s), if any (not utils-only).
+nvidia_driver_packages() {
+  local pkg
+  for pkg in \
+    nvidia-open \
+    nvidia-open-dkms \
+    nvidia \
+    nvidia-dkms \
+    nvidia-lts \
+    nvidia-open-lts
+  do
+    if pacman -Q "$pkg" &>/dev/null; then
+      echo "$pkg"
+    fi
+  done
 }
