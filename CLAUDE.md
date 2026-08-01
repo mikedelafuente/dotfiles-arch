@@ -4,144 +4,129 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an Arch Linux dotfiles and configuration repository that automates system setup for a development workstation with Hyprland (Wayland compositor), GNOME, and developer tools. The project includes:
+Arch Linux dotfiles and setup automation for a **GNOME (Wayland)** development workstation with Kitty, Herdr, Neovim, Cursor, and Claude Code. Profiles distinguish **work** vs **personal** apps; the shared stack is the same on every machine.
 
-- **Bootstrap System**: Automated setup orchestration with user configuration
-- **Individual Setup Scripts**: Modular installers for specific tools and applications
-- **Dotfiles Linking**: Symlink management for configuration files
-- **User Configurations**: Pre-configured settings for Arch installation and development environments
+Includes:
+
+- **Bootstrap / sync**: Orchestrated installers with saved user config
+- **Modular `setup-*.sh` scripts**: Per-tool installers
+- **Symlinked dotfiles**: `home/` and `config/` linked into `$HOME`
+- **archinstall template**: `user_configuration.json` (Btrfs + LUKS + Snapper, GNOME + GDM)
 
 ## Repository Structure
 
 ```
 dotfiles-arch/
 ├── scripts/
-│   ├── bootstrap.sh              # Main orchestration script (entry point)
-│   ├── dotheader.sh              # Common header sourced by all scripts
-│   ├── fn-lib.sh                 # Shared utility functions
-│   ├── link-dotfiles.sh          # Symlink dotfiles to home directory
-│   ├── setup-*.sh                # Individual tool setup scripts
+│   ├── bootstrap.sh              # Full new-machine orchestration
+│   ├── sync.sh                   # Bring an existing machine up to date
+│   ├── dotheader.sh              # Common header (SCRIPT_DIR, USER_HOME_DIR)
+│   ├── fn-lib.sh                 # Shared print/NVIDIA helpers
+│   ├── link-dotfiles.sh          # Symlink home/ + config/ into $HOME
+│   └── setup-*.sh                # Individual tool setup scripts
+├── home/                         # Dotfiles for ~/
+│   ├── .bashrc
+│   ├── .gitconfig
+│   └── .local/bin/               # Helpers (code, hide-gnome-overview, …)
+├── config/                       # ~/.config application configs
+│   ├── nvim/
+│   ├── kitty/
+│   ├── herdr/
+│   ├── starship.toml
 │   └── ...
-├── home/                          # Dotfiles for home directory (~/)
-│   ├── .bashrc                   # Bash configuration
-│   ├── .gitconfig                # Git configuration
-│   ├── .tmux.conf                # Tmux configuration
-│   └── ...
-├── config/                        # Application config directories
-│   ├── nvim/                     # Neovim configuration (LazyVim)
-│   ├── ghostty/                  # Ghostty terminal config
-│   ├── hypr/                     # Hyprland config
-│   ├── alacritty/                # Alacritty terminal config
-│   └── ...
-├── post_install.sh               # Minimal post-installation script
-├── user_configuration.json       # Archinstall configuration template
-└── NOTES.md                      # Installation notes
+├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty)
+├── user_configuration.json       # archinstall 4.4 template
+└── NOTES.md                      # Install / sync notes
 ```
 
 ## Common Commands
 
-### Bootstrap New System
-
-The primary entry point for setting up a new Arch Linux system:
+### Bootstrap (new system)
 
 ```bash
 cd /path/to/dotfiles-arch
 bash scripts/bootstrap.sh
 ```
 
-This script:
-1. Collects user information (full name, email)
-2. Enables multilib in pacman
-3. Updates system packages and installs yay (AUR helper)
-4. Sequentially runs all setup-*.sh scripts
-5. Links dotfiles to home directory
-6. Cleans up orphaned packages
+Prompts for name, email, **work|personal** profile, and **INSTALL_NVIDIA**. Then enables multilib, updates packages, installs yay, runs setup scripts, links dotfiles.
 
-### Run Individual Setup Scripts
+### Sync (existing / drifted machine)
 
-Each setup script can be run independently (useful for debugging or re-running specific installations):
+```bash
+bash scripts/sync.sh
+# bash scripts/sync.sh --profile work|personal --yes
+```
+
+### Individual setups
 
 ```bash
 bash scripts/setup-essentials.sh
 bash scripts/setup-neovim.sh
-bash scripts/setup-rust.sh
-bash scripts/setup-docker.sh
-bash scripts/setup-git.sh <full-name> <email-address>
+bash scripts/setup-herdr.sh
+bash scripts/setup-gnome.sh
+bash scripts/setup-git.sh "<full-name>" "<email>"
 ```
 
-### Link Dotfiles
-
-Create symbolic links from the repository's dotfiles to the home directory:
+### Link dotfiles
 
 ```bash
-bash scripts/link-dotfiles.sh [profile-name]
+bash scripts/link-dotfiles.sh [work|personal]
 ```
 
-The profile name defaults to "dela" if not specified.
+Profile argument is recorded for reference; linking is shared. Default profile name: `work`.
 
-## Architecture & Design Patterns
+## Architecture
 
-### Sourced Header and Library System
+### Header + library
 
-All setup scripts follow a consistent pattern:
-1. Source `dotheader.sh` which sets up the script directory and loads `fn-lib.sh`
-2. Use utility functions from `fn-lib.sh` for consistent output formatting
+Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DIR` (respects `$SUDO_USER`). Do **not** hardcode `/home/<user>` — machines use different usernames.
 
-**fn-lib.sh utilities** (scripts/fn-lib.sh):
-- `print_line_break()` - Prints green section headers with timestamp
-- `print_info_message()` - Blue information messages
-- `print_action_message()` - Orange action messages
-- `print_success_message()` - Green success messages
-- `print_warning_message()` - Yellow warning messages
-- `print_error_message()` - Red error messages
-- `print_tool_setup_start()` / `print_tool_setup_complete()` - Tool-specific wrappers
+**fn-lib.sh**: `print_*` helpers, `has_nvidia_hardware`, `has_nvidia_packages`, `nvidia_driver_packages`.
 
-### Bootstrap Configuration
+### Bootstrap config
 
-The bootstrap process:
-- Stores configuration at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
-- Caches timestamps for package manager updates to avoid redundant operations
-- Conditionally runs setup scripts based on what's already installed (uses `pacman -Q`)
-- Handles sudo context properly (distinguishes between real user and sudo user)
+Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
 
-### Setup Script Conventions
+- `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`
 
-Each `setup-*.sh` script:
-- Sources dotheader.sh for utilities and proper script directory detection
-- Checks if the tool is already installed before installing
-- Handles both official pacman packages and AUR packages
-- Uses consistent output formatting
+### Profiles
 
-### Special Cases
+| Profile   | Extra apps                          |
+|-----------|-------------------------------------|
+| work      | Zoom, Slack, Chrome                 |
+| personal  | Steam, Discord, Firefox, Mullvad    |
 
-**setup-git.sh**: Accepts full name and email as arguments (passed from bootstrap.sh)
+Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc.
 
-**setup-gnome.sh** and **setup-hyprland.sh**: Only run if those desktop environments are installed
+### Special cases
 
-**Rust Installation** (setup-rust.sh): Uses rustup instead of pacman package for better flexibility with multiple toolchain versions
+- **setup-git.sh**: Requires name + email args
+- **setup-gnome.sh**: Only from bootstrap/sync when `gnome-shell` is installed
+- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true` (detects hardware/packages for defaults); never swaps an existing driver flavor
+- **setup-rust.sh**: Uses rustup, not the pacman package
+- **setup-cursor.sh**: Installs IDE (`cursor-bin`) **and** Agent CLI (`curl https://cursor.com/install`); wires `herdr integration install cursor` when Herdr is present
+- **`code`**: Creates a Herdr workspace and starts `nvim .`
 
-## Key Design Decisions
+## Key design decisions
 
-1. **Modular Setup Scripts**: Each tool has its own script for clarity and independent execution
-2. **Conditional Execution**: Bootstrap only runs scripts if the tool isn't already installed
-3. **Rate-Limited Updates**: Package manager updates are cached (1-day cooldown) to avoid redundant operations
-4. **Symlink-Based Dotfiles**: Configuration files are linked, not copied, allowing easy updates
-5. **Single-User Focus**: Designed for user-level setup, not system-wide deployments
-6. **Wayland-First**: Configured for Hyprland with GNOME as fallback
+1. Modular setup scripts for independent re-runs
+2. Symlink-based dotfiles (edit in repo, re-link / sync)
+3. Rate-limited pacman/yay updates (1-day cooldown)
+4. Portable `$HOME` / `$USER_HOME_DIR` paths for multi-username machines
+5. GNOME-first Wayland; Pop Shell for tiling
+6. Do not append PATH hacks into the symlinked `~/.bashrc` from setup scripts
 
-## Important Files
+## Important files
 
-- **scripts/dotheader.sh**: Sets up `SCRIPT_DIR` variable and sources `fn-lib.sh` - required by all setup scripts
-- **scripts/fn-lib.sh**: Contains all utility functions for consistent formatting and output
-- **scripts/bootstrap.sh**: Orchestration logic and sequencing of all setup operations
-- **user_configuration.json**: Template for Archinstall - customize disk config, hostname, and auth before use
-- **post_install.sh**: Minimal fallback setup (enables multilib, optionally installs NVIDIA via detect/prompt, installs Kitty)
+- `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
+- `scripts/setup-gnome.sh` — theme, Pop Shell, keybindings, GPaste, AppIndicator, No Overview
+- `scripts/setup-herdr.sh` — Herdr + Claude/Cursor integrations
+- `user_configuration.json` — set disk device and `gfx_driver` per machine
+- `NOTES.md` — WiFi, USB config, NVIDIA, sync
 
-## Development Notes
+## Development notes
 
-- All scripts assume bash (`#!/bin/bash`)
-- Scripts use `-e` flags where appropriate to fail on errors
-- Configuration is stored in `~/.config/dotfiles-arch/` for persistence across runs
-- The bootstrap script checks `$SUDO_USER` to handle being run with sudo
-- Package checks use `pacman -Q` to detect installed packages (returns error if not found)
-- Dotfiles are symlinked to `$HOME`, derived from `$SUDO_USER` when running with sudo
+- Scripts use bash; prefer `pacman -Q` for install checks
+- Config persistence: `~/.config/dotfiles-arch/`
+- Dotfiles link to `$USER_HOME_DIR`, not root’s home when run with sudo
+- Overview at login: `no-overview@fthx` plus optional `hide-gnome-overview` autostart fallback

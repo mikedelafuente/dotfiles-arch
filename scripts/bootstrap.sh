@@ -213,7 +213,7 @@ else
     if grep -q "^#\[multilib\]" "$PACMAN_CONF"; then
         sudo sed -i '/^#\[multilib\]/{ s/^#//; n; s/^#//; }' "$PACMAN_CONF"
         echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
-        CHANGES_MADE=true
+        PACMAN_CHANGES_MADE=true
     else
         echo "[multilib] section not found in $PACMAN_CONF"
     fi

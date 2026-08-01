@@ -282,7 +282,7 @@ gsettings set org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 15
 gsettings set org.gnome.shell.extensions.pop-shell active-hint true
 
 # Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher)
-print_info_message "Clearing Pop Shell keybindings that conflict with Hyprland-style shortcuts"
+print_info_message "Clearing Pop Shell keybindings that conflict with our shortcuts"
 gsettings set org.gnome.shell.extensions.pop-shell tile-enter "[]"
 
 # Super+Ctrl+Left/Right: snap/tile on the current monitor (Mutter defaults)
@@ -310,7 +310,7 @@ gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-down "[]"
 # Clear Conflicting Default Keybindings
 # --------------------------
 
-print_info_message "Clearing GNOME default keybindings that conflict with Hyprland-style workflow"
+print_info_message "Clearing GNOME default keybindings that conflict with our workflow"
 
 # Disable Super+number app launcher keybindings (these launch favorite apps by default)
 gsettings set org.gnome.shell.keybindings switch-to-application-1 "[]"
@@ -337,7 +337,7 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys email "['']"
 gsettings set org.gnome.settings-daemon.plugins.media-keys home "['<Super>e']"
 
 # --------------------------
-# Configure Workspace Keybindings (Hyprland-like)
+# Configure workspace keybindings
 # --------------------------
 
 print_info_message "Configuring workspace switching keybindings (Super+1-9)"
@@ -376,7 +376,7 @@ print_info_message "Configuring additional window management shortcuts"
 gsettings set org.gnome.mutter dynamic-workspaces false
 gsettings set org.gnome.desktop.wm.preferences num-workspaces 9
 
-# Close window with Super+Q (Hyprland-like)
+# Close window with Super+Q
 gsettings set org.gnome.desktop.wm.keybindings close "['<Super>q', '<Alt>F4']"
 
 # Toggle fullscreen with Super+F
@@ -396,10 +396,10 @@ gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-left "['<Super>
 gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-right "['<Super><Shift><Alt>Right']"
 
 # --------------------------
-# Configure Application Launch Keybindings (Hyprland-like)
+# Configure application launch keybindings
 # --------------------------
 
-print_info_message "Configuring Hyprland-style application launcher shortcuts"
+print_info_message "Configuring tiling / Pop Shell application launcher shortcuts"
 
 # Super+Return for terminal (using kitty if available, fallback to gnome-terminal)
 CUSTOM_KB_TERMINAL="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
@@ -433,7 +433,7 @@ gsettings set org.gnome.desktop.interface enable-hot-corners false
 gsettings set org.gnome.shell.keybindings toggle-overview "[]"
 
 print_info_message ""
-print_success_message "Hyprland-style keybindings configured!"
+print_success_message "Window manager keybindings configured!"
 print_info_message ""
 print_info_message "Workspace Management:"
 print_info_message "  - Switch to workspace: Super+1 through Super+9"

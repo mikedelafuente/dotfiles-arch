@@ -107,15 +107,10 @@ else
         print_info_message "Installing Laravel installer globally via Composer"
         composer global require laravel/installer
 
-        # Add Composer global bin to PATH if not already there
         COMPOSER_BIN="$USER_HOME_DIR/.config/composer/vendor/bin"
-        if [[ ":$PATH:" != *":$COMPOSER_BIN:"* ]]; then
-            print_info_message "Adding Composer global bin to PATH"
-            echo "export PATH=\"\$PATH:$COMPOSER_BIN\"" >> "$USER_HOME_DIR/.bashrc"
-        fi
-
-        print_info_message "Laravel installer installed. Restart your terminal or run:"
-        print_info_message "  export PATH=\"\$PATH:$COMPOSER_BIN\""
+        print_info_message "Laravel installer installed."
+        print_info_message "Composer bin is on PATH via ~/.bashrc ($COMPOSER_BIN)."
+        print_info_message "Open a new shell or run: export PATH=\"\$PATH:$COMPOSER_BIN\""
     else
         print_warning_message "Cannot install Laravel installer - Composer not available"
     fi

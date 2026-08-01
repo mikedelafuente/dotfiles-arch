@@ -118,21 +118,10 @@ fi
 # Configure PATH in Shell RC Files
 # --------------------------
 
-# Add to .bashrc if not already there
-BASHRC="$USER_HOME_DIR/.bashrc"
-if [ -f "$BASHRC" ]; then
-    if ! grep -q "gem/ruby.*bin" "$BASHRC"; then
-        print_info_message "Adding gem bin directory to ~/.bashrc"
-        {
-            echo ""
-            echo "# Ruby gem binaries"
-            echo "if [ -d \"\$HOME/.local/share/gem/ruby/$RUBY_VERSION/bin\" ]; then"
-            echo "    export PATH=\"\$HOME/.local/share/gem/ruby/$RUBY_VERSION/bin:\$PATH\""
-            echo "fi"
-        } >> "$BASHRC"
-    else
-        print_info_message "Gem bin directory already configured in ~/.bashrc"
-    fi
+# Gem bin PATH is handled portably in ~/.bashrc (any ~/.local/share/gem/ruby/*/bin).
+# Do not append version-pinned PATH lines into the symlinked bashrc.
+if [ -d "$GEM_BIN_DIR" ]; then
+    print_info_message "Gem binaries available at: $GEM_BIN_DIR (loaded from ~/.bashrc)"
 fi
 
 print_tool_setup_complete "Ruby on Rails"

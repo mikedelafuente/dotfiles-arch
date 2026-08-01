@@ -354,10 +354,23 @@ if [ -d "$HOME/.config/herd-lite/bin" ]; then
     export PHP_INI_SCAN_DIR="$HOME/.config/herd-lite/bin:$PHP_INI_SCAN_DIR"
 fi
 
-export PATH="$PATH:/home/dela/.config/composer/vendor/bin"
-export PATH="$PATH:/home/dela/.config/composer/vendor/bin"
+# Composer global binaries (portable across usernames/machines)
+COMPOSER_BIN="$HOME/.config/composer/vendor/bin"
+if [ -d "$COMPOSER_BIN" ]; then
+    case ":$PATH:" in
+        *":$COMPOSER_BIN:"*) ;;
+        *) export PATH="$PATH:$COMPOSER_BIN" ;;
+    esac
+fi
 
-# Ruby gem binaries
-if [ -d "$HOME/.local/share/gem/ruby/3.4.0/bin" ]; then
-    export PATH="$HOME/.local/share/gem/ruby/3.4.0/bin:$PATH"
+# Ruby gem binaries (any installed Ruby version under ~/.local/share/gem/ruby)
+if [ -d "$HOME/.local/share/gem/ruby" ]; then
+    for gem_bin in "$HOME"/.local/share/gem/ruby/*/bin; do
+        if [ -d "$gem_bin" ]; then
+            case ":$PATH:" in
+                *":$gem_bin:"*) ;;
+                *) export PATH="$gem_bin:$PATH" ;;
+            esac
+        fi
+    done
 fi

@@ -144,3 +144,14 @@ bash scripts/sync.sh --yes --profile work --cleanup
 If no profile is saved yet, sync prompts you to choose **work** or **personal** (with `--yes`, you must pass `--profile`).
 
 Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`.
+
+Paths use `$HOME` / `$USER_HOME_DIR` so different usernames on other machines work without edits.
+
+## GNOME overview at login
+
+GNOME has no built-in “skip Activities at startup” setting. This repo uses:
+
+1. **`no-overview@fthx`** (`gnome-shell-extension-no-overview`) — primary fix
+2. **`hide-gnome-overview` autostart** — portable `$HOME`-based fallback if the overview still flashes
+
+Both are intentional; either alone is usually enough.

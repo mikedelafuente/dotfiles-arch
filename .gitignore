@@ -1,0 +1,10 @@
+# Ignore local / generated noise
+.claude/
+*.bak
+*.backup
+*~
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
