@@ -76,7 +76,7 @@ else
 fi
 
 print_line_break "Setup Complete"
-print_info_message "The 'code' command opens a Herdr workspace for a git repo"
+print_info_message "The 'code' command creates a Herdr workspace and starts Neovim"
 print_info_message "Usage: code [directory]"
 print_info_message "Cursor IDE is available as: cursor"
 

@@ -270,7 +270,7 @@ aliases() {
             echo "  Prefix: Ctrl+B (press first, then the command key)"
             echo ""
             printf "  %-22s → %s\n" "herdr" "Attach / create session"
-            printf "  %-22s → %s\n" "code [dir]" "Open Herdr in a git repo (Kitty)"
+            printf "  %-22s → %s\n" "code [dir]" "Herdr workspace + Neovim for a git repo"
             printf "  %-22s → %s\n" "Ctrl+B  q" "Detach (agents keep running)"
             printf "  %-22s → %s\n" "Ctrl+B  v" "Split pane right"
             printf "  %-22s → %s\n" "Ctrl+B  -" "Split pane down"

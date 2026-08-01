@@ -1,13 +1,17 @@
 #!/bin/bash
 
-# code - Open a development environment using Herdr
+# code - Open a Herdr workspace with Neovim for a git repo
 # Usage: code [directory]
 #   directory: Path to project directory (defaults to current directory)
+#
+# - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
+# - Inside Herdr: create a new focused workspace and start nvim there
 
-set -e
+set -euo pipefail
 
 TARGET_DIR="${1:-.}"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+LABEL="$(basename "$TARGET_DIR")"
 
 if [[ ! -d "$TARGET_DIR/.git" ]]; then
     echo "Error: $TARGET_DIR is not a git repository"
@@ -15,25 +19,170 @@ if [[ ! -d "$TARGET_DIR/.git" ]]; then
     exit 1
 fi
 
-if ! command -v herdr &> /dev/null; then
+if ! command -v herdr &>/dev/null; then
     echo "Error: herdr is not installed. Run scripts/setup-herdr.sh first."
     exit 1
 fi
 
-echo "Opening Herdr workspace for $TARGET_DIR"
+if ! command -v nvim &>/dev/null; then
+    echo "Error: nvim is not installed. Run scripts/setup-neovim.sh first."
+    exit 1
+fi
 
+if ! command -v python3 &>/dev/null; then
+    echo "Error: python3 is required to parse Herdr CLI JSON."
+    exit 1
+fi
+
+herdr_server_running() {
+    herdr status 2>/dev/null | grep -q "status: running"
+}
+
+ensure_herdr_server() {
+    if herdr_server_running; then
+        return 0
+    fi
+
+    echo "Starting Herdr server..."
+    herdr server >/dev/null 2>&1 &
+    disown $! 2>/dev/null || true
+
+    local i
+    for i in $(seq 1 50); do
+        if herdr_server_running; then
+            return 0
+        fi
+        sleep 0.1
+    done
+
+    echo "Error: could not start Herdr server"
+    exit 1
+}
+
+# Herdr panes report viewport_rows; wait until the PTY looks real before starting nvim.
+# Starting Neovim in a zero/unstable grid (common before a client attaches) trips
+# Arch neovim's RelWithDebInfo ui_line assert.
+pane_viewport_rows() {
+    local pane_id="$1"
+    herdr pane get "$pane_id" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    print(json.load(sys.stdin)["result"]["pane"]["scroll"]["viewport_rows"])
+except Exception:
+    print(0)
+'
+}
+
+wait_for_pane_shell() {
+    local pane_id="$1"
+    local i rows
+    for i in $(seq 1 50); do
+        rows="$(pane_viewport_rows "$pane_id")"
+        if [[ "${rows:-0}" -ge 10 ]]; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    return 1
+}
+
+# Create a workspace and launch Neovim after the pane size is stable.
+open_workspace_with_nvim() {
+    local create_json pane_id
+
+    create_json="$(herdr workspace create --cwd "$TARGET_DIR" --label "$LABEL" --focus)"
+    pane_id="$(
+        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])' <<<"$create_json"
+    )"
+
+    if [[ -z "$pane_id" ]]; then
+        echo "Error: could not determine new workspace pane id"
+        exit 1
+    fi
+
+    if ! wait_for_pane_shell "$pane_id"; then
+        echo "Warning: pane $pane_id may not be fully ready; starting Neovim anyway"
+    fi
+
+    # Brief settle after focus/resize so Neovim does not start mid-reflow.
+    # Launch via a short delayed shell command as a second safeguard.
+    sleep 0.25
+    if ! herdr pane run "$pane_id" "bash -lc 'sleep 0.35; exec nvim .'" >/dev/null 2>&1; then
+        echo "Error: failed to start Neovim in pane $pane_id"
+        exit 1
+    fi
+
+    echo "Opened Neovim in Herdr workspace '$LABEL' (pane $pane_id)"
+}
+
+# Open a Herdr UI client before starting Neovim so the PTY has a real size.
+ensure_herdr_ui() {
+    # Already inside a Herdr client
+    if [[ -n "${HERDR_SOCKET_PATH:-}" ]]; then
+        return 0
+    fi
+
+    if ! command -v kitty &>/dev/null; then
+        echo "Warning: kitty not found; attaching Herdr in this terminal after Neovim starts"
+        return 1
+    fi
+
+    echo "Opening Herdr UI in Kitty..."
+    kitty --detach --directory "$TARGET_DIR" herdr
+
+    local i
+    for i in $(seq 1 50); do
+        # Any pane with a usable viewport means a client has sized the session
+        if herdr pane list 2>/dev/null | python3 -c '
+import json, sys
+try:
+    panes = json.load(sys.stdin)["result"]["panes"]
+except Exception:
+    sys.exit(1)
+sys.exit(0 if any(p.get("scroll", {}).get("viewport_rows", 0) >= 10 for p in panes) else 1)
+'; then
+            sleep 0.2
+            return 0
+        fi
+        sleep 0.1
+    done
+
+    echo "Warning: Herdr UI did not report a ready viewport; continuing anyway"
+    return 0
+}
+
+echo "Opening Herdr workspace for $TARGET_DIR"
 cd "$TARGET_DIR"
 
-# Already inside herdr — nothing extra to do
+ensure_herdr_server
+
+INSIDE_HERDR=0
 if [[ -n "${HERDR_SOCKET_PATH:-}" ]]; then
-    echo "Already inside a Herdr session."
+    INSIDE_HERDR=1
+fi
+
+STARTED_UI=0
+if [[ "$INSIDE_HERDR" -eq 0 ]]; then
+    if ensure_herdr_ui; then
+        STARTED_UI=1
+    fi
+fi
+
+open_workspace_with_nvim
+
+if [[ "$INSIDE_HERDR" -eq 1 ]]; then
     exit 0
 fi
 
-# Launch Herdr in Kitty when available so the session has a dedicated terminal
+# Detached Kitty already shows the session
+if [[ "$STARTED_UI" -eq 1 ]]; then
+    exit 0
+fi
+
+# Fallback: attach in the current terminal (nvim delayed launch should survive resize)
 if [[ -n "${KITTY_WINDOW_ID:-}" ]] || [[ "${TERM}" == *kitty* ]]; then
     exec herdr
-elif command -v kitty &> /dev/null; then
+elif command -v kitty &>/dev/null; then
     exec kitty --directory "$TARGET_DIR" herdr
 else
     exec herdr
