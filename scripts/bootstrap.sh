@@ -75,11 +75,45 @@ if [[ "$SETUP_PROFILE" != "work" && "$SETUP_PROFILE" != "personal" ]]; then
   exit 1
 fi
 
+# Prompt for NVIDIA drivers (detect packages from archinstall / hardware for default)
+# shellcheck source=/dev/null
+source "$(dirname -- "${BASH_SOURCE[0]}")/fn-lib.sh" 2>/dev/null || true
+if ! declare -F has_nvidia_packages >/dev/null 2>&1; then
+  has_nvidia_packages() { pacman -Qq nvidia-open nvidia-open-dkms nvidia nvidia-dkms nvidia-utils 2>/dev/null | grep -q .; }
+  has_nvidia_hardware() { command -v lspci &>/dev/null && lspci -nn 2>/dev/null | grep -qiE 'NVIDIA.*(VGA|3D|Display)|VGA.*NVIDIA'; }
+fi
+
+NVIDIA_DEFAULT="n"
+if [ "${INSTALL_NVIDIA:-}" = "true" ]; then
+  NVIDIA_DEFAULT="y"
+elif [ "${INSTALL_NVIDIA:-}" = "false" ]; then
+  NVIDIA_DEFAULT="n"
+elif has_nvidia_packages || has_nvidia_hardware; then
+  NVIDIA_DEFAULT="y"
+fi
+
+echo ""
+echo "NVIDIA drivers:"
+echo "  Install nvidia-open on this machine? (skip on AMD/Intel-only systems)"
+if has_nvidia_packages; then
+  echo "  Detected: NVIDIA packages already installed (likely from archinstall)"
+fi
+if has_nvidia_hardware; then
+  echo "  Detected: NVIDIA GPU on PCI bus"
+fi
+read -rp "Install NVIDIA drivers? [y/N] (default: $NVIDIA_DEFAULT): " NVIDIA_INPUT
+NVIDIA_INPUT="${NVIDIA_INPUT:-$NVIDIA_DEFAULT}"
+case "${NVIDIA_INPUT,,}" in
+  y|yes) INSTALL_NVIDIA="true" ;;
+  *) INSTALL_NVIDIA="false" ;;
+esac
+
 # Validate the variables with the user
 echo "Please confirm the following information:"
 echo "Full Name: $FULL_NAME"
 echo "Email Address: $EMAIL_ADDRESS"
 echo "Setup Profile: $SETUP_PROFILE"
+echo "Install NVIDIA: $INSTALL_NVIDIA"
 
 read -rp "Is this information correct? (y/n): " CONFIRMATION
 if [[ ! "$CONFIRMATION" =~ ^[Yy]$ ]]; then
@@ -93,6 +127,7 @@ fi
   echo "FULL_NAME=\"$FULL_NAME\""
   echo "EMAIL_ADDRESS=\"$EMAIL_ADDRESS\""
   echo "SETUP_PROFILE=\"$SETUP_PROFILE\""
+  echo "INSTALL_NVIDIA=\"$INSTALL_NVIDIA\""
 } > "$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config"
 
 # --------------------------
@@ -258,6 +293,9 @@ print_info_message "Running bootstrap with profile: $SETUP_PROFILE"
 
 # Install Essential Packages
 bash "$DF_SCRIPT_DIR/setup-essentials.sh"
+
+# NVIDIA drivers (optional — preference saved in bootstrap config)
+bash "$DF_SCRIPT_DIR/setup-nvidia.sh" --yes
 
 # Set up Git configuration
 bash "$DF_SCRIPT_DIR/setup-git.sh" "$FULL_NAME" "$EMAIL_ADDRESS"

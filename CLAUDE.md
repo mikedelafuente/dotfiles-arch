@@ -135,7 +135,7 @@ Each `setup-*.sh` script:
 - **scripts/fn-lib.sh**: Contains all utility functions for consistent formatting and output
 - **scripts/bootstrap.sh**: Orchestration logic and sequencing of all setup operations
 - **user_configuration.json**: Template for Archinstall - customize disk config, hostname, and auth before use
-- **post_install.sh**: Minimal fallback setup (enables multilib and installs NVIDIA drivers and hyprland)
+- **post_install.sh**: Minimal fallback setup (enables multilib, optionally installs NVIDIA via detect/prompt, installs Kitty)
 
 ## Development Notes
 

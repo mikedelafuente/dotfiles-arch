@@ -98,10 +98,12 @@ mkdir -p "$BOOTSTRAP_CONFIG_DIR"
 CONFIG_FILE="$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config"
 
 SAVED_PROFILE=""
+SAVED_NVIDIA=""
 if [ -r "$CONFIG_FILE" ]; then
   # shellcheck source=/dev/null
   source "$CONFIG_FILE"
   SAVED_PROFILE="${SETUP_PROFILE:-}"
+  SAVED_NVIDIA="${INSTALL_NVIDIA:-}"
 fi
 
 # Migrate legacy name from saved config
@@ -176,7 +178,53 @@ if [[ "$SETUP_PROFILE" != "work" && "$SETUP_PROFILE" != "personal" ]]; then
   exit 1
 fi
 
-# Preserve identity fields; refresh profile
+# Resolve NVIDIA preference (detect archinstall packages / hardware for default)
+INSTALL_NVIDIA="${SAVED_NVIDIA:-}"
+if [ -z "$INSTALL_NVIDIA" ]; then
+  NVIDIA_DEFAULT="false"
+  if has_nvidia_packages || has_nvidia_hardware; then
+    NVIDIA_DEFAULT="true"
+  fi
+
+  if [ "$ASSUME_YES" = true ]; then
+    INSTALL_NVIDIA="$NVIDIA_DEFAULT"
+    print_info_message "INSTALL_NVIDIA not saved — auto-set to $INSTALL_NVIDIA (packages/hardware detect)"
+  else
+    echo ""
+    print_info_message "NVIDIA drivers are optional (skip on AMD/Intel-only machines)."
+    if has_nvidia_packages; then
+      print_info_message "Detected: NVIDIA packages already installed (likely from archinstall)"
+    fi
+    if has_nvidia_hardware; then
+      print_info_message "Detected: NVIDIA GPU on PCI bus"
+    fi
+    DEFAULT_YN="n"
+    [[ "$NVIDIA_DEFAULT" == "true" ]] && DEFAULT_YN="y"
+    read -rp "Install/keep NVIDIA drivers on this machine? [y/N] (default: $DEFAULT_YN): " NVIDIA_INPUT
+    NVIDIA_INPUT="${NVIDIA_INPUT:-$DEFAULT_YN}"
+    case "${NVIDIA_INPUT,,}" in
+      y|yes) INSTALL_NVIDIA="true" ;;
+      *) INSTALL_NVIDIA="false" ;;
+    esac
+  fi
+elif [ "$ASSUME_YES" = false ]; then
+  echo ""
+  print_info_message "Current INSTALL_NVIDIA: $INSTALL_NVIDIA"
+  read -rp "Change NVIDIA preference? [y/N to keep, or true/false]: " NVIDIA_INPUT
+  case "${NVIDIA_INPUT:-}" in
+    ""|n|N|no|No) ;;
+    y|Y|yes|Yes|true|TRUE) INSTALL_NVIDIA="true" ;;
+    false|FALSE|0) INSTALL_NVIDIA="false" ;;
+    *)
+      case "${NVIDIA_INPUT,,}" in
+        true|y|yes) INSTALL_NVIDIA="true" ;;
+        false|n|no) INSTALL_NVIDIA="false" ;;
+      esac
+      ;;
+  esac
+fi
+
+# Preserve identity fields; refresh profile + NVIDIA preference
 FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
 {
@@ -184,6 +232,7 @@ EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
   echo "FULL_NAME=\"$FULL_NAME\""
   echo "EMAIL_ADDRESS=\"$EMAIL_ADDRESS\""
   echo "SETUP_PROFILE=\"$SETUP_PROFILE\""
+  echo "INSTALL_NVIDIA=\"$INSTALL_NVIDIA\""
 } > "$CONFIG_FILE"
 
 print_line_break "Syncing machine to dotfiles-arch ($SETUP_PROFILE)"
@@ -226,9 +275,10 @@ if [ "$SKIP_BOOTSTRAP" = false ]; then
 
   run_setup() {
     local script="$1"
+    shift || true
     if [ -f "$DF_SCRIPT_DIR/$script" ]; then
-      print_info_message "→ $script"
-      bash "$DF_SCRIPT_DIR/$script"
+      print_info_message "→ $script${*:+ ($*)}"
+      bash "$DF_SCRIPT_DIR/$script" "$@"
     else
       print_warning_message "Missing $script — skipped"
     fi
@@ -236,6 +286,7 @@ if [ "$SKIP_BOOTSTRAP" = false ]; then
 
   # Shared stack (mirrors bootstrap.sh)
   run_setup setup-essentials.sh
+  run_setup setup-nvidia.sh --yes
   if [ -n "$FULL_NAME" ] && [ -n "$EMAIL_ADDRESS" ]; then
     bash "$DF_SCRIPT_DIR/setup-git.sh" "$FULL_NAME" "$EMAIL_ADDRESS"
   else

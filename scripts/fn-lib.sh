@@ -54,3 +54,25 @@ print_error_message() {
   local message="$1"
   echo -e "\e[31m$message\e[0m"
 }
+
+# True when an NVIDIA GPU is visible to the system (PCI).
+has_nvidia_hardware() {
+  if command -v lspci &>/dev/null; then
+    lspci -nn 2>/dev/null | grep -qiE 'NVIDIA.*(VGA|3D|Display)|VGA.*NVIDIA|3D.*NVIDIA|Display.*NVIDIA'
+    return $?
+  fi
+  # Fallback: sysfs vendor ID 10de = NVIDIA
+  local vendor
+  for vendor in /sys/bus/pci/devices/*/vendor; do
+    [[ -r "$vendor" ]] || continue
+    if [[ "$(cat "$vendor" 2>/dev/null)" == "0x10de" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# True when Arch NVIDIA driver packages from archinstall / pacman are present.
+has_nvidia_packages() {
+  pacman -Qq nvidia-open nvidia-open-dkms nvidia nvidia-dkms nvidia-utils 2>/dev/null | grep -q .
+}

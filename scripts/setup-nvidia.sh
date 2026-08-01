@@ -1,0 +1,121 @@
+#!/bin/bash
+# --------------------------
+# Setup NVIDIA drivers (optional)
+# --------------------------
+# Installs nvidia-open + utils only when this machine should use NVIDIA drivers.
+#
+# Decision order:
+#   1. INSTALL_NVIDIA=true|false from env / bootstrap config (explicit)
+#   2. --yes / non-interactive: install only if packages already present OR hardware detected
+#   3. Interactive: prompt, defaulting to yes when packages or hardware are detected
+# --------------------------
+
+CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
+if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$CURRENT_FILE_DIR/dotheader.sh"
+else
+  echo "Missing header file: $CURRENT_FILE_DIR/dotheader.sh"
+  exit 1
+fi
+
+ASSUME_YES=false
+FORCE_INSTALL=""
+for arg in "$@"; do
+  case "$arg" in
+    --yes|-y) ASSUME_YES=true ;;
+    --install) FORCE_INSTALL=true ;;
+    --skip) FORCE_INSTALL=false ;;
+  esac
+done
+
+# Load saved bootstrap preference when not already set
+BOOTSTRAP_CONFIG_FILE="$USER_HOME_DIR/.config/dotfiles-arch/.dotfiles_bootstrap_config"
+if [ -z "${INSTALL_NVIDIA:-}" ] && [ -r "$BOOTSTRAP_CONFIG_FILE" ]; then
+  # shellcheck source=/dev/null
+  source "$BOOTSTRAP_CONFIG_FILE"
+fi
+
+print_tool_setup_start "NVIDIA drivers"
+
+PACKAGES_PRESENT=false
+HARDWARE_PRESENT=false
+if has_nvidia_packages; then
+  PACKAGES_PRESENT=true
+fi
+if has_nvidia_hardware; then
+  HARDWARE_PRESENT=true
+fi
+
+print_info_message "NVIDIA packages installed: $PACKAGES_PRESENT"
+print_info_message "NVIDIA hardware detected:  $HARDWARE_PRESENT"
+
+should_install=""
+if [ -n "$FORCE_INSTALL" ]; then
+  should_install="$FORCE_INSTALL"
+elif [ -n "${INSTALL_NVIDIA:-}" ]; then
+  case "${INSTALL_NVIDIA,,}" in
+    1|true|yes|y) should_install=true ;;
+    0|false|no|n) should_install=false ;;
+  esac
+fi
+
+if [ -z "$should_install" ]; then
+  # Smart default: already installed via archinstall, or GPU is present
+  DEFAULT="n"
+  if [ "$PACKAGES_PRESENT" = true ] || [ "$HARDWARE_PRESENT" = true ]; then
+    DEFAULT="y"
+  fi
+
+  if [ "$ASSUME_YES" = true ]; then
+    if [ "$DEFAULT" = "y" ]; then
+      should_install=true
+    else
+      should_install=false
+    fi
+  else
+    echo ""
+    print_info_message "Install NVIDIA drivers (nvidia-open + utils)?"
+    print_info_message "  Prefer 'y' if archinstall selected an NVIDIA gfx driver or this machine has an NVIDIA GPU."
+    print_info_message "  Prefer 'n' on AMD/Intel-only machines."
+    read -rp "Install NVIDIA drivers? [y/N] (default: $DEFAULT): " NVIDIA_INPUT
+    NVIDIA_INPUT="${NVIDIA_INPUT:-$DEFAULT}"
+    case "${NVIDIA_INPUT,,}" in
+      y|yes) should_install=true ;;
+      *) should_install=false ;;
+    esac
+  fi
+fi
+
+# Persist preference for bootstrap/sync
+mkdir -p "$(dirname "$BOOTSTRAP_CONFIG_FILE")"
+if [ -r "$BOOTSTRAP_CONFIG_FILE" ]; then
+  if grep -q '^INSTALL_NVIDIA=' "$BOOTSTRAP_CONFIG_FILE" 2>/dev/null; then
+    sed -i "s/^INSTALL_NVIDIA=.*/INSTALL_NVIDIA=\"$should_install\"/" "$BOOTSTRAP_CONFIG_FILE"
+  else
+    echo "INSTALL_NVIDIA=\"$should_install\"" >> "$BOOTSTRAP_CONFIG_FILE"
+  fi
+else
+  {
+    echo "# Configuration file for dotfiles bootstrap script"
+    echo "INSTALL_NVIDIA=\"$should_install\""
+  } > "$BOOTSTRAP_CONFIG_FILE"
+fi
+
+if [ "$should_install" != true ]; then
+  print_info_message "Skipping NVIDIA driver install (INSTALL_NVIDIA=false)"
+  print_tool_setup_complete "NVIDIA drivers"
+  exit 0
+fi
+
+if [ "$PACKAGES_PRESENT" = true ]; then
+  print_info_message "NVIDIA packages already present — ensuring utils/settings/headers only (not changing driver flavor)"
+  sudo pacman -S --needed --noconfirm nvidia-utils nvidia-settings linux-headers
+else
+  print_action_message "Installing NVIDIA open kernel module drivers (Turing+)"
+  sudo pacman -S --needed --noconfirm nvidia-open nvidia-utils nvidia-settings linux-headers
+fi
+
+print_success_message "NVIDIA drivers ready"
+print_tool_setup_complete "NVIDIA drivers"

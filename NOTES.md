@@ -86,9 +86,19 @@ You can get some extra information about what drives were inserted using `dmesg`
 
 You can unmount via `umount /mnt/usb`
 
+## GPU / NVIDIA
+
+`user_configuration.json` currently sets archinstall `gfx_driver` to **NVIDIA open** (Turing+). On AMD/Intel-only machines, change that before install, for example to `All open-source`, or pick the right driver in the archinstall UI.
+
+After install, NVIDIA packages are **not** forced:
+
+- `post_install.sh` / `scripts/setup-nvidia.sh` detect existing NVIDIA packages (from archinstall) and/or an NVIDIA GPU
+- You are prompted; the choice is saved as `INSTALL_NVIDIA` in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
+- Bootstrap and sync reuse that preference (`false` skips installing nvidia-open)
+
 ## After install
 
-GNOME + GDM are installed by archinstall. For NVIDIA drivers, Kitty, and multilib:
+GNOME + GDM are installed by archinstall. For multilib, optional NVIDIA, Kitty, and base tools:
 
 ```shell
 ./post_install.sh

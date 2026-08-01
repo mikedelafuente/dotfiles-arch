@@ -1,19 +1,26 @@
 #!/bin/bash
 
-# Update pacman so the /etc/pacman.conf has multilib uncommented
+# Minimal post-install after archinstall:
+# - enable multilib
+# - optionally install NVIDIA drivers (only when already present from archinstall,
+#   NVIDIA hardware is detected, or the user confirms)
+# - install Kitty + base tooling
 
-# Define the path to pacman.conf
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
+# --------------------------
+# Enable multilib
+# --------------------------
+
 PACMAN_CONF="/etc/pacman.conf"
 
-# Check if the file exists
 if [ ! -f "$PACMAN_CONF" ]; then
     echo "Error: $PACMAN_CONF not found."
     exit 1
 fi
 
-# Uncomment the [multilib] section and the subsequent Include line
-# This sed command finds the line containing "[multilib]", then looks for the next line
-# that starts with "#Include" and removes the "#" from both.
 sudo sed -i '/^#\[multilib\]/{
     s/^#//
     n
@@ -22,17 +29,21 @@ sudo sed -i '/^#\[multilib\]/{
 
 echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
 
-# Update pacman
-sudo pacman -Syu
+sudo pacman -Syu --noconfirm
 
-# Install NVIDIA drivers (open kernel module for Turing+)
-sudo pacman -S nvidia-open nvidia-utils nvidia-settings --needed --noconfirm
+# --------------------------
+# NVIDIA (conditional)
+# --------------------------
 
-# Install Kitty as the default terminal
-sudo pacman -S kitty --needed --noconfirm
+if [ -r "$SCRIPT_DIR/scripts/setup-nvidia.sh" ]; then
+    bash "$SCRIPT_DIR/scripts/setup-nvidia.sh"
+else
+    echo "Warning: scripts/setup-nvidia.sh not found; skipping NVIDIA setup"
+fi
 
-sudo pacman -S git base-devel linux-headers --needed --noconfirm
+# --------------------------
+# Base packages
+# --------------------------
 
-sudo pacman -S man-db --noconfirm
-
+sudo pacman -S --needed --noconfirm kitty git base-devel linux-headers man-db
 sudo mandb
