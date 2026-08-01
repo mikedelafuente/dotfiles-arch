@@ -3,13 +3,57 @@
 Target ISO: [archlinux-2026.07.01](https://fastly.mirror.pkgbuild.com/iso/2026.07.01/) (ships **archinstall 4.4**).
 `user_configuration.json` is written for that schema (`bootloader_config`, `pacman_config`, zram `swap` object, nested `disk_encryption`).
 
+## WiFi (before archinstall)
+
+The live ISO needs network access before you can run `archinstall` or fetch configs. On WiFi:
+
+```shell
+# List interfaces (look for wlan0, wlp*, etc.)
+ip link
+
+# Enable the interface if it is down
+ip link set wlan0 up
+
+# Connect with iwctl (default on the Arch ISO)
+iwctl
+```
+
+Inside `iwctl`:
+
+```shell
+device list
+station wlan0 scan
+station wlan0 get-networks
+station wlan0 connect "YourSSID"
+exit
+```
+
+Confirm connectivity:
+
+```shell
+ping -c 3 archlinux.org
+```
+
+If DHCP did not assign an address:
+
+```shell
+dhcpcd wlan0
+# or
+systemctl start iwd
+iwctl station wlan0 connect "YourSSID"
+```
+
+Wired Ethernet usually works without setup (`dhcpcd` / NetworkManager on the ISO). Prefer Ethernet when available.
+
+## Config on USB
+
 To save the config to persistent storage, mount a USB drive:
 
 ```shell
 mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb;
 ```
 
-You can use that same medium to replicate the installation by runn from the usb stick
+You can use that same medium to replicate the installation from the USB stick:
 
 ```shell
 mkdir -p /mnt/usb && mount /dev/sda1 /mnt/usb && archinstall --config /mnt/usb/dotfiles-arch/user_configuration.json --creds /mnt/usb/dotfiles-arch/user_credentials.json;
@@ -22,6 +66,7 @@ archinstall --config-url http://archconfig.weekendproject.app/
 ```
 
 You need to set:
+
 - Disk device path in `user_configuration.json` (`disk_config.device_modifications[0].device`)
 - Hostname
 - Authentication (including the LUKS encryption password in credentials)
