@@ -49,7 +49,12 @@ GNOME + GDM are installed by archinstall. For NVIDIA drivers, Kitty, and multili
 ./post_install.sh
 ```
 
-Then run bootstrap for the rest of the developer tooling:
+Then run bootstrap for the rest of the tooling. You will be prompted for a profile:
+
+- **work** — shared stack + Zoom + Slack
+- **personal** — shared stack + Steam + Discord
+
+Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, Obsidian, etc.) is shared.
 
 ```shell
 bash scripts/bootstrap.sh

@@ -118,12 +118,6 @@ alias serve='python3 -m http.server'
 alias jsonpp='python3 -m json.tool'
 alias myip='curl ifconfig.me'
 
-# GitHub Copilot CLI
-# Note: Requires authentication first with: github-copilot-cli auth
-if command -v github-copilot-cli &> /dev/null; then
-    eval "$(github-copilot-cli alias -- "$0")"
-fi
-
 # Functions
 
 # Better touch that creates directories if they don't exist
@@ -180,7 +174,7 @@ aliases() {
         echo ""
         
         # Display key bindings in readable format - only show our custom bindings
-        # These are configured in ~/.inputrc (tmux-compatible)
+        # These are configured in ~/.inputrc (herdr/readline-compatible)
         printf "  %-22s → %s\n" "Tab" "Cycle through completions (menu-style)"
         printf "  %-22s → %s\n" "Shift+Tab" "Cycle backward through completions"
         printf "  %-22s → %s\n" "Up Arrow" "Search history backward (with prefix)"
@@ -224,7 +218,7 @@ aliases() {
             "shellcheck:Shell script analysis tool"
             "stow:Symlink farm manager for dotfiles"
             "tldr:Simplified man pages with examples"
-            "tmux:Terminal multiplexer"
+            "herdr:Agent-friendly terminal multiplexer"
             "tree:Display directory structure as tree"
             "wget:Download files from the web"
             "xsel:Clipboard manipulation tool"
@@ -266,66 +260,32 @@ aliases() {
             echo "     used directories by typing partial names. Just use it for a while!"
         fi
         
-        if command -v tmux &> /dev/null; then
+        if command -v herdr &> /dev/null; then
             
             echo ""
             echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-            echo "║                         🪟  Tmux Key Bindings                                ║"
+            echo "║                         🪟  Herdr (Agent Multiplexer)                        ║"
             echo "╚══════════════════════════════════════════════════════════════════════════════╝"
             echo ""
             echo "  Prefix: Ctrl+B (press first, then the command key)"
             echo ""
-            
-            # Session Management
-            printf "  %-22s → %s\n" "Ctrl+B  d" "Detach from session"
-            printf "  %-22s → %s\n" "Ctrl+B  $" "Rename current session"
-            printf "  %-22s → %s\n" "Ctrl+B  s" "List/switch sessions"
-            
-            echo ""
-            # Window Management
-            printf "  %-22s → %s\n" "Ctrl+B  c" "Create new window"
-            printf "  %-22s → %s\n" "Ctrl+B  ," "Rename current window"
-            printf "  %-22s → %s\n" "Ctrl+B  w" "List/switch windows"
-            printf "  %-22s → %s\n" "Ctrl+B  n" "Next window"
-            printf "  %-22s → %s\n" "Ctrl+B  p" "Previous window"
-            printf "  %-22s → %s\n" "Ctrl+B  0-9" "Switch to window number"
-            printf "  %-22s → %s\n" "Ctrl+B  &" "Kill current window"
-            
-            echo ""
-            # Pane Management
-            printf "  %-22s → %s\n" "Ctrl+B  %" "Split pane vertically"
-            printf "  %-22s → %s\n" "Ctrl+B  \"" "Split pane horizontally"
-            printf "  %-22s → %s\n" "Ctrl+B  o" "Switch to next pane"
-            printf "  %-22s → %s\n" "Ctrl+B  ;" "Toggle last pane"
-            printf "  %-22s → %s\n" "Ctrl+B  x" "Kill current pane"
-            printf "  %-22s → %s\n" "Ctrl+B  {" "Move pane left"
-            printf "  %-22s → %s\n" "Ctrl+B  }" "Move pane right"
-            printf "  %-22s → %s\n" "Ctrl+B  z" "Toggle pane zoom (fullscreen)"
-            printf "  %-22s → %s\n" "Ctrl+B  ↑↓←→" "Navigate between panes"
-            
-            echo ""
-            # Copy Mode
-            printf "  %-22s → %s\n" "Ctrl+B  [" "Enter copy mode (scroll/search)"
-            printf "  %-22s → %s\n" "Ctrl+B  ]" "Paste from buffer"
-            printf "  %-22s → %s\n" "q (in copy mode)" "Exit copy mode"
-            
-            echo ""
-            # Helpful Commands
+            printf "  %-22s → %s\n" "herdr" "Attach / create session"
+            printf "  %-22s → %s\n" "code [dir]" "Open Herdr in a git repo (Kitty)"
+            printf "  %-22s → %s\n" "Ctrl+B  q" "Detach (agents keep running)"
+            printf "  %-22s → %s\n" "Ctrl+B  v" "Split pane right"
+            printf "  %-22s → %s\n" "Ctrl+B  -" "Split pane down"
+            printf "  %-22s → %s\n" "Ctrl+B  c" "New tab"
+            printf "  %-22s → %s\n" "Ctrl+B  n/p" "Next / previous tab"
             printf "  %-22s → %s\n" "Ctrl+B  ?" "Show all key bindings"
-            printf "  %-22s → %s\n" "Ctrl+B  t" "Show time"
-            
             echo ""
-            echo "  💡 Outside tmux: 'tmux' (start), 'tmux ls' (list), 'tmux attach' (reconnect)"
+            echo "  💡 Run agents (claude, etc.) inside panes — sidebar shows working/blocked/done"
         fi
         
-        # Add GitHub Copilot CLI aliases if available
-        if command -v github-copilot-cli &> /dev/null; then
+        if command -v cursor &> /dev/null; then
             echo ""
-            echo "🤖 AI Assistant (GitHub Copilot CLI):"
-            echo "  ??        → Ask for any command help"
-            echo "  git?     → Git-specific help"
-            echo "  gh?       → GitHub CLI help"
-            echo "  Note: Run 'github-copilot-cli auth' to authenticate first"
+            echo "🖥️  Editors:"
+            echo "  cursor    → Cursor IDE"
+            echo "  claude    → Claude Code CLI (if installed)"
         fi
         
         echo ""

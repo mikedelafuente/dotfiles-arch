@@ -8,7 +8,7 @@
 # -------------------------
 # Allow for the profile name to be passed as an argument
 # -------------------------
-PROFILE_NAME="${1:-dela}"
+PROFILE_NAME="${1:-work}"
 
 # --------------------------
 # Import Common Header 
@@ -31,6 +31,7 @@ fi
 # --------------------------
 
 print_tool_setup_start "Linking dotfiles"
+print_info_message "Linking dotfiles for profile: $PROFILE_NAME"
 
 # --------------------------
 # Link Home Directory Dotfiles
@@ -42,7 +43,7 @@ DOTFILES_CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
 
 print_info_message "Linking home directory dotfiles..."
 
-for file in .bashrc .inputrc .profile .gitconfig .gitignore_global .nvim-cheatsheet.md .welcome.md .tmux.conf; do
+for file in .bashrc .inputrc .profile .gitconfig .gitignore_global .nvim-cheatsheet.md .welcome.md; do
   target="$USER_HOME_DIR/$file"
   source_file="$DOTFILES_HOME_DIR/$file"
   

@@ -43,11 +43,43 @@ else
   fi
 fi
 
+# Prompt for setup profile
+# work     — shared stack + Zoom + Slack
+# personal — shared stack + Steam + Discord
+if [ -z "$SETUP_PROFILE" ]; then
+  SETUP_PROFILE="work"
+fi
+
+# Migrate legacy profile name from earlier bootstrap versions
+if [ "$SETUP_PROFILE" = "productivity" ]; then
+  SETUP_PROFILE="work"
+fi
+
+echo ""
+echo "Select setup profile:"
+echo "  1) work      — shared tooling + Zoom + Slack"
+echo "  2) personal — shared tooling + Steam + Discord"
+read -rp "Profile [1=work, 2=personal] (current: $SETUP_PROFILE): " PROFILE_INPUT
+case "${PROFILE_INPUT:-}" in
+  "" ) ;; # keep current / default
+  1|work|Work|WORK|productivity|Productivity) SETUP_PROFILE="work" ;;
+  2|personal|Personal|PERSONAL) SETUP_PROFILE="personal" ;;
+  *)
+    echo "Unknown choice '$PROFILE_INPUT'. Use 1/work or 2/personal."
+    exit 1
+    ;;
+esac
+
+if [[ "$SETUP_PROFILE" != "work" && "$SETUP_PROFILE" != "personal" ]]; then
+  echo "Unknown profile '$SETUP_PROFILE'. Use 'work' or 'personal'."
+  exit 1
+fi
 
 # Validate the variables with the user
 echo "Please confirm the following information:"
 echo "Full Name: $FULL_NAME"
 echo "Email Address: $EMAIL_ADDRESS"
+echo "Setup Profile: $SETUP_PROFILE"
 
 read -rp "Is this information correct? (y/n): " CONFIRMATION
 if [[ ! "$CONFIRMATION" =~ ^[Yy]$ ]]; then
@@ -60,6 +92,7 @@ fi
   echo "# Configuration file for dotfiles bootstrap script"
   echo "FULL_NAME=\"$FULL_NAME\""
   echo "EMAIL_ADDRESS=\"$EMAIL_ADDRESS\""
+  echo "SETUP_PROFILE=\"$SETUP_PROFILE\""
 } > "$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config"
 
 # --------------------------
@@ -221,24 +254,19 @@ fi
 # Run Individual Setup Scripts
 # --------------------------
 
+print_info_message "Running bootstrap with profile: $SETUP_PROFILE"
+
 # Install Essential Packages
 bash "$DF_SCRIPT_DIR/setup-essentials.sh"
 
 # Set up Git configuration
 bash "$DF_SCRIPT_DIR/setup-git.sh" "$FULL_NAME" "$EMAIL_ADDRESS"
 
-# Setup GitHub CLI and Copilot CLI
+# Setup GitHub CLI (no Copilot)
 bash "$DF_SCRIPT_DIR/setup-github-cli.sh"
 
-# --------------------------
-# Run Individual Setup Scripts
-# --------------------------
-
-# Install Node.js and npm (needed by multiple tools)
+# Install Node.js and npm (needed by Claude Code and other tools)
 bash "$DF_SCRIPT_DIR/setup-node.sh"
-
-# Setup Python
-bash "$DF_SCRIPT_DIR/setup-python.sh"
 
 # Setup Fonts
 bash "$DF_SCRIPT_DIR/setup-fonts.sh"
@@ -246,62 +274,48 @@ bash "$DF_SCRIPT_DIR/setup-fonts.sh"
 # Setup Bash
 bash "$DF_SCRIPT_DIR/setup-bash.sh"
 
-# Ensure Rust is installed
-bash "$DF_SCRIPT_DIR/setup-rust.sh"
-
-# Setup Go (Golang)
-bash "$DF_SCRIPT_DIR/setup-golang.sh"
-
 # Setup Kitty as the default terminal
 bash "$DF_SCRIPT_DIR/setup-kitty.sh"
 
-# Setup TablePlus for database management
-bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
-
-# Setup Neovim and Lazyvim - This needs to run after python setup
-bash "$DF_SCRIPT_DIR/setup-neovim.sh"
-
-# Setup Mullvad VPN
-bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
-
-# Run the setup-docker.sh script to set up Docker
-bash "$DF_SCRIPT_DIR/setup-docker.sh"
-
-# Setup Minikube (Kubernetes cluster manager)
-bash "$DF_SCRIPT_DIR/setup-minikube.sh"
+# Install Cursor IDE
+bash "$DF_SCRIPT_DIR/setup-cursor.sh"
 
 # Install Claude Code CLI
 bash "$DF_SCRIPT_DIR/setup-claude.sh"
 
-# Setup Code Command (development environment launcher)
+# Herdr replaces tmux as the default multiplexer
+bash "$DF_SCRIPT_DIR/setup-herdr.sh"
+
+# Shared developer / desktop stack
+bash "$DF_SCRIPT_DIR/setup-python.sh"
+bash "$DF_SCRIPT_DIR/setup-rust.sh"
+bash "$DF_SCRIPT_DIR/setup-golang.sh"
+bash "$DF_SCRIPT_DIR/setup-neovim.sh"
+bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
+bash "$DF_SCRIPT_DIR/setup-docker.sh"
+bash "$DF_SCRIPT_DIR/setup-minikube.sh"
 bash "$DF_SCRIPT_DIR/setup-code.sh"
-
-# Install PHP
 bash "$DF_SCRIPT_DIR/setup-php.sh"
-
-# Install Ruby on Rails
 bash "$DF_SCRIPT_DIR/setup-ruby.sh"
-
-# Install Postman
 bash "$DF_SCRIPT_DIR/setup-postman.sh"
-
-# Install Steam
-bash "$DF_SCRIPT_DIR/setup-steam.sh"
-
-# Install Discord
-bash "$DF_SCRIPT_DIR/setup-discord.sh"
-
-# Setup ZSA Moonlander keyboard (udev rules and Keymapp)
 bash "$DF_SCRIPT_DIR/setup-moonlander.sh"
-
-# Install Spotify
 bash "$DF_SCRIPT_DIR/setup-spotify.sh"
-
-# Install Obsidian
 bash "$DF_SCRIPT_DIR/setup-obsidian.sh"
+bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
 
-# Install Zoom
-bash "$DF_SCRIPT_DIR/setup-zoom.sh"
+# --------------------------
+# Profile-specific apps
+# --------------------------
+
+if [ "$SETUP_PROFILE" = "work" ]; then
+    print_line_break "Work profile — Zoom + Slack"
+    bash "$DF_SCRIPT_DIR/setup-zoom.sh"
+    bash "$DF_SCRIPT_DIR/setup-slack.sh"
+else
+    print_line_break "Personal profile — Steam + Discord"
+    bash "$DF_SCRIPT_DIR/setup-steam.sh"
+    bash "$DF_SCRIPT_DIR/setup-discord.sh"
+fi
 
 # Setup GNOME with Catppuccin theme (if GNOME is installed)
 if pacman -Q gnome-shell &> /dev/null; then
@@ -311,8 +325,8 @@ else
     print_info_message "GNOME is not installed. Skipping GNOME setup."
 fi
 
-# Link dotfiles
-bash "$DF_SCRIPT_DIR/link-dotfiles.sh"
+# Link dotfiles (pass setup profile name for reference)
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$SETUP_PROFILE"
 
 # --------------------------
 # Clean Up

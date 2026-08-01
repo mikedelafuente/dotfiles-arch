@@ -1,50 +1,40 @@
 #!/bin/bash
 
-# code - Open a development environment using tmuxinator
+# code - Open a development environment using Herdr
 # Usage: code [directory]
 #   directory: Path to project directory (defaults to current directory)
 
 set -e
 
-# Parse arguments
 TARGET_DIR="${1:-.}"
-TARGET_DIR="$(cd "$TARGET_DIR" && pwd)" # Get absolute path
+TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 
-# Verify this is a git repository
 if [[ ! -d "$TARGET_DIR/.git" ]]; then
     echo "Error: $TARGET_DIR is not a git repository"
     echo "The 'code' command should only be used from the base of a git repository."
     exit 1
 fi
 
-# Generate unique session name from directory
-# Use basename of directory, sanitize for tmux session name (no dots, spaces, or colons)
-SESSION_NAME=$(basename "$TARGET_DIR" | tr '.' '_' | tr ' ' '_' | tr ':' '_')
-
-# If session name is empty or just underscores, use a hash of the full path
-if [[ -z "$SESSION_NAME" || "$SESSION_NAME" =~ ^_+$ ]]; then
-    SESSION_NAME="dev_$(echo "$TARGET_DIR" | md5sum | cut -c1-8)"
+if ! command -v herdr &> /dev/null; then
+    echo "Error: herdr is not installed. Run scripts/setup-herdr.sh first."
+    exit 1
 fi
 
-# Kill any existing session with the same name (always start fresh)
-if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-    echo "Killing existing session '$SESSION_NAME'"
-    tmux kill-session -t "$SESSION_NAME"
+echo "Opening Herdr workspace for $TARGET_DIR"
+
+cd "$TARGET_DIR"
+
+# Already inside herdr — nothing extra to do
+if [[ -n "${HERDR_SOCKET_PATH:-}" ]]; then
+    echo "Already inside a Herdr session."
+    exit 0
 fi
 
-echo "Starting tmuxinator session '$SESSION_NAME' for $TARGET_DIR"
-
-# Set environment variables for tmuxinator template
-export TMUX_SESSION_NAME="$SESSION_NAME"
-export TMUX_PROJECT_ROOT="$TARGET_DIR"
-
-# Start tmuxinator with the code template
-# Use the config from ~/.config/tmuxinator/code.yml
-if [[ -n "$TMUX" ]]; then
-    # Already in tmux, start detached and switch
-    tmuxinator start code -n "$SESSION_NAME" # --no-attach
-   # tmux switch-client -t "$SESSION_NAME"
+# Launch Herdr in Kitty when available so the session has a dedicated terminal
+if [[ -n "${KITTY_WINDOW_ID:-}" ]] || [[ "${TERM}" == *kitty* ]]; then
+    exec herdr
+elif command -v kitty &> /dev/null; then
+    exec kitty --directory "$TARGET_DIR" herdr
 else
-    # Not in tmux, start and attach
-    exec kitty tmuxinator start code -n "$SESSION_NAME"
+    exec herdr
 fi

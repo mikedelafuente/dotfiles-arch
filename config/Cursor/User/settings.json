@@ -19,8 +19,5 @@
     "terminal.integrated.defaultProfile.linux": "bash",
     "git.autofetch": true,
     "chat.mcp.gallery.enabled": true,
-    "go.toolsManagement.autoUpdate": true,
-    "chat.tools.terminal.autoApprove": {
-        "dnf": true
-    }
+    "go.toolsManagement.autoUpdate": true
 }
