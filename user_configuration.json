@@ -130,7 +130,6 @@
         "git",
         "linux-headers",
         "man-db",
-        "firefox",
         "curl",
         "wget",
         "xsel",

@@ -144,8 +144,8 @@ if [ -z "$SETUP_PROFILE" ]; then
   echo ""
   print_info_message "No setup profile is configured for this machine yet."
   echo "Select which profile to use:"
-  echo "  1) work      — shared stack + Zoom + Slack"
-  echo "  2) personal — shared stack + Steam + Discord"
+  echo "  1) work      — shared stack + Zoom + Slack + Chrome"
+  echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
   while true; do
     read -rp "Profile [1=work, 2=personal]: " PROFILE_INPUT
     if SETUP_PROFILE="$(normalize_profile "${PROFILE_INPUT:-}")"; then
@@ -160,8 +160,8 @@ elif [ "$ASSUME_YES" = false ]; then
   else
     print_info_message "Current saved profile: $SETUP_PROFILE"
   fi
-  echo "  1) work      — shared stack + Zoom + Slack"
-  echo "  2) personal — shared stack + Steam + Discord"
+  echo "  1) work      — shared stack + Zoom + Slack + Chrome"
+  echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
   read -rp "Profile [1=work, 2=personal] (Enter keeps '$SETUP_PROFILE'): " PROFILE_INPUT
   if [ -n "${PROFILE_INPUT:-}" ]; then
     if ! SETUP_PROFILE="$(normalize_profile "$PROFILE_INPUT")"; then
@@ -263,14 +263,16 @@ if [ "$SKIP_BOOTSTRAP" = false ]; then
   run_setup setup-moonlander.sh
   run_setup setup-spotify.sh
   run_setup setup-obsidian.sh
-  run_setup setup-mullvad.sh
 
   if [ "$SETUP_PROFILE" = "work" ]; then
     run_setup setup-zoom.sh
     run_setup setup-slack.sh
+    run_setup setup-chrome.sh
   else
     run_setup setup-steam.sh
     run_setup setup-discord.sh
+    run_setup setup-firefox.sh
+    run_setup setup-mullvad.sh
   fi
 
   if pacman -Q gnome-shell &>/dev/null; then

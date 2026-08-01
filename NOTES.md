@@ -96,10 +96,10 @@ GNOME + GDM are installed by archinstall. For NVIDIA drivers, Kitty, and multili
 
 Then run bootstrap for the rest of the tooling. You will be prompted for a profile:
 
-- **work** — shared stack + Zoom + Slack
-- **personal** — shared stack + Steam + Discord
+- **work** — shared stack + Zoom + Slack + Chrome
+- **personal** — shared stack + Steam + Discord + Firefox + Mullvad
 
-Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, Obsidian, etc.) is shared.
+Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, Obsidian, etc.) is shared. Mullvad is personal-only; browsers are profile-specific (Chrome / Firefox).
 
 ```shell
 bash scripts/bootstrap.sh

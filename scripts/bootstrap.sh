@@ -44,8 +44,8 @@ else
 fi
 
 # Prompt for setup profile
-# work     — shared stack + Zoom + Slack
-# personal — shared stack + Steam + Discord
+# work     — shared stack + Zoom + Slack + Chrome
+# personal — shared stack + Steam + Discord + Firefox + Mullvad
 if [ -z "$SETUP_PROFILE" ]; then
   SETUP_PROFILE="work"
 fi
@@ -57,8 +57,8 @@ fi
 
 echo ""
 echo "Select setup profile:"
-echo "  1) work      — shared tooling + Zoom + Slack"
-echo "  2) personal — shared tooling + Steam + Discord"
+echo "  1) work      — shared tooling + Zoom + Slack + Chrome"
+echo "  2) personal — shared tooling + Steam + Discord + Firefox + Mullvad"
 read -rp "Profile [1=work, 2=personal] (current: $SETUP_PROFILE): " PROFILE_INPUT
 case "${PROFILE_INPUT:-}" in
   "" ) ;; # keep current / default
@@ -301,20 +301,22 @@ bash "$DF_SCRIPT_DIR/setup-postman.sh"
 bash "$DF_SCRIPT_DIR/setup-moonlander.sh"
 bash "$DF_SCRIPT_DIR/setup-spotify.sh"
 bash "$DF_SCRIPT_DIR/setup-obsidian.sh"
-bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
 
 # --------------------------
 # Profile-specific apps
 # --------------------------
 
 if [ "$SETUP_PROFILE" = "work" ]; then
-    print_line_break "Work profile — Zoom + Slack"
+    print_line_break "Work profile — Zoom + Slack + Chrome"
     bash "$DF_SCRIPT_DIR/setup-zoom.sh"
     bash "$DF_SCRIPT_DIR/setup-slack.sh"
+    bash "$DF_SCRIPT_DIR/setup-chrome.sh"
 else
-    print_line_break "Personal profile — Steam + Discord"
+    print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad"
     bash "$DF_SCRIPT_DIR/setup-steam.sh"
     bash "$DF_SCRIPT_DIR/setup-discord.sh"
+    bash "$DF_SCRIPT_DIR/setup-firefox.sh"
+    bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
 fi
 
 # Setup GNOME with Catppuccin theme (if GNOME is installed)

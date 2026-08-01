@@ -158,9 +158,41 @@ gsettings set org.gnome.desktop.interface clock-show-weekday true
 # Show battery percentage
 gsettings set org.gnome.desktop.interface show-battery-percentage true
 
-# Set Firefox as default browser
-print_info_message "Setting Firefox as default browser"
-xdg-settings set default-web-browser firefox.desktop
+# Default browser + Super+B launcher (work=Chrome, personal=Firefox)
+BOOTSTRAP_CONFIG_FILE="$USER_HOME_DIR/.config/dotfiles-arch/.dotfiles_bootstrap_config"
+SETUP_PROFILE=""
+if [ -r "$BOOTSTRAP_CONFIG_FILE" ]; then
+  # shellcheck source=/dev/null
+  source "$BOOTSTRAP_CONFIG_FILE"
+fi
+
+DEFAULT_BROWSER_DESKTOP="firefox.desktop"
+BROWSER_COMMAND="firefox"
+case "${SETUP_PROFILE:-}" in
+  work)
+    DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
+    if command -v google-chrome-stable &>/dev/null; then
+      BROWSER_COMMAND="google-chrome-stable"
+    else
+      BROWSER_COMMAND="google-chrome"
+    fi
+    ;;
+  personal)
+    DEFAULT_BROWSER_DESKTOP="firefox.desktop"
+    BROWSER_COMMAND="firefox"
+    ;;
+  *)
+    # Fallback when profile is unknown: prefer whatever is installed
+    if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
+      DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
+      BROWSER_COMMAND="$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome)"
+    fi
+    ;;
+esac
+
+print_info_message "Setting default browser to $DEFAULT_BROWSER_DESKTOP ($BROWSER_COMMAND)"
+xdg-settings set default-web-browser "$DEFAULT_BROWSER_DESKTOP" 2>/dev/null \
+  || print_warning_message "Could not set default browser via xdg-settings"
 
 CUSTOM_KEYBINDING_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/"
 
@@ -242,6 +274,11 @@ gsettings set org.gnome.shell.keybindings toggle-message-tray "[]"
 gsettings set org.gnome.desktop.wm.keybindings switch-input-source "[]"
 gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "[]"
 
+# Super+E opens the file explorer via GNOME's built-in "Home folder" binding.
+# Clear Email first — it commonly steals Super+E (empty string disables the shortcut).
+gsettings set org.gnome.settings-daemon.plugins.media-keys email "['']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys home "['<Super>e']"
+
 # --------------------------
 # Configure Workspace Keybindings (Hyprland-like)
 # --------------------------
@@ -317,20 +354,14 @@ else
 fi
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_TERMINAL binding '<Super>Return'
 
-# Super+E for file manager
-CUSTOM_KB_FILES="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_FILES name 'Launch File Manager'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_FILES command 'nautilus'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_FILES binding '<Super>e'
-
-# Super+B for browser (Firefox)
+# Super+B for browser (Chrome on work, Firefox on personal)
 CUSTOM_KB_BROWSER="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom3/"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER name 'Launch Browser'
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER command 'firefox'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER command "$BROWSER_COMMAND"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_BROWSER binding '<Super>b'
 
-# Update the custom keybindings list to include all custom shortcuts
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH', '$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_FILES', '$CUSTOM_KB_BROWSER']"
+# Update the custom keybindings list (Super+E uses built-in Home, not a custom binding)
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYBINDING_PATH', '$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_BROWSER']"
 
 # Configure Super+Space for app launcher (GNOME overview with app grid)
 gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>space']"
@@ -363,7 +394,7 @@ print_info_message ""
 print_info_message "Application Launchers:"
 print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
-print_info_message "  - File Manager: Super+E"
+print_info_message "  - File Explorer: Super+E"
 print_info_message "  - Browser (Firefox): Super+B"
 
 # --------------------------
