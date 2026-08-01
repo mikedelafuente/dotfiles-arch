@@ -104,3 +104,33 @@ Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, O
 ```shell
 bash scripts/bootstrap.sh
 ```
+
+## Syncing an existing machine (drift / other PCs)
+
+After big repo changes, bring a machine up to date without reinstalling Arch:
+
+```shell
+cd /path/to/dotfiles-arch
+bash scripts/sync.sh
+```
+
+That will:
+
+1. `git pull --ff-only` (if this is a git clone)
+2. Re-run the setup scripts (idempotent installs for Kitty, Herdr, Cursor, Claude, …)
+3. Relink dotfiles
+4. Optionally remove obsolete packages (`tmux`, `ghostty`, `alacritty`, Hyprland stack, Copilot CLI) and stale configs
+
+Useful flags:
+
+```shell
+bash scripts/sync.sh --profile work
+bash scripts/sync.sh --profile personal
+bash scripts/sync.sh --cleanup          # remove obsolete packages
+bash scripts/sync.sh --skip-bootstrap   # only pull + link (+ optional cleanup)
+bash scripts/sync.sh --yes --profile work --cleanup
+```
+
+If no profile is saved yet, sync prompts you to choose **work** or **personal** (with `--yes`, you must pass `--profile`).
+
+Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`.
