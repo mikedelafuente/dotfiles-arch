@@ -249,6 +249,27 @@ gsettings set org.gnome.shell.extensions.pop-shell active-hint true
 print_info_message "Clearing Pop Shell keybindings that conflict with Hyprland-style shortcuts"
 gsettings set org.gnome.shell.extensions.pop-shell tile-enter "[]"
 
+# Super+Ctrl+Left/Right: snap/tile on the current monitor (Mutter defaults)
+gsettings set org.gnome.mutter.keybindings toggle-tiled-left "['<Primary><Super>Left']"
+gsettings set org.gnome.mutter.keybindings toggle-tiled-right "['<Primary><Super>Right']"
+
+# Super+Ctrl+Up/Down must NOT switch workspaces (GNOME default steals these chords)
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-up "[]"
+gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-down "[]"
+
+# Super+Ctrl+Up/Down: move window between monitors.
+# Monitors are usually arranged left/right, so Up/Down map to left/right hops
+# (geometric Up/Down only works when displays are stacked vertically).
+print_info_message "Configuring Super+Ctrl+Up/Down to move windows between monitors"
+gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-left "['<Primary><Super>Up']"
+gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-right "['<Primary><Super>Down']"
+gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-up "[]"
+gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-down "[]"
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-left "['<Primary><Super>Up']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "['<Primary><Super>Down']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-up "[]"
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-down "[]"
+
 # --------------------------
 # Clear Conflicting Default Keybindings
 # --------------------------
@@ -388,6 +409,8 @@ print_info_message "Window Management:"
 print_info_message "  - Close window: Super+Q"
 print_info_message "  - Toggle fullscreen: Super+F"
 print_info_message "  - Toggle maximize: Super+M"
+print_info_message "  - Tile left/right (this monitor): Super+Ctrl+Left/Right"
+print_info_message "  - Move window to other monitor: Super+Ctrl+Up/Down"
 print_info_message "  - Pop Shell toggle tiling: Super+Y"
 print_info_message "  - Switch windows: Alt+Tab"
 print_info_message ""
