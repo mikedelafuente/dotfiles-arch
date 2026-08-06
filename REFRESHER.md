@@ -102,6 +102,15 @@ zi                 # interactive pick
 | **Super+1…9** | Jump to workspace |
 | **Super+Shift+1…9** | Move window to workspace |
 
+### …fix ugly Courier-like title / UI fonts
+
+```bash
+bash scripts/setup-fonts.sh
+bash scripts/setup-gnome.sh   # or full: bash scripts/sync.sh
+```
+
+Shared stack: **Adwaita Sans** (UI/title), **JetBrainsMono Nerd Font** (mono / Kitty). Then log out/in if apps still look wrong.
+
 ### …sync after I changed the repo on another machine
 
 ```bash

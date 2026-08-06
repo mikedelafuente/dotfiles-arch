@@ -112,10 +112,13 @@ gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
 # Set cursor theme (optional - using Adwaita dark)
 gsettings set org.gnome.desktop.interface cursor-theme "Adwaita"
 
-# Set font preferences (optional)
-gsettings set org.gnome.desktop.interface font-name "Cantarell 11"
-gsettings set org.gnome.desktop.interface document-font-name "Cantarell 11"
-gsettings set org.gnome.desktop.interface monospace-font-name "Source Code Pro 10"
+# Set shared fonts (installed by setup-fonts.sh; GNOME 48+ uses Adwaita)
+# Cantarell / Source Code Pro are often missing and fall back to Courier-like faces.
+gsettings set org.gnome.desktop.interface font-name "Adwaita Sans 11"
+gsettings set org.gnome.desktop.interface document-font-name "Adwaita Sans 11"
+gsettings set org.gnome.desktop.interface monospace-font-name "JetBrainsMono Nerd Font 10"
+gsettings set org.gnome.desktop.wm.preferences titlebar-uses-system-font false
+gsettings set org.gnome.desktop.wm.preferences titlebar-font "Adwaita Sans Bold 11"
 
 # Window manager preferences
 gsettings set org.gnome.desktop.wm.preferences button-layout "appmenu:minimize,maximize,close"

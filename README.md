@@ -121,7 +121,7 @@ Everything else in the stack is shared.
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
 | **Apps** | TablePlus, Postman, Spotify, Obsidian, ZSA Keymapp (Moonlander) |
-| **Fonts** | Meslo / Ubuntu / Fira Code / JetBrains Mono / Hack Nerd Fonts |
+| **Fonts** | Adwaita Sans/Mono (GNOME UI), Noto + Liberation fallbacks, Meslo / Ubuntu / Fira Code / JetBrains Mono / Hack Nerd Fonts |
 | **Desktop** | GNOME + Pop Shell, No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
 
 ### GNOME extras (via `setup-gnome.sh`)

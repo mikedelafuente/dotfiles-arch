@@ -1,17 +1,15 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Nerd Fonts for Arch Linux
+# Setup shared UI + Nerd Fonts for Arch Linux
 # --------------------------
 
 # --------------------------
-# Import Common Header 
+# Import Common Header
 # --------------------------
 
-# add header file
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
 
-# source header (uses SCRIPT_DIR and loads lib.sh)
 if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
   # shellcheck source=/dev/null
   source "$CURRENT_FILE_DIR/dotheader.sh"
@@ -21,17 +19,29 @@ else
 fi
 
 # --------------------------
-# End Import Common Header 
+# End Import Common Header
 # --------------------------
 
 print_tool_setup_start "Fonts"
 
 # --------------------------
-# Install Nerd Fonts via AUR
+# System / GNOME UI fonts
+# --------------------------
+# GNOME 48+ defaults to Adwaita Sans/Mono (adwaita-fonts).
+# Noto + Liberation cover generic sans/serif/mono fallbacks so missing
+# app font names do not degrade to Courier-like bitmap faces.
+
+SYSTEM_FONT_PACKAGES=(
+    adwaita-fonts
+    noto-fonts
+    noto-fonts-emoji
+    ttf-liberation
+)
+
+# --------------------------
+# Nerd Fonts (terminal / editors / Kitty)
 # --------------------------
 
-# Map font names to AUR package names
-# Update this associative array to install different fonts if desired
 declare -A NERD_FONTS=(
     ["Meslo"]="ttf-meslo-nerd"
     ["Ubuntu"]="ttf-ubuntu-nerd"
@@ -40,44 +50,61 @@ declare -A NERD_FONTS=(
     ["Hack"]="ttf-hack-nerd"
 )
 
-print_info_message "Installing Nerd Fonts from official Arch repositories"
+PACKAGES_TO_INSTALL=()
 
-# Batch check which fonts need to be installed
-FONTS_TO_INSTALL=()
-for FONT_NAME in "${!NERD_FONTS[@]}"; do
-    PACKAGE_NAME="${NERD_FONTS[$FONT_NAME]}"
-    if pacman -Q "$PACKAGE_NAME" &> /dev/null; then
-        print_info_message "$FONT_NAME Nerd Font already installed"
+print_info_message "Checking system UI fonts"
+for PACKAGE_NAME in "${SYSTEM_FONT_PACKAGES[@]}"; do
+    if pacman -Q "$PACKAGE_NAME" &>/dev/null; then
+        print_info_message "Already installed: $PACKAGE_NAME"
     else
-        FONTS_TO_INSTALL+=("$PACKAGE_NAME")
+        PACKAGES_TO_INSTALL+=("$PACKAGE_NAME")
     fi
 done
 
-# Batch install all missing fonts
+print_info_message "Checking Nerd Fonts"
+for FONT_NAME in "${!NERD_FONTS[@]}"; do
+    PACKAGE_NAME="${NERD_FONTS[$FONT_NAME]}"
+    if pacman -Q "$PACKAGE_NAME" &>/dev/null; then
+        print_info_message "$FONT_NAME Nerd Font already installed"
+    else
+        PACKAGES_TO_INSTALL+=("$PACKAGE_NAME")
+    fi
+done
+
 FONTS_UPDATED=false
-if [ ${#FONTS_TO_INSTALL[@]} -gt 0 ]; then
-    print_info_message "Installing ${#FONTS_TO_INSTALL[@]} font package(s): ${FONTS_TO_INSTALL[*]}"
-    if sudo pacman -S --needed --noconfirm "${FONTS_TO_INSTALL[@]}"; then
+if [ ${#PACKAGES_TO_INSTALL[@]} -gt 0 ]; then
+    print_action_message "Installing font package(s): ${PACKAGES_TO_INSTALL[*]}"
+    if sudo pacman -S --needed --noconfirm "${PACKAGES_TO_INSTALL[@]}"; then
         print_success_message "Fonts installed successfully"
         FONTS_UPDATED=true
     else
         print_error_message "Some fonts failed to install"
     fi
 else
-    print_info_message "All Nerd Fonts are already installed"
+    print_info_message "All shared font packages are already installed"
 fi
 
 # --------------------------
 # Refresh Font Cache
 # --------------------------
+# Always refresh on sync/bootstrap so newly linked fontconfig + packages
+# are picked up even when pacman had nothing to install.
 
-# Refresh font cache if new fonts were installed
-if [ "$FONTS_UPDATED" = true ]; then
-    print_info_message "Fonts were installed. Refreshing font cache."
-    fc-cache -f # add -v for verbose output
-    print_info_message "Font cache refreshed successfully"
+print_info_message "Refreshing font cache (fc-cache)"
+if fc-cache -f; then
+    print_success_message "Font cache refreshed"
 else
-    print_info_message "No new fonts were installed. Skipping font cache refresh."
+    print_warning_message "fc-cache reported an error"
+fi
+
+# Helpful verification for shared stack
+if command -v fc-list &>/dev/null; then
+    print_info_message "UI: $(fc-list : family | rg -m1 -i '^Adwaita Sans$' || echo 'Adwaita Sans MISSING')"
+    print_info_message "Mono: $(fc-list : family | rg -m1 'JetBrainsMono Nerd Font$' || echo 'JetBrainsMono Nerd Font MISSING')"
+fi
+
+if [ "$FONTS_UPDATED" = true ]; then
+    print_info_message "New fonts installed — log out/in (or restart apps) if title bars still look wrong"
 fi
 
 print_tool_setup_complete "Fonts"
