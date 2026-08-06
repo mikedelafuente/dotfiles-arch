@@ -19,5 +19,7 @@
     "terminal.integrated.defaultProfile.linux": "bash",
     "git.autofetch": true,
     "chat.mcp.gallery.enabled": true,
-    "go.toolsManagement.autoUpdate": true
+    "go.toolsManagement.autoUpdate": true,
+    "datadog.cursor.notification.suppressMcpMigrationMessage": true,
+    "git.openRepositoryInParentFolders": "always"
 }

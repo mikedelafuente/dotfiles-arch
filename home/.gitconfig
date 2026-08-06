@@ -1,12 +1,12 @@
-# This is Git's per-user configuration file.
-[user]
-	email = mike.delafuente@gmail.com
-	name = Mike de la Fuente
+# Shared Git config (symlinked). Per-machine identity lives in
+# ~/.config/git/identity — written by scripts/setup-git.sh.
+[include]
+	path = ~/.config/git/identity
 [core]
 	editor = nvim
 [init]
 	defaultBranch = main
 [credential "https://github.com"]
-	helper = !/usr/bin/gh auth git-credential
+    helper = !/usr/bin/gh auth git-credential
 [credential "https://gist.github.com"]
-	helper = !/usr/bin/gh auth git-credential
+    helper = !/usr/bin/gh auth git-credential

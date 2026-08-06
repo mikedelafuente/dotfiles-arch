@@ -100,7 +100,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 
 ### Special cases
 
-- **setup-git.sh**: Requires name + email args
+- **setup-git.sh**: Requires name + email args; writes `~/.config/git/identity` (not the shared `.gitconfig`) so machines/users can differ
 - **setup-gnome.sh**: Only from bootstrap/sync when `gnome-shell` is installed
 - **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true` (detects hardware/packages for defaults); never swaps an existing driver flavor
 - **setup-rust.sh**: Uses rustup, not the pacman package

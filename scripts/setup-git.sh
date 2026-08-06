@@ -65,21 +65,28 @@ else
 fi
 
 # --------------------------
-# Configure Git Settings
+# Configure Git Identity (machine-local)
 # --------------------------
+# Name/email are per-machine and must not live in the symlinked ~/.gitconfig.
+# Shared settings (editor, defaultBranch, credentials) come from home/.gitconfig.
+# Identity is written here and included via: [include] path = ~/.config/git/identity
 
-print_info_message "Configuring Git with user information"
+print_info_message "Writing machine-local Git identity"
 
-git config --global user.name "$USERNAME_ARG"
-git config --global user.email "$EMAIL_ARG"
-git config --global core.editor "nvim"
-git config --global init.defaultBranch main
+GIT_CONFIG_DIR="$USER_HOME_DIR/.config/git"
+IDENTITY_FILE="$GIT_CONFIG_DIR/identity"
 
-print_info_message "Git configured successfully:"
+mkdir -p "$GIT_CONFIG_DIR"
+cat > "$IDENTITY_FILE" <<EOF
+[user]
+	name = $USERNAME_ARG
+	email = $EMAIL_ARG
+EOF
+
+print_info_message "Git identity written to $IDENTITY_FILE:"
 print_info_message "  Name: $USERNAME_ARG"
 print_info_message "  Email: $EMAIL_ARG"
-print_info_message "  Editor: nvim"
-print_info_message "  Default Branch: main"
+print_info_message "Shared settings (editor, defaultBranch) come from ~/.gitconfig after link-dotfiles"
 
 # --------------------------
 # Setup SSH Keys

@@ -6,6 +6,7 @@ onboarding = false
 [theme]
 name = "catppuccin"
 
+auto_switch = false
 [terminal]
 default_shell = "bash"
 shell_mode = "auto"
@@ -23,3 +24,4 @@ prefix = "ctrl+b"
 
 [ui]
 agent_panel_sort = "spaces"
+show_agent_labels_on_pane_borders = true
