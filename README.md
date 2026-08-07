@@ -12,10 +12,22 @@ This README is the starting point. Detailed install notes live in [NOTES.md](NOT
 |-----------|-------------|
 | **Brand-new Arch install** | archinstall → `./post_install.sh` → `bash scripts/bootstrap.sh` |
 | **Existing machine / other PC** | `bash scripts/sync.sh` |
+| **Day-to-day package updates** | `bash scripts/update-system.sh` (guarded `pacman` + `yay`) |
 | **Just re-link configs** | `bash scripts/link-dotfiles.sh` |
 | **One tool only** | `bash scripts/setup-<tool>.sh` |
 
 Paths use `$HOME` — different usernames on other machines are fine.
+
+### Day-to-day updates (preferred)
+
+```bash
+update-system                 # after link-dotfiles; or:
+bash scripts/update-system.sh
+bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
+bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
+```
+
+This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Bootstrap/sync use the same scan before any `--noconfirm` AUR install.
 
 ---
 

@@ -44,19 +44,18 @@ else
     print_info_message "Installing Obsidian from AUR"
 
     # Install Obsidian from AUR
-    yay -S --noconfirm --needed obsidian
+    ensure_yay_pkgs obsidian
 
     if command -v obsidian &> /dev/null; then
         print_info_message "Obsidian installed successfully"
         print_info_message "You can launch Obsidian from your application menu or run: obsidian"
         echo ""
-        print_info_message "To update Obsidian in the future, run:"
-        print_info_message "  yay -S obsidian"
-        print_info_message "Or update all packages with:"
-        print_info_message "  yay -Syu"
+        print_info_message "To update packages safely, run:"
+        print_info_message "  update-system"
+        print_info_message "  # or: bash scripts/update-system.sh"
     else
         print_error_message "Obsidian installation failed"
-        print_info_message "You can manually install with: yay -S obsidian"
+        print_info_message "You can manually install with: yay -S obsidian (review PKGBUILD first)"
     fi
 fi
 

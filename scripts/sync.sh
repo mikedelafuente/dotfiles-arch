@@ -275,6 +275,7 @@ if [ "$SKIP_BOOTSTRAP" = false ]; then
 
   export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS
   export SETUP_CONTINUE_ON_ERROR=true
+  export DOTFILES_AUR_ASSUME_YES=true
   # Shared list with bootstrap — continue on error, exit 1 if any failed
   set +e
   bash "$DF_SCRIPT_DIR/run-profile-setup.sh"

@@ -45,19 +45,18 @@ else
     print_info_message "Installing Spotify from AUR"
 
     # Install Spotify from AUR
-    yay -S --noconfirm --needed spotify
+    ensure_yay_pkgs spotify
 
     if command -v spotify &> /dev/null; then
         print_info_message "Spotify installed successfully"
         print_info_message "You can launch Spotify from your application menu or run: spotify"
         echo ""
-        print_info_message "To update Spotify in the future, run:"
-        print_info_message "  yay -S spotify"
-        print_info_message "Or update all packages with:"
-        print_info_message "  yay -Syu"
+        print_info_message "To update packages safely, run:"
+        print_info_message "  update-system"
+        print_info_message "  # or: bash scripts/update-system.sh"
     else
         print_error_message "Spotify installation failed"
-        print_info_message "You can manually install with: yay -S spotify"
+        print_info_message "You can manually install with: yay -S spotify (review PKGBUILD first)"
     fi
 fi
 

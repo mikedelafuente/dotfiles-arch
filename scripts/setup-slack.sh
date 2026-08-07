@@ -28,7 +28,7 @@ if command -v slack &> /dev/null; then
     print_info_message "Slack is already installed. Skipping installation."
 else
     print_info_message "Installing Slack from AUR (slack-desktop)"
-    yay -S --noconfirm --needed slack-desktop
+    ensure_yay_pkgs slack-desktop
 
     if command -v slack &> /dev/null; then
         print_success_message "Slack installed successfully"

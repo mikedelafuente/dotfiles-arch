@@ -36,7 +36,7 @@ if ! command -v mullvad &> /dev/null; then
 
     # Install the Mullvad VPN package from AUR
     # Using mullvad-vpn-bin for faster installation (pre-compiled binary)
-    yay -S --needed --noconfirm mullvad-vpn-bin
+    ensure_yay_pkgs mullvad-vpn-bin
 
     print_info_message "Mullvad VPN installed successfully"
 else

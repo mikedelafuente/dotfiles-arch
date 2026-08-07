@@ -44,7 +44,7 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
                 sudo pacman -S --needed --noconfirm lazygit
                 ;;
             lazydocker)
-                yay -S --needed --noconfirm lazydocker
+                ensure_yay_pkgs lazydocker
                 ;;
         esac
 

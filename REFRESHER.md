@@ -102,6 +102,16 @@ zi                 # interactive pick
 | **Super+1…9** | Jump to workspace |
 | **Super+Shift+1…9** | Move window to workspace |
 
+### …update packages safely (instead of raw yay -Syu)
+
+```bash
+bash scripts/update-system.sh           # interactive
+bash scripts/update-system.sh --yes     # after IoC scan, non-interactive
+bash scripts/update-system.sh --scan-only
+```
+
+Scans pending AUR PKGBUILDs for known supply-chain IoCs before upgrading.
+
 ### …fix ugly Courier-like title / UI fonts
 
 ```bash

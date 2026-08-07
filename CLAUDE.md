@@ -140,7 +140,8 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 - `README.md` / `REFRESHER.md` — human starting point and short memory jogger
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
 - `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
-- `scripts/fn-lib.sh` — package/nvm/hardware/config helpers
+- `scripts/update-system.sh` — guarded day-to-day `pacman` + `yay` updater (AUR IoC scan)
+- `scripts/fn-lib.sh` — package/nvm/hardware/config/AUR-scan helpers
 - `scripts/setup-gnome.sh` — theme, Pop Shell, keybindings, GPaste, AppIndicator, No Overview
 - `scripts/setup-herdr.sh` — Herdr + Claude/Cursor integrations
 - `user_configuration.json` — set disk device and `gfx_driver` per machine

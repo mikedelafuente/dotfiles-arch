@@ -39,7 +39,7 @@ else
     print_info_message "Installing TablePlus from AUR via yay"
 
     # Install TablePlus from AUR
-    yay -S --needed --noconfirm tableplus
+    ensure_yay_pkgs tableplus
 
     print_info_message "TablePlus installation completed."
 fi

@@ -41,19 +41,18 @@ else
     print_info_message "Installing Zoom from AUR"
 
     # Install Zoom from AUR
-    yay -S --noconfirm --needed zoom
+    ensure_yay_pkgs zoom
 
     if command -v zoom &> /dev/null; then
         print_info_message "Zoom installed successfully"
         print_info_message "You can launch Zoom from your application menu or run: zoom"
         echo ""
-        print_info_message "To update Zoom in the future, run:"
-        print_info_message "  yay -S zoom"
-        print_info_message "Or update all packages with:"
-        print_info_message "  yay -Syu"
+        print_info_message "To update packages safely, run:"
+        print_info_message "  update-system"
+        print_info_message "  # or: bash scripts/update-system.sh"
     else
         print_error_message "Zoom installation failed"
-        print_info_message "You can manually install with: yay -S zoom"
+        print_info_message "You can manually install with: yay -S zoom (review PKGBUILD first)"
     fi
 fi
 

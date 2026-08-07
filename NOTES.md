@@ -117,6 +117,20 @@ Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, O
 bash scripts/bootstrap.sh
 ```
 
+## AUR / package updates (security)
+
+Day-to-day upgrades should use the guarded updater (not raw `yay -Syu`):
+
+```bash
+bash scripts/update-system.sh
+# bash scripts/update-system.sh --yes
+# bash scripts/update-system.sh --scan-only
+```
+
+This runs `pacman -Syu`, scans pending AUR PKGBUILDs for known supply-chain IoCs (e.g. Atomic Arch: `atomic-lockfile`, `js-digest`, `curl|sh` in build scripts), then upgrades AUR packages. Bootstrap/sync set `DOTFILES_AUR_ASSUME_YES=true` so installs can be non-interactive **after** a clean scan.
+
+Official `core`/`extra`/`multilib` packages are signed; AUR is community PKGBUILDs — treat as lower trust.
+
 ## Syncing an existing machine (drift / other PCs)
 
 After big repo changes, bring a machine up to date without reinstalling Arch:

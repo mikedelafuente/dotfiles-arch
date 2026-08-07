@@ -28,7 +28,7 @@ print_tool_setup_start "Herdr"
 if ! command -v herdr &> /dev/null; then
     if command -v yay &> /dev/null; then
         print_info_message "Installing Herdr via yay (herdr-bin)"
-        yay -S --needed --noconfirm herdr-bin
+        ensure_yay_pkgs herdr-bin
     else
         print_warning_message "yay missing — falling back to official herdr.dev curl|bash installer"
         curl -fsSL https://herdr.dev/install.sh | sh

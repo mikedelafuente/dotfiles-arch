@@ -277,7 +277,7 @@ fi
 	fi
 }
 
-# Update yay packages if they have not been updated in the last day
+# Update AUR packages if they have not been updated in the last day (guarded)
 LAST_YAY_UPDATE=$(cat "$BOOTSTRAP_CONFIG_DIR/.last_yay_update" 2>/dev/null || echo 0)
 CURRENT_TIME=$(date +%s)
 TIME_DIFF=$((CURRENT_TIME - LAST_YAY_UPDATE)) 
@@ -285,9 +285,14 @@ TIME_DIFF=$((CURRENT_TIME - LAST_YAY_UPDATE))
 if [ "$TIME_DIFF" -lt 86400 ]; then
     print_info_message "Last Yay update was less than a day ago. Skipping update."
 else
-    print_info_message "Last Yay update was more than a day ago. Performing update."
+    print_info_message "Last Yay update was more than a day ago. Performing guarded AUR update."
     date +%s > "$BOOTSTRAP_CONFIG_DIR/.last_yay_update"
-    yay -Syu --noconfirm
+    export DOTFILES_AUR_ASSUME_YES=true
+    if aur_scan_pending_upgrades; then
+      yay -Syu --noconfirm
+    else
+      print_error_message "AUR security scan failed — skipping yay -Syu"
+    fi
 fi
 
 # --------------------------
@@ -299,6 +304,8 @@ print_info_message "Running bootstrap with profile: $SETUP_PROFILE"
 # Shared setup list (also used by sync.sh) — continue on error, summarize at end
 export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS
 export SETUP_CONTINUE_ON_ERROR=true
+# AUR installs during bootstrap/sync: IoC-scan then --noconfirm
+export DOTFILES_AUR_ASSUME_YES=true
 set +e
 bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
 SETUP_RC=$?

@@ -37,7 +37,7 @@ print_tool_setup_start "GNOME with Catppuccin Theme"
 # --------------------------
 
 print_info_message "Installing GNOME tools and utilities"
-yay -S --noconfirm --needed \
+ensure_pacman_pkgs \
     gnome-tweaks \
     gnome-shell-extensions \
     dconf-editor
@@ -72,7 +72,7 @@ else
     mkdir -p "$CATPPUCCIN_GTK_DIR"
 
     # Install from AUR
-    yay -S --noconfirm --needed catppuccin-gtk-theme-mocha
+    ensure_yay_pkgs catppuccin-gtk-theme-mocha
 
     # Link the theme to user directory for easy access
     if [ -d "/usr/share/themes/$CATPPUCCIN_THEME_NAME" ]; then
@@ -86,7 +86,8 @@ fi
 # --------------------------
 
 print_info_message "Installing Papirus icon theme with Catppuccin colors"
-yay -S --noconfirm --needed papirus-icon-theme papirus-folders-catppuccin-git
+ensure_pacman_pkgs papirus-icon-theme
+ensure_yay_pkgs papirus-folders-catppuccin-git
 
 # Apply Catppuccin colors to Papirus folders
 if command -v papirus-folders &> /dev/null; then
@@ -229,11 +230,11 @@ print_info_message ""
 # --------------------------
 
 print_info_message "Installing Pop Shell for tiling window management"
-yay -S --noconfirm --needed gnome-shell-extension-pop-shell-git
+ensure_yay_pkgs gnome-shell-extension-pop-shell-git
 
 # Skip GNOME Activities overview at login (land on workspace 1 / desktop)
 print_info_message "Installing No Overview extension (skip workspace picker at login)"
-yay -S --noconfirm --needed gnome-shell-extension-no-overview
+ensure_yay_pkgs gnome-shell-extension-no-overview
 
 # AppIndicators for tray icons (Slack, Discord, Spotify, etc.)
 print_info_message "Installing AppIndicator extension"

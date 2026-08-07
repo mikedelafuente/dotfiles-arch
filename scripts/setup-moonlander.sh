@@ -113,7 +113,7 @@ if pacman -Q zsa-keymapp-bin &> /dev/null; then
     print_info_message "Keymapp is already installed"
 else
     print_info_message "Installing Keymapp from AUR"
-    yay -S --needed --noconfirm zsa-keymapp-bin
+    ensure_yay_pkgs zsa-keymapp-bin
 
     if pacman -Q zsa-keymapp-bin &> /dev/null; then
         print_success_message "Keymapp installed successfully"

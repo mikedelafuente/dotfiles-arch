@@ -215,10 +215,106 @@ ensure_pacman_pkgs() {
   sudo pacman -S --needed --noconfirm "${missing[@]}"
 }
 
-# Install missing AUR packages via yay (idempotent). Usage: ensure_yay_pkgs pkg1 pkg2 ...
+# --------------------------
+# AUR hardening (Atomic Arch / supply-chain guards)
+# --------------------------
+# Known IoCs from the June 2026 "Atomic Arch" AUR campaign and common
+# PKGBUILD footguns. Scan before any yay -S / yay -Syu.
+
+# Regex (ERE) matched case-insensitively against PKGBUILD and *.install files.
+aur_ioc_regex() {
+  printf '%s' \
+    'atomic-lockfile|js-digest|lockfile-js|' \
+    'npm[[:space:]]+install[[:space:]]+atomic|bun[[:space:]]+install[[:space:]]+js-digest|' \
+    'curl[^|[:space:]]*\|[[:space:]]*(ba)?sh|wget[^|[:space:]]*\|[[:space:]]*(ba)?sh|' \
+    'pipefail.*curl|/dev/tcp/'
+}
+
+# Fetch AUR package sources into DIR (shallow clone). Returns 0 on success.
+aur_fetch_pkgbuild() {
+  local pkg="$1"
+  local dest="$2"
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  if git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "$dest" 2>/dev/null; then
+    return 0
+  fi
+  # Fallback: raw PKGBUILD only
+  if curl -fsSL "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=${pkg}" -o "$dest/PKGBUILD"; then
+    return 0
+  fi
+  print_error_message "Could not fetch AUR sources for: $pkg"
+  return 1
+}
+
+# Scan a directory of AUR sources (PKGBUILD, *.install, *.sh). Returns 1 if IoC hit.
+aur_scan_dir() {
+  local dir="$1"
+  local label="${2:-$dir}"
+  local hits
+  if [[ ! -d "$dir" ]]; then
+    print_error_message "AUR scan: directory missing ($dir)"
+    return 1
+  fi
+  hits="$(
+    find "$dir" -maxdepth 2 -type f \( \
+      -name PKGBUILD -o -name '*.install' -o -name '*.sh' -o -name '*.bash' \
+    \) -print0 2>/dev/null \
+      | xargs -0 rg -n -i -e "$(aur_ioc_regex)" 2>/dev/null || true
+  )"
+  if [[ -n "$hits" ]]; then
+    print_error_message "AUR SECURITY: suspicious content in $label"
+    echo "$hits" >&2
+    print_error_message "Refusing to install/upgrade. Inspect: https://aur.archlinux.org/packages/$label"
+    return 1
+  fi
+  return 0
+}
+
+# Fetch + scan one AUR package by name.
+aur_scan_package() {
+  local pkg="$1"
+  local tmp rc=0
+  tmp="$(mktemp -d)"
+  print_info_message "Scanning AUR package: $pkg"
+  if ! aur_fetch_pkgbuild "$pkg" "$tmp"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  if ! aur_scan_dir "$tmp" "$pkg"; then
+    rc=1
+  fi
+  rm -rf "$tmp"
+  return "$rc"
+}
+
+# Scan every package that yay would upgrade from the AUR (yay -Qua).
+aur_scan_pending_upgrades() {
+  local pkg
+  local pending=()
+  if ! command -v yay &>/dev/null; then
+    return 0
+  fi
+  mapfile -t pending < <(yay -Qua 2>/dev/null | awk '{print $1}' || true)
+  if [[ ${#pending[@]} -eq 0 ]]; then
+    print_info_message "No pending AUR upgrades to scan"
+    return 0
+  fi
+  print_action_message "Scanning ${#pending[@]} pending AUR upgrade(s)"
+  for pkg in "${pending[@]}"; do
+    [[ -n "$pkg" ]] || continue
+    aur_scan_package "$pkg" || return 1
+  done
+  print_success_message "AUR upgrade scan clean"
+  return 0
+}
+
+# Install missing AUR packages via yay after IoC scan.
+# Env: DOTFILES_AUR_ASSUME_YES=true → --noconfirm after scan passes (bootstrap/sync).
 ensure_yay_pkgs() {
   local pkg
   local missing=()
+  local assume_yes="${DOTFILES_AUR_ASSUME_YES:-false}"
   if ! command -v yay &>/dev/null; then
     print_error_message "yay is required but not installed"
     return 1
@@ -233,8 +329,62 @@ ensure_yay_pkgs() {
   if [[ ${#missing[@]} -eq 0 ]]; then
     return 0
   fi
-  print_action_message "Installing via yay: ${missing[*]}"
-  yay -S --needed --noconfirm "${missing[@]}"
+
+  print_action_message "AUR install candidates: ${missing[*]}"
+  for pkg in "${missing[@]}"; do
+    aur_scan_package "$pkg" || return 1
+  done
+
+  if [[ "$assume_yes" == "true" || "$assume_yes" == "1" ]]; then
+    print_warning_message "DOTFILES_AUR_ASSUME_YES set — installing with --noconfirm after clean IoC scan"
+    yay -S --needed --noconfirm "${missing[@]}"
+  else
+    print_info_message "IoC scan clean. Running interactive yay (review PKGBUILD if prompted)."
+    yay -S --needed "${missing[@]}"
+  fi
+}
+
+# Guarded full system update: pacman -Syu + AUR scan + yay -Syu.
+# Usage: safe_system_upgrade [--yes]
+safe_system_upgrade() {
+  local assume_yes=false
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --yes|-y) assume_yes=true ;;
+    esac
+  done
+
+  print_line_break "Guarded system update"
+
+  print_action_message "Updating official repositories (pacman -Syu)"
+  if [[ "$assume_yes" == true ]]; then
+    sudo pacman -Syu --noconfirm
+  else
+    sudo pacman -Syu
+  fi
+
+  if ! command -v yay &>/dev/null; then
+    print_warning_message "yay not installed — skipping AUR upgrades"
+    return 0
+  fi
+
+  print_action_message "Checking for AUR updates"
+  if ! aur_scan_pending_upgrades; then
+    print_error_message "Aborting AUR upgrade due to failed security scan"
+    return 1
+  fi
+
+  print_action_message "Upgrading AUR packages (yay -Sua / -Syu AUR side)"
+  if [[ "$assume_yes" == true ]]; then
+    export DOTFILES_AUR_ASSUME_YES=true
+    # -Syu after pacman already refreshed; -a limits to AUR if supported
+    yay -Syu --noconfirm
+  else
+    yay -Syu
+  fi
+
+  print_success_message "Guarded system update complete"
 }
 
 # Remove orphaned packages if any (safe when none — pacman -Qtdq exits 1).

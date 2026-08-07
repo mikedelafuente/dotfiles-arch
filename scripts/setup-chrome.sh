@@ -20,7 +20,7 @@ if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/de
   print_info_message "Google Chrome is already installed. Skipping installation."
 else
   print_info_message "Installing Google Chrome from AUR (google-chrome)"
-  yay -S --needed --noconfirm google-chrome
+  ensure_yay_pkgs google-chrome
 
   if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
     print_success_message "Google Chrome installed successfully"

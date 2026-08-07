@@ -40,7 +40,7 @@ else
         print_error_message "yay is required to install Cursor from the AUR"
         exit 1
     fi
-    yay -S --needed --noconfirm cursor-bin
+    ensure_yay_pkgs cursor-bin
 fi
 
 if command -v cursor &> /dev/null; then
