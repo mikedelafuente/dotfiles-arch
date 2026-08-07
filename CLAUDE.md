@@ -29,7 +29,7 @@ dotfiles-arch/
 ├── home/                         # Dotfiles for ~/
 │   ├── .bashrc
 │   ├── .gitconfig                # Shared only; includes ~/.config/git/identity
-│   └── .local/bin/               # Helpers (code, hide-gnome-overview, …)
+│   └── .local/bin/               # Helpers (code, hide-gnome-overview, sync-dotfiles, update-system, …)
 ├── config/                       # ~/.config application configs
 │   ├── fontconfig/fonts.conf
 │   ├── nvim/
@@ -123,7 +123,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 - **setup-gnome.sh**: Only when `gnome-shell` is installed; battery detection via power_supply `type`
 - **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
-- **setup-cursor.sh**: IDE via AUR; Agent CLI via official installer (documented trust boundary); prefer AUR for Herdr
+- **setup-cursor.sh**: IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`
 - **`code`**: Creates a Herdr workspace and starts `nvim .`
 
 ## Key design decisions

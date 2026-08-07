@@ -68,8 +68,15 @@ DOTFILES_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/home/.local/b
 BIN_TARGET_DIR="$USER_HOME_DIR/.local/bin"
 
 if [ -d "$DOTFILES_BIN_DIR" ]; then
-  mkdir -p "$BIN_TARGET_DIR"
+  mkdir -p "$BIN_TARGET_DIR" 2>/dev/null \
+    || sudo mkdir -p "$BIN_TARGET_DIR"
   print_info_message "Linking .local/bin directory files..."
+
+  # Earlier bootstrap/setup under sudo can leave ~/.local/bin root-owned.
+  if [ ! -w "$BIN_TARGET_DIR" ]; then
+    print_warning_message "$BIN_TARGET_DIR is not writable — linking with sudo"
+    print_info_message "Tip: sudo chown -R \"${SUDO_USER:-$(whoami)}\":\"${SUDO_USER:-$(whoami)}\" \"$BIN_TARGET_DIR\""
+  fi
 
   find "$DOTFILES_BIN_DIR" -type f | while read -r file; do
     filename="$(basename "$file")"
@@ -80,13 +87,16 @@ if [ -d "$DOTFILES_BIN_DIR" ]; then
     if [ -e "$target" ] && [ ! -L "$target" ]; then
       print_warning_message "Warning: $target exists and is not a symlink."
       print_action_message "Backing up existing $target to $target.backup"
-      mv "$target" "$target.backup"
+      mv "$target" "$target.backup" 2>/dev/null \
+        || sudo mv "$target" "$target.backup"
     elif [ -L "$target" ]; then
       print_info_message "Overwriting existing symlink $target"
     fi
 
-    ln -sf "$source_file" "$target"
-    chmod +x "$target"  # Ensure the script is executable
+    ln -sfn "$source_file" "$target" 2>/dev/null \
+      || sudo ln -sfn "$source_file" "$target"
+    chmod +x "$target" 2>/dev/null \
+      || sudo chmod +x "$target"
     print_info_message "Linked: .local/bin/$filename"
   done
 fi

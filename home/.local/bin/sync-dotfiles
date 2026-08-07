@@ -1,6 +1,6 @@
 #!/bin/bash
-# Day-to-day guarded pacman + yay updater (AUR IoC scan).
-# Usage: update-system [--yes|-y] [--scan-only] [-h]
+# Bring this machine in line with the current dotfiles-arch repo.
+# Usage: sync-dotfiles [--profile work|personal] [--cleanup] [--skip-bootstrap] [--yes|-y]
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ resolve_dotfiles_arch() {
     candidates+=("$(cd "$(dirname "$self")/../../.." && pwd)")
   fi
   for d in "${candidates[@]}"; do
-    if [[ -f "$d/scripts/update-system.sh" ]]; then
+    if [[ -f "$d/scripts/sync.sh" ]]; then
       echo "$d"
       return 0
     fi
@@ -35,4 +35,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/update-system.sh" "$@"
+exec bash "$ROOT/scripts/sync.sh" "$@"

@@ -8,8 +8,19 @@ export INPUTRC=~/.inputrc
 
 
 
-# Give a small intro message upon starting a new shell that most developers use
-# echo "Type 'aliases' to see custom aliases and key bindings."
+# Give a small intro tip on interactive shells (Kitty, GNOME Terminal, etc.)
+# Full cheat sheet lives in `welcome` — keep this one line so panes stay quiet.
+# Colors use ANSI palette indices (not hex) so they follow the active terminal
+# theme — Catppuccin Mocha in Kitty, whatever is configured elsewhere.
+case $- in
+  *i*)
+    if [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ]; then
+      printf '\033[1;38;5;13m❯\033[0m \033[2mrun\033[0m \033[1;38;5;10mwelcome\033[0m \033[2mfor aliases, update commands, and shortcuts\033[0m\n'
+    else
+      printf '%s\n' "Tip: run 'welcome' for aliases, update commands, shortcuts, and more."
+    fi
+    ;;
+esac
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
@@ -374,3 +385,7 @@ if [ -d "$HOME/.local/share/gem/ruby" ]; then
         fi
     done
 fi
+
+# Default to production read-only SSO profile
+export AWS_PROFILE=production-readonly
+export AWS_DEFAULT_REGION=us-east-1

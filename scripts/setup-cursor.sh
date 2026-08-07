@@ -24,7 +24,7 @@ fi
 
 print_tool_setup_start "Cursor IDE"
 
-# Ensure ~/.local/bin exists and is preferred for agent/cursor-agent shims
+# Ensure ~/.local/bin exists and is on PATH for the `agent` compat shim
 mkdir -p "$USER_HOME_DIR/.local/bin"
 case ":$PATH:" in
   *":$USER_HOME_DIR/.local/bin:"*) ;;
@@ -50,21 +50,71 @@ else
     exit 1
 fi
 
-# Cursor Agent CLI (agent / cursor-agent) — required for Herdr Cursor integration
-if command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; then
-    print_info_message "Cursor Agent CLI already installed: $(command -v cursor-agent 2>/dev/null || command -v agent)"
-    agent --version 2>/dev/null || cursor-agent --version 2>/dev/null || true
-else
-    # Trust boundary: official Cursor installer (same pattern as Cursor docs).
-    # Prefer reusing an existing agent binary when present (checked above).
-    print_warning_message "Installing Cursor Agent CLI via official curl|bash installer (cursor.com)"
-    print_action_message "Installing Cursor Agent CLI (official installer)"
-    curl -fsS https://cursor.com/install | bash \
-        || print_warning_message "Cursor Agent CLI install failed — run: curl -fsS https://cursor.com/install | bash"
+# --------------------------
+# Cursor Agent CLI (cursor-cli from the AUR)
+# --------------------------
+# Managed through yay so it flows via the same guarded `yay -Syu` + IoC scan as
+# the rest of the stack. The AUR package blocks the vendor auto-updater by
+# chmod -x'ing ~/.local/share/cursor-agent/versions, so any earlier curl|bash
+# install living in that tree must be cleared out first — otherwise the two
+# installs fight over PATH and the old shims silently break.
+
+AGENT_STATE_DIR="$USER_HOME_DIR/.local/share/cursor-agent"
+
+# Shims may be root-owned when an earlier setup run happened under sudo.
+remove_path_entry() {
+    rm -rf "$1" 2>/dev/null || sudo rm -rf "$1"
+}
+
+remove_legacy_agent_cli() {
+    local link
+    local removed=false
+
+    for link in "$USER_HOME_DIR/.local/bin/cursor-agent" "$USER_HOME_DIR/.local/bin/agent"; do
+        if [ -L "$link" ] && [[ "$(readlink -f "$link" 2>/dev/null)" == "$AGENT_STATE_DIR"/* ]]; then
+            print_action_message "Removing curl-installed shim: $link"
+            remove_path_entry "$link"
+            removed=true
+        fi
+    done
+
+    if [ -d "$AGENT_STATE_DIR/versions" ]; then
+        # cursor-cli leaves this directory non-traversable; restore +x so it can be walked.
+        chmod u+rwx "$AGENT_STATE_DIR/versions" 2>/dev/null \
+            || sudo chmod u+rwx "$AGENT_STATE_DIR/versions" 2>/dev/null || true
+        if [ -n "$(ls -A "$AGENT_STATE_DIR/versions" 2>/dev/null)" ]; then
+            print_action_message "Removing curl-installed Agent CLI payload: $AGENT_STATE_DIR/versions"
+            remove_path_entry "$AGENT_STATE_DIR/versions"
+            removed=true
+        fi
+    fi
+
+    if [ "$removed" = true ]; then
+        print_success_message "Removed curl-installed Cursor Agent CLI"
+        hash -r 2>/dev/null || true
+    fi
+}
+
+remove_legacy_agent_cli
+
+if ! command -v yay &>/dev/null; then
+    print_error_message "yay is required to install the Cursor Agent CLI (cursor-cli)"
+    exit 1
 fi
 
-if command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; then
-    print_success_message "Cursor Agent CLI available (agent / cursor-agent)"
+ensure_yay_pkgs cursor-cli
+
+# cursor-cli only ships /usr/bin/cursor-agent; keep `agent` available for Herdr and muscle memory.
+if command -v cursor-agent &>/dev/null && [ ! -e "$USER_HOME_DIR/.local/bin/agent" ]; then
+    AGENT_BIN="$(command -v cursor-agent)"
+    print_action_message "Linking 'agent' → $AGENT_BIN"
+    ln -sfn "$AGENT_BIN" "$USER_HOME_DIR/.local/bin/agent" 2>/dev/null \
+        || sudo ln -sfn "$AGENT_BIN" "$USER_HOME_DIR/.local/bin/agent" \
+        || print_warning_message "Could not create 'agent' shim in $USER_HOME_DIR/.local/bin"
+fi
+
+if command -v cursor-agent &>/dev/null; then
+    print_success_message "Cursor Agent CLI available: $(command -v cursor-agent) ($(cursor-agent --version 2>/dev/null | head -1))"
     # Wire Herdr integration when Herdr is already present (bootstrap installs cursor before herdr;
     # re-runs / sync also cover the reverse order)
     if command -v herdr &>/dev/null; then
@@ -74,7 +124,7 @@ if command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; then
             || print_warning_message "Could not install Herdr Cursor integration (run: herdr integration install cursor)"
     fi
 else
-    print_warning_message "Cursor Agent CLI not on PATH yet — ensure ~/.local/bin is in PATH"
+    print_warning_message "cursor-agent not on PATH — check that cursor-cli installed (yay -S cursor-cli)"
 fi
 
 print_info_message "Settings are linked to ~/.config/Cursor/User/ via link-dotfiles.sh"
