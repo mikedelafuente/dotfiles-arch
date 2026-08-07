@@ -20,7 +20,7 @@ if [ -r "$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config" ]; then
   source "$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config"
 else
   echo "Configuration file not found. Setting based on System User."
-  FULL_NAME=""$(getent passwd "$(whoami)" | cut -d ':' -f 5 | cut -d ',' -f 1)""
+  FULL_NAME="$(getent passwd "$(whoami)" | cut -d ':' -f 5 | cut -d ',' -f 1)"
 fi
 
 # Prompt for full name
@@ -145,7 +145,7 @@ echo "Display server protocol: $XDG_SESSION_TYPE"
 echo "Current user: $(whoami)"
 echo "Home directory: $HOME"
 echo "Real user: ${SUDO_USER:-$(whoami)}"
-echo "Home directory of real user: $(eval echo ~${SUDO_USER:-$(whoami)})" 
+echo "Home directory of real user: $(eval echo "~${SUDO_USER:-$(whoami)}")"
 echo "Shell: $SHELL"
 echo "Script directory: $(dirname -- "${BASH_SOURCE[0]}")"
 echo "----------------------------------------"
@@ -245,7 +245,7 @@ else
     print_info_message "Last Pacman update was more than a day ago or changes to pacman.conf was made. Performing update."
     sudo pacman -Sy --noconfirm #|| true
     # Write a file to ~/.last_pacman_update with the current timestamp
-    echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_update"
+    date +%s > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_update"
 fi
 
 LAST_PACMAN_UPGRADE=$(cat "$BOOTSTRAP_CONFIG_DIR/.last_pacman_upgrade" 2>/dev/null || echo 0)
@@ -259,7 +259,7 @@ else
     print_info_message "Last Pacman upgrade was more than a day ago. Performing upgrade."
     sudo pacman -Su --noconfirm
     # Write a file to ~/.last_pacman_upgrade with the current timestamp
-    echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_upgrade"
+    date +%s > "$BOOTSTRAP_CONFIG_DIR/.last_pacman_upgrade"
 fi
 
 
@@ -277,7 +277,7 @@ fi
 	fi
 }
 
-# Update Flatpak apps if they have not been updated in the last day
+# Update yay packages if they have not been updated in the last day
 LAST_YAY_UPDATE=$(cat "$BOOTSTRAP_CONFIG_DIR/.last_yay_update" 2>/dev/null || echo 0)
 CURRENT_TIME=$(date +%s)
 TIME_DIFF=$((CURRENT_TIME - LAST_YAY_UPDATE)) 
@@ -286,8 +286,7 @@ if [ "$TIME_DIFF" -lt 86400 ]; then
     print_info_message "Last Yay update was less than a day ago. Skipping update."
 else
     print_info_message "Last Yay update was more than a day ago. Performing update."
-    # Write a file to ~/.last_flatpak_update with the current timestamp
-    echo "$(date +%s)" > "$BOOTSTRAP_CONFIG_DIR/.last_yay_update"
+    date +%s > "$BOOTSTRAP_CONFIG_DIR/.last_yay_update"
     yay -Syu --noconfirm
 fi
 
@@ -297,98 +296,29 @@ fi
 
 print_info_message "Running bootstrap with profile: $SETUP_PROFILE"
 
-# Install Essential Packages
-bash "$DF_SCRIPT_DIR/setup-essentials.sh"
-
-# NVIDIA drivers (optional — preference saved in bootstrap config)
-bash "$DF_SCRIPT_DIR/setup-nvidia.sh" --yes
-
-# Set up Git configuration
-bash "$DF_SCRIPT_DIR/setup-git.sh" "$FULL_NAME" "$EMAIL_ADDRESS"
-
-# Setup GitHub CLI (no Copilot)
-bash "$DF_SCRIPT_DIR/setup-github-cli.sh"
-
-# Install Node.js and npm (needed by Claude Code and other tools)
-bash "$DF_SCRIPT_DIR/setup-node.sh"
-
-# Setup Fonts
-bash "$DF_SCRIPT_DIR/setup-fonts.sh"
-
-# Setup Bash
-bash "$DF_SCRIPT_DIR/setup-bash.sh"
-
-# Setup Kitty as the default terminal
-bash "$DF_SCRIPT_DIR/setup-kitty.sh"
-
-# Install Cursor IDE
-bash "$DF_SCRIPT_DIR/setup-cursor.sh"
-
-# Install Claude Code CLI
-bash "$DF_SCRIPT_DIR/setup-claude.sh"
-
-# Herdr replaces tmux as the default multiplexer
-bash "$DF_SCRIPT_DIR/setup-herdr.sh"
-
-# Shared developer / desktop stack
-bash "$DF_SCRIPT_DIR/setup-python.sh"
-bash "$DF_SCRIPT_DIR/setup-rust.sh"
-bash "$DF_SCRIPT_DIR/setup-golang.sh"
-bash "$DF_SCRIPT_DIR/setup-neovim.sh"
-bash "$DF_SCRIPT_DIR/setup-tableplus.sh"
-bash "$DF_SCRIPT_DIR/setup-docker.sh"
-bash "$DF_SCRIPT_DIR/setup-minikube.sh"
-bash "$DF_SCRIPT_DIR/setup-code.sh"
-bash "$DF_SCRIPT_DIR/setup-php.sh"
-bash "$DF_SCRIPT_DIR/setup-ruby.sh"
-bash "$DF_SCRIPT_DIR/setup-postman.sh"
-bash "$DF_SCRIPT_DIR/setup-moonlander.sh"
-bash "$DF_SCRIPT_DIR/setup-spotify.sh"
-bash "$DF_SCRIPT_DIR/setup-obsidian.sh"
-
-# --------------------------
-# Profile-specific apps
-# --------------------------
-
-if [ "$SETUP_PROFILE" = "work" ]; then
-    print_line_break "Work profile — Zoom + Slack + Chrome"
-    bash "$DF_SCRIPT_DIR/setup-zoom.sh"
-    bash "$DF_SCRIPT_DIR/setup-slack.sh"
-    bash "$DF_SCRIPT_DIR/setup-chrome.sh"
-else
-    print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad"
-    bash "$DF_SCRIPT_DIR/setup-steam.sh"
-    bash "$DF_SCRIPT_DIR/setup-discord.sh"
-    bash "$DF_SCRIPT_DIR/setup-firefox.sh"
-    bash "$DF_SCRIPT_DIR/setup-mullvad.sh"
-fi
-
-# Setup GNOME with Catppuccin theme (if GNOME is installed)
-if pacman -Q gnome-shell &> /dev/null; then
-    print_info_message "GNOME is installed. Running GNOME setup..."
-    bash "$DF_SCRIPT_DIR/setup-gnome.sh"
-else
-    print_info_message "GNOME is not installed. Skipping GNOME setup."
+# Shared setup list (also used by sync.sh) — continue on error, summarize at end
+export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS
+export SETUP_CONTINUE_ON_ERROR=true
+set +e
+bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
+SETUP_RC=$?
+set -e
+if [ "$SETUP_RC" -ne 0 ]; then
+  print_warning_message "Some setup scripts failed (see above). Continuing with link/cleanup."
 fi
 
 # Link dotfiles (pass setup profile name for reference)
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$SETUP_PROFILE"
+
+# Refresh fonts / print GNOME checklist after configs are linked
+bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 
 # --------------------------
 # Clean Up
 # --------------------------
 
 print_line_break "Cleaning up"
-
-ORPHANED_PACKAGES=$(pacman -Qtdq)
-if [ -n "$ORPHANED_PACKAGES" ]; then
-    # The variable is not empty, meaning there are orphaned packages.
-    echo "Found orphaned packages. Removing them now..."
-    sudo pacman -Rns --noconfirm $ORPHANED_PACKAGES
-else
-    # The variable is empty, meaning there are no orphaned packages.
-    echo "No orphaned packages found."
-fi
+remove_orphaned_packages
 
 print_line_break "Bootstrap completed. Please restart your terminal or log out and log back in."
 

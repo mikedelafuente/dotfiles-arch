@@ -55,6 +55,9 @@ if command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; then
     print_info_message "Cursor Agent CLI already installed: $(command -v cursor-agent 2>/dev/null || command -v agent)"
     agent --version 2>/dev/null || cursor-agent --version 2>/dev/null || true
 else
+    # Trust boundary: official Cursor installer (same pattern as Cursor docs).
+    # Prefer reusing an existing agent binary when present (checked above).
+    print_warning_message "Installing Cursor Agent CLI via official curl|bash installer (cursor.com)"
     print_action_message "Installing Cursor Agent CLI (official installer)"
     curl -fsS https://cursor.com/install | bash \
         || print_warning_message "Cursor Agent CLI install failed — run: curl -fsS https://cursor.com/install | bash"

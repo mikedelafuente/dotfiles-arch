@@ -47,7 +47,7 @@ yay -S --noconfirm --needed \
 # --------------------------
 
 # Only disable audio power saving on desktops (systems without batteries)
-if [ -d /sys/class/power_supply/BAT* ] 2>/dev/null || [ -d /sys/class/power_supply/battery ] 2>/dev/null; then
+if has_battery; then
     print_info_message "Battery detected - keeping audio power saving enabled for better battery life"
     print_info_message "If you experience audio popping, you can manually disable with:"
     print_info_message "  echo 'options snd_hda_intel power_save=0' | sudo tee /etc/modprobe.d/audio_disable_powersave.conf"
@@ -495,7 +495,8 @@ print_info_message "  - File Explorer: Super+E"
 print_info_message "  - Browser: Super+B"
 print_info_message "  - Clipboard history (GPaste): Super+V"
 print_info_message ""
-print_warning_message "If Super+V / Super+Y still do nothing: log out and back in so GNOME reloads extensions."
+print_warning_message "Log out and back in so GNOME reloads extensions (GPaste, AppIndicator, Pop Shell)."
+print_warning_message "Until then Super+V / Super+Y / tray icons may not work."
 
 # --------------------------
 # Installation Complete

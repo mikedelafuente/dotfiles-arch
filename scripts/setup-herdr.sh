@@ -30,7 +30,7 @@ if ! command -v herdr &> /dev/null; then
         print_info_message "Installing Herdr via yay (herdr-bin)"
         yay -S --needed --noconfirm herdr-bin
     else
-        print_info_message "Installing Herdr via official install script"
+        print_warning_message "yay missing — falling back to official herdr.dev curl|bash installer"
         curl -fsSL https://herdr.dev/install.sh | sh
     fi
 else

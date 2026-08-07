@@ -32,13 +32,23 @@ fi
 USERNAME_ARG="$1"
 EMAIL_ARG="$2"
 
-# If not passed as arguments, then ask for them
+# If not passed as arguments, only prompt when a TTY is available
 if [ -z "$USERNAME_ARG" ]; then
-    read -rp "Enter your full name for git commit history: " USERNAME_ARG
+    if [ -t 0 ]; then
+        read -rp "Enter your full name for git commit history: " USERNAME_ARG
+    else
+        print_error_message "Full name required (pass as arg 1). Non-interactive run has no TTY."
+        exit 1
+    fi
 fi
 
 if [ -z "$EMAIL_ARG" ]; then
-    read -rp "Enter your email for git commit history: " EMAIL_ARG
+    if [ -t 0 ]; then
+        read -rp "Enter your email for git commit history: " EMAIL_ARG
+    else
+        print_error_message "Email required (pass as arg 2). Non-interactive run has no TTY."
+        exit 1
+    fi
 fi
 
 if [ -z "$USERNAME_ARG" ] || [ -z "$EMAIL_ARG" ]; then

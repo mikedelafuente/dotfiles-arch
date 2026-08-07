@@ -20,15 +20,18 @@ dotfiles-arch/
 ├── scripts/
 │   ├── bootstrap.sh              # Full new-machine orchestration
 │   ├── sync.sh                   # Bring an existing machine up to date
+│   ├── run-profile-setup.sh      # Shared setup-* list (bootstrap + sync)
+│   ├── post-link-hooks.sh        # After link-dotfiles (fc-cache, GNOME checklist)
 │   ├── dotheader.sh              # Common header (SCRIPT_DIR, USER_HOME_DIR)
-│   ├── fn-lib.sh                 # Shared print/NVIDIA helpers
+│   ├── fn-lib.sh                 # Shared helpers (print, packages, nvm, hardware)
 │   ├── link-dotfiles.sh          # Symlink home/ + config/ into $HOME
 │   └── setup-*.sh                # Individual tool setup scripts
 ├── home/                         # Dotfiles for ~/
 │   ├── .bashrc
-│   ├── .gitconfig
+│   ├── .gitconfig                # Shared only; includes ~/.config/git/identity
 │   └── .local/bin/               # Helpers (code, hide-gnome-overview, …)
 ├── config/                       # ~/.config application configs
+│   ├── fontconfig/fonts.conf
 │   ├── nvim/
 │   ├── kitty/
 │   ├── herdr/
@@ -81,7 +84,22 @@ Profile argument is recorded for reference; linking is shared. Default profile n
 
 Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DIR` (respects `$SUDO_USER`). Do **not** hardcode `/home/<user>` — machines use different usernames.
 
-**fn-lib.sh**: `print_*` helpers, `has_nvidia_hardware`, `has_nvidia_packages`, `nvidia_driver_packages`.
+**fn-lib.sh** includes:
+
+- `print_*` helpers
+- Hardware: `has_nvidia_*`, `has_intel_hardware`, `has_battery`
+- Packages: `ensure_pacman_pkgs`, `ensure_yay_pkgs`, `remove_orphaned_packages`
+- NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
+- Config: `load_bootstrap_config`, `validate_bootstrap_profile`, `write_bootstrap_config`
+- Fonts: `refresh_font_cache`
+
+### Orchestration
+
+`bootstrap.sh` and `sync.sh` both call:
+
+1. `run-profile-setup.sh` — single shared setup-* list; continues on error and prints a failure summary
+2. `link-dotfiles.sh`
+3. `post-link-hooks.sh` — `fc-cache` after `fonts.conf` is linked; GNOME logout checklist
 
 ### Bootstrap config
 
@@ -100,11 +118,12 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 
 ### Special cases
 
-- **setup-git.sh**: Requires name + email args; writes `~/.config/git/identity` (not the shared `.gitconfig`) so machines/users can differ
-- **setup-gnome.sh**: Only from bootstrap/sync when `gnome-shell` is installed
-- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true` (detects hardware/packages for defaults); never swaps an existing driver flavor
-- **setup-rust.sh**: Uses rustup, not the pacman package
-- **setup-cursor.sh**: Installs IDE (`cursor-bin`) **and** Agent CLI (`curl https://cursor.com/install`); wires `herdr integration install cursor` when Herdr is present
+- **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes `~/.config/git/identity` (not the shared `.gitconfig`)
+- **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm`; Claude uses user-level `npm` (never `sudo npm`)
+- **setup-gnome.sh**: Only when `gnome-shell` is installed; battery detection via power_supply `type`
+- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor
+- **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
+- **setup-cursor.sh**: IDE via AUR; Agent CLI via official installer (documented trust boundary); prefer AUR for Herdr
 - **`code`**: Creates a Herdr workspace and starts `nvim .`
 
 ## Key design decisions
@@ -120,6 +139,8 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 
 - `README.md` / `REFRESHER.md` — human starting point and short memory jogger
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
+- `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
+- `scripts/fn-lib.sh` — package/nvm/hardware/config helpers
 - `scripts/setup-gnome.sh` — theme, Pop Shell, keybindings, GPaste, AppIndicator, No Overview
 - `scripts/setup-herdr.sh` — Herdr + Claude/Cursor integrations
 - `user_configuration.json` — set disk device and `gfx_driver` per machine

@@ -104,7 +104,7 @@ mkdir -p "$CONFIG_TARGET_DIR"
 print_info_message "Linking .config directory files..."
 
 find "$CONFIG_SOURCE_DIR" -type f | while read -r file; do
-  relative_path="${file#$CONFIG_SOURCE_DIR/}"
+  relative_path="${file#"$CONFIG_SOURCE_DIR"/}"
   target="$CONFIG_TARGET_DIR/$relative_path"
   source_file="$file"
   target_dir="$(dirname "$target")"

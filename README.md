@@ -76,8 +76,8 @@ That will:
 
 1. Resolve/save profile + NVIDIA preference
 2. `git pull --ff-only`
-3. Re-run setup scripts (idempotent)
-4. Relink dotfiles
+3. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
+4. Relink dotfiles + `post-link-hooks.sh` (font cache, GNOME checklist)
 5. Optionally remove obsolete packages (tmux, Hyprland stack, etc.)
 
 ### Useful flags

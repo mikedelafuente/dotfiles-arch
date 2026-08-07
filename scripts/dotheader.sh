@@ -7,8 +7,10 @@
 
 set -euo pipefail
 
-# Set a USER_HOME_DIR variable and export it for use in other scripts
-export USER_HOME_DIR="$(eval echo ~${SUDO_USER:-$(whoami)})"
+# Resolve real user home when run under sudo
+_user="${SUDO_USER:-$(whoami)}"
+USER_HOME_DIR="$(eval echo "~${_user}")"
+export USER_HOME_DIR
 
 # Use parameter expansion to avoid "unbound variable" with set -u
 if [ -z "${DF_SCRIPT_DIR:-}" ]; then
@@ -23,6 +25,6 @@ else
   echo "Missing required library: $DF_SCRIPT_DIR/fn-lib.sh"
   echo "DF_SCRIPT_DIR is $DF_SCRIPT_DIR"
   echo "Current user: $(whoami)"
-  echo "Real user: ${SUDO_USER:-$(whoami)}" 
+  echo "Real user: ${_user}"
   exit 1
 fi

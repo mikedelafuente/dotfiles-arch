@@ -273,61 +273,15 @@ if [ "$SKIP_BOOTSTRAP" = false ]; then
   SUDO_KEEPALIVE_PID=$!
   trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
 
-  run_setup() {
-    local script="$1"
-    shift || true
-    if [ -f "$DF_SCRIPT_DIR/$script" ]; then
-      print_info_message "→ $script${*:+ ($*)}"
-      bash "$DF_SCRIPT_DIR/$script" "$@"
-    else
-      print_warning_message "Missing $script — skipped"
-    fi
-  }
-
-  # Shared stack (mirrors bootstrap.sh)
-  run_setup setup-essentials.sh
-  run_setup setup-nvidia.sh --yes
-  if [ -n "$FULL_NAME" ] && [ -n "$EMAIL_ADDRESS" ]; then
-    bash "$DF_SCRIPT_DIR/setup-git.sh" "$FULL_NAME" "$EMAIL_ADDRESS"
-  else
-    print_warning_message "FULL_NAME/EMAIL_ADDRESS not set — skipping setup-git.sh (re-run bootstrap once to set them)"
-  fi
-  run_setup setup-github-cli.sh
-  run_setup setup-node.sh
-  run_setup setup-fonts.sh
-  run_setup setup-bash.sh
-  run_setup setup-kitty.sh
-  run_setup setup-cursor.sh
-  run_setup setup-claude.sh
-  run_setup setup-herdr.sh
-  run_setup setup-python.sh
-  run_setup setup-rust.sh
-  run_setup setup-golang.sh
-  run_setup setup-neovim.sh
-  run_setup setup-tableplus.sh
-  run_setup setup-docker.sh
-  run_setup setup-minikube.sh
-  run_setup setup-code.sh
-  run_setup setup-php.sh
-  run_setup setup-ruby.sh
-  run_setup setup-postman.sh
-  run_setup setup-moonlander.sh
-  run_setup setup-spotify.sh
-  run_setup setup-obsidian.sh
-
-  if [ "$SETUP_PROFILE" = "work" ]; then
-    run_setup setup-zoom.sh
-    run_setup setup-slack.sh
-    run_setup setup-chrome.sh
-  else
-    run_setup setup-steam.sh
-    run_setup setup-discord.sh
-    run_setup setup-firefox.sh
-    run_setup setup-mullvad.sh
-  fi
-
-  if pacman -Q gnome-shell &>/dev/null; then
-    run_setup setup-gnome.sh
+  export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS
+  export SETUP_CONTINUE_ON_ERROR=true
+  # Shared list with bootstrap — continue on error, exit 1 if any failed
+  set +e
+  bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
+  SETUP_RC=$?
+  set -e
+  if [ "$SETUP_RC" -ne 0 ]; then
+    print_warning_message "Some setup scripts failed (see above). Continuing with link/cleanup."
   fi
 else
   print_info_message "Skipping setup scripts (--skip-bootstrap)"
@@ -339,6 +293,7 @@ fi
 
 print_line_break "Linking dotfiles"
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$SETUP_PROFILE"
+bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 
 # --------------------------
 # Optional cleanup of obsolete tooling
@@ -447,5 +402,6 @@ fi
 print_line_break "Sync complete"
 print_success_message "Profile: $SETUP_PROFILE"
 print_info_message "Restart the terminal (or log out/in) so PATH, Kitty defaults, and shell aliases refresh."
+print_info_message "If GNOME shortcuts/tray/fonts look wrong: log out and back in so extensions reload."
 print_info_message "Neovim: open nvim once and run :Lazy sync / :TSUpdate if plugins look stale."
 print_info_message "On other machines: clone/pull this repo, then run:  bash scripts/sync.sh"
