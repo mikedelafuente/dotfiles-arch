@@ -300,29 +300,36 @@ bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 # Optional cleanup of obsolete tooling
 # --------------------------
 
+OBSOLETE_PKG_CANDIDATES=(
+  tmux
+  tmuxinator
+  ghostty
+  alacritty
+  hyprland
+  hyprpaper
+  hyprlock
+  hypridle
+  hyprshot
+  waybar
+  swaync
+)
+
+# Populate OBSOLETE_PKGS_INSTALLED with candidate packages that are installed.
+collect_obsolete_pkgs() {
+  OBSOLETE_PKGS_INSTALLED=()
+  local pkg
+  for pkg in "${OBSOLETE_PKG_CANDIDATES[@]}"; do
+    if pacman -Q "$pkg" &>/dev/null; then
+      OBSOLETE_PKGS_INSTALLED+=("$pkg")
+    fi
+  done
+}
+
 cleanup_obsolete() {
   print_line_break "Cleaning obsolete packages / configs"
 
-  local pkgs_to_remove=()
-  local candidates=(
-    tmux
-    tmuxinator
-    ghostty
-    alacritty
-    hyprland
-    hyprpaper
-    hyprlock
-    hypridle
-    hyprshot
-    waybar
-    swaync
-  )
-
-  for pkg in "${candidates[@]}"; do
-    if pacman -Q "$pkg" &>/dev/null; then
-      pkgs_to_remove+=("$pkg")
-    fi
-  done
+  collect_obsolete_pkgs
+  local pkgs_to_remove=("${OBSOLETE_PKGS_INSTALLED[@]}")
 
   if [ ${#pkgs_to_remove[@]} -gt 0 ]; then
     print_action_message "Will remove: ${pkgs_to_remove[*]}"
@@ -386,18 +393,22 @@ cleanup_obsolete() {
   fi
 }
 
+collect_obsolete_pkgs
+
 if [ "$DO_CLEANUP" = true ]; then
   cleanup_obsolete
+elif [ ${#OBSOLETE_PKGS_INSTALLED[@]} -eq 0 ]; then
+  print_info_message "No obsolete packages installed; skipping cleanup"
 elif [ "$ASSUME_YES" = false ]; then
   echo ""
-  read -rp "Also remove obsolete packages (tmux, ghostty, alacritty, hyprland, …)? [y/N]: " ASK_CLEAN
+  read -rp "Also remove obsolete packages (${OBSOLETE_PKGS_INSTALLED[*]})? [y/N]: " ASK_CLEAN
   if [[ "${ASK_CLEAN:-}" =~ ^[Yy]$ ]]; then
     cleanup_obsolete
   else
     print_info_message "Skipped cleanup (re-run with --cleanup later if needed)"
   fi
 else
-  print_info_message "Skipped cleanup (pass --cleanup with --yes to remove obsolete packages)"
+  print_info_message "Skipped cleanup (pass --cleanup with --yes to remove: ${OBSOLETE_PKGS_INSTALLED[*]})"
 fi
 
 print_line_break "Sync complete"
