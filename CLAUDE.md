@@ -60,7 +60,7 @@ bash scripts/sync.sh
 # bash scripts/sync.sh --profile work|personal --yes
 ```
 
-Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup.
+Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan of packages + AUR deps), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup. Saved profile/NVIDIA are kept silently; pass `--prompt` to re-ask. AUR `--noconfirm` only with `--yes`.
 
 ### Individual setups
 
@@ -90,10 +90,10 @@ Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DI
 
 - `print_*` helpers / `fmt_choice` (turquoise prompt defaults)
 - Hardware: `has_nvidia_*`, `has_intel_hardware`, `has_battery`
-- Packages: `ensure_pacman_pkgs`, `ensure_yay_installed`, `ensure_yay_pkgs`, `safe_system_upgrade`, `remove_orphaned_packages`
-- AUR IoC scan: `aur_scan_*` (fail closed if neither `rg` nor `grep` is available)
+- Packages: `ensure_pacman_pkgs`, `ensure_yay_installed` (scanned before makepkg), `ensure_yay_pkgs`, `ensure_multilib_enabled`, `safe_system_upgrade`, `remove_orphaned_packages`
+- AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `write_bootstrap_config`, `validate_bootstrap_profile`, `normalize_setup_profile`, `resolve_nvidia_preference`
+- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `resolve_nvidia_preference`
 - Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 

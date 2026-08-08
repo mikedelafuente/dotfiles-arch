@@ -127,7 +127,9 @@ bash scripts/update-system.sh
 # bash scripts/update-system.sh --scan-only
 ```
 
-This runs `pacman -Syu`, scans pending AUR PKGBUILDs for known supply-chain IoCs (e.g. Atomic Arch: `atomic-lockfile`, `js-digest`, `curl|sh` in build scripts), then upgrades AUR packages. Bootstrap/sync set `DOTFILES_AUR_ASSUME_YES=true` so installs can be non-interactive **after** a clean scan.
+This runs `pacman -Syu`, scans pending AUR PKGBUILDs **and AUR-only dependencies** for known supply-chain IoCs (e.g. Atomic Arch: `atomic-lockfile`, `js-digest`, `curl|sh` in build scripts), then upgrades AUR packages. Yay itself is IoC-scanned before first `makepkg`. This is a **known-IoC gate**, not a full PKGBUILD audit.
+
+Bootstrap always sets `DOTFILES_AUR_ASSUME_YES=true` for non-interactive AUR installs after a clean scan. Sync sets that only with `--yes`.
 
 Official `core`/`extra`/`multilib` packages are signed; AUR is community PKGBUILDs — treat as lower trust.
 
@@ -142,24 +144,27 @@ bash scripts/sync.sh
 
 That will:
 
-1. `git pull --ff-only` (if this is a git clone)
-2. Re-run the setup scripts (idempotent installs for Kitty, Herdr, Cursor, Claude, …)
-3. Relink dotfiles
-4. Optionally remove obsolete packages (`tmux`, `ghostty`, `alacritty`, Hyprland stack, Copilot CLI) and stale configs
+1. Resolve profile + NVIDIA (keeps saved values silently; use `--prompt` to re-ask)
+2. `git pull --ff-only` (if this is a git clone)
+3. Guarded system upgrade (`pacman` + AUR IoC scan + `yay`) **every run**
+4. Re-run the setup scripts (idempotent installs for Kitty, Herdr, Cursor, Claude, …)
+5. Relink dotfiles
+6. Optionally remove obsolete packages (`tmux`, `ghostty`, `alacritty`, Hyprland stack, Copilot CLI) and stale configs
 
 Useful flags:
 
 ```shell
 bash scripts/sync.sh --profile work
 bash scripts/sync.sh --profile personal
-bash scripts/sync.sh --cleanup          # remove obsolete packages
-bash scripts/sync.sh --skip-bootstrap   # only pull + link (+ optional cleanup)
+bash scripts/sync.sh --prompt            # re-ask profile / NVIDIA
+bash scripts/sync.sh --cleanup           # remove obsolete packages
+bash scripts/sync.sh --skip-bootstrap    # skip setup-*.sh (still upgrades + links)
 bash scripts/sync.sh --yes --profile work --cleanup
 ```
 
 If no profile is saved yet, sync prompts you to choose **work** or **personal** (with `--yes`, you must pass `--profile`).
 
-Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`.
+Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`. For day-to-day package-only updates, prefer `update-system`.
 
 Paths use `$HOME` / `$USER_HOME_DIR` so different usernames on other machines work without edits.
 

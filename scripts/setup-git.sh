@@ -97,6 +97,7 @@ print_info_message "Git identity written to $IDENTITY_FILE:"
 print_info_message "  Name: $USERNAME_ARG"
 print_info_message "  Email: $EMAIL_ARG"
 print_info_message "Shared settings (editor, defaultBranch) come from ~/.gitconfig after link-dotfiles"
+chmod 600 "$IDENTITY_FILE"
 
 # --------------------------
 # Setup SSH Keys
@@ -107,29 +108,40 @@ print_info_message "Setting up SSH keys for Git"
 # Check to see if SSH keys already exist
 if [ -f "$USER_HOME_DIR/.ssh/id_ed25519" ]; then
     print_info_message "SSH key already exists. Skipping key generation."
+elif [ ! -t 0 ]; then
+    print_warning_message "No TTY — skipping SSH key generation."
+    print_info_message "Create one later: ssh-keygen -t ed25519 -C \"$EMAIL_ARG\" -f ~/.ssh/id_ed25519"
 else
     print_info_message "Generating new SSH key using Ed25519 algorithm"
     
-    # Ensure .ssh directory exists
     mkdir -p "$USER_HOME_DIR/.ssh"
     chmod 700 "$USER_HOME_DIR/.ssh"
 
-    # Create SSH keys for GitHub using Ed25519 without passphrase
-    ssh-keygen -t ed25519 -C "$EMAIL_ARG" -f "$USER_HOME_DIR/.ssh/id_ed25519" -N ""
-    
-    # Add SSH key to ssh-agent
-    eval "$(ssh-agent -s)"
-    ssh-add "$USER_HOME_DIR/.ssh/id_ed25519"
-    
-    # Display the public key for GitHub
     echo ""
-    print_info_message "Your public SSH key is:"
+    read -rsp "SSH key passphrase (Enter for empty — less secure): " SSH_PASS
     echo ""
-    cat "$USER_HOME_DIR/.ssh/id_ed25519.pub"
+    read -rsp "Confirm passphrase: " SSH_PASS2
     echo ""
-    print_warning_message "Copy this key to your GitHub account:"
-    print_info_message "  https://github.com/settings/keys"
-    echo ""
+    if [[ "$SSH_PASS" != "$SSH_PASS2" ]]; then
+        print_error_message "Passphrases do not match — skipping SSH key generation"
+    else
+        if [[ -z "$SSH_PASS" ]]; then
+            print_warning_message "Creating SSH key with empty passphrase"
+        fi
+        ssh-keygen -t ed25519 -C "$EMAIL_ARG" -f "$USER_HOME_DIR/.ssh/id_ed25519" -N "$SSH_PASS"
+        
+        eval "$(ssh-agent -s)"
+        ssh-add "$USER_HOME_DIR/.ssh/id_ed25519"
+        
+        echo ""
+        print_info_message "Your public SSH key is:"
+        echo ""
+        cat "$USER_HOME_DIR/.ssh/id_ed25519.pub"
+        echo ""
+        print_warning_message "Copy this key to your GitHub account:"
+        print_info_message "  https://github.com/settings/keys"
+        echo ""
+    fi
 fi
 
 # --------------------------

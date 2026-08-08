@@ -5,17 +5,9 @@
 # This script creates symbolic links from the dotfiles repository to your home directory
 # -------------------------
 
-# -------------------------
-# Allow for the profile name to be passed as an argument
-# -------------------------
-PROFILE_NAME="${1:-work}"
-
-# --------------------------
-# Import Common Header
-# --------------------------
+PROFILE_ARG="${1:-work}"
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
-
 if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
   # shellcheck source=/dev/null
   source "$CURRENT_FILE_DIR/dotheader.sh"
@@ -24,39 +16,57 @@ else
   exit 1
 fi
 
-# --------------------------
-# End Import Common Header
-# --------------------------
+if ! PROFILE_NAME="$(normalize_setup_profile "$PROFILE_ARG")"; then
+  print_warning_message "Invalid profile arg '$PROFILE_ARG' — linking is profile-agnostic; continuing as work"
+  PROFILE_NAME="work"
+fi
 
 print_tool_setup_start "Linking dotfiles"
 print_info_message "Linking dotfiles for profile: $PROFILE_NAME"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DOTFILES_HOME_DIR="$REPO_ROOT/home"
+DOTFILES_CONFIG_DIR="$REPO_ROOT/config"
+
+# Link source → target with backup + sudo fallback for root-owned targets.
+link_path() {
+  local source_file="$1"
+  local target="$2"
+  local target_dir
+
+  if [ ! -e "$source_file" ]; then
+    print_warning_message "Missing source $source_file — skipping"
+    return 0
+  fi
+
+  target_dir="$(dirname "$target")"
+  mkdir -p "$target_dir" 2>/dev/null \
+    || sudo mkdir -p "$target_dir"
+
+  if [ -e "$target" ] && [ ! -L "$target" ]; then
+    print_warning_message "Warning: $target exists and is not a symlink."
+    print_action_message "Backing up existing $target to $target.backup"
+    mv "$target" "$target.backup" 2>/dev/null \
+      || sudo mv "$target" "$target.backup"
+  elif [ -L "$target" ]; then
+    print_info_message "Overwriting existing symlink $target"
+  fi
+
+  if ! ln -sfn "$source_file" "$target" 2>/dev/null; then
+    print_warning_message "Not writable — linking with sudo: $target"
+    print_info_message "Tip: sudo chown -R \"${SUDO_USER:-$(whoami)}\":\"${SUDO_USER:-$(whoami)}\" \"$target_dir\""
+    sudo ln -sfn "$source_file" "$target"
+  fi
+}
 
 # --------------------------
 # Link Home Directory Dotfiles
 # --------------------------
 
-DOTFILES_HOME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/home"
-DOTFILES_CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/config"
-
 print_info_message "Linking home directory dotfiles..."
 
 for file in .bashrc .inputrc .profile .gitconfig .gitignore_global .nvim-cheatsheet.md .welcome.md; do
-  target="$USER_HOME_DIR/$file"
-  source_file="$DOTFILES_HOME_DIR/$file"
-
-  if [ ! -e "$source_file" ]; then
-    print_warning_message "Missing source $source_file — skipping"
-    continue
-  fi
-
-  if [ -e "$target" ] && [ ! -L "$target" ]; then
-    print_warning_message "Warning: $target exists and is not a symlink."
-    print_action_message "Backing up existing $target to $target.backup"
-    mv "$target" "$target.backup"
-  elif [ -L "$target" ]; then
-    print_info_message "Overwriting existing symlink $target"
-  fi
-  ln -sf "$source_file" "$target"
+  link_path "$DOTFILES_HOME_DIR/$file" "$USER_HOME_DIR/$file"
   print_info_message "Linked: $file"
 done
 
@@ -64,7 +74,7 @@ done
 # Link .local/bin Directory Files
 # --------------------------
 
-DOTFILES_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/home/.local/bin"
+DOTFILES_BIN_DIR="$DOTFILES_HOME_DIR/.local/bin"
 BIN_TARGET_DIR="$USER_HOME_DIR/.local/bin"
 
 if [ -d "$DOTFILES_BIN_DIR" ]; then
@@ -72,7 +82,6 @@ if [ -d "$DOTFILES_BIN_DIR" ]; then
     || sudo mkdir -p "$BIN_TARGET_DIR"
   print_info_message "Linking .local/bin directory files..."
 
-  # Earlier bootstrap/setup under sudo can leave ~/.local/bin root-owned.
   if [ ! -w "$BIN_TARGET_DIR" ]; then
     print_warning_message "$BIN_TARGET_DIR is not writable — linking with sudo"
     print_info_message "Tip: sudo chown -R \"${SUDO_USER:-$(whoami)}\":\"${SUDO_USER:-$(whoami)}\" \"$BIN_TARGET_DIR\""
@@ -80,27 +89,8 @@ if [ -d "$DOTFILES_BIN_DIR" ]; then
 
   while IFS= read -r -d '' file; do
     filename="$(basename "$file")"
-    target="$BIN_TARGET_DIR/$filename"
-    source_file="$file"
-
-    if [ ! -e "$source_file" ]; then
-      print_warning_message "Missing source $source_file — skipping"
-      continue
-    fi
-
-    if [ -e "$target" ] && [ ! -L "$target" ]; then
-      print_warning_message "Warning: $target exists and is not a symlink."
-      print_action_message "Backing up existing $target to $target.backup"
-      mv "$target" "$target.backup" 2>/dev/null \
-        || sudo mv "$target" "$target.backup"
-    elif [ -L "$target" ]; then
-      print_info_message "Overwriting existing symlink $target"
-    fi
-
-    ln -sfn "$source_file" "$target" 2>/dev/null \
-      || sudo ln -sfn "$source_file" "$target"
-    chmod +x "$target" 2>/dev/null \
-      || sudo chmod +x "$target"
+    link_path "$file" "$BIN_TARGET_DIR/$filename"
+    # Do not chmod symlinks into the repo (avoids dirtying git file modes).
     print_info_message "Linked: .local/bin/$filename"
   done < <(find "$DOTFILES_BIN_DIR" -type f -print0)
 fi
@@ -117,26 +107,7 @@ print_info_message "Linking .config directory files..."
 
 while IFS= read -r -d '' file; do
   relative_path="${file#"$CONFIG_SOURCE_DIR"/}"
-  target="$CONFIG_TARGET_DIR/$relative_path"
-  source_file="$file"
-  target_dir="$(dirname "$target")"
-
-  if [ ! -e "$source_file" ]; then
-    print_warning_message "Missing source $source_file — skipping"
-    continue
-  fi
-
-  mkdir -p "$target_dir"
-
-  if [ -e "$target" ] && [ ! -L "$target" ]; then
-    print_warning_message "Warning: $target exists and is not a symlink."
-    print_action_message "Backing up existing $target to $target.backup"
-    mv "$target" "$target.backup"
-  elif [ -L "$target" ]; then
-    print_info_message "Overwriting existing symlink $target"
-  fi
-
-  ln -sf "$source_file" "$target"
+  link_path "$file" "$CONFIG_TARGET_DIR/$relative_path"
   print_info_message "Linked: .config/$relative_path"
 done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
 

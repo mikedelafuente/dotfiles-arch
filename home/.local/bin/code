@@ -47,8 +47,7 @@ ensure_herdr_server() {
     herdr server >/dev/null 2>&1 &
     disown $! 2>/dev/null || true
 
-    local i
-    for i in $(seq 1 50); do
+    for _ in $(seq 1 50); do
         if herdr_server_running; then
             return 0
         fi
@@ -75,8 +74,8 @@ except Exception:
 
 wait_for_pane_shell() {
     local pane_id="$1"
-    local i rows
-    for i in $(seq 1 50); do
+    local rows
+    for _ in $(seq 1 50); do
         rows="$(pane_viewport_rows "$pane_id")"
         if [[ "${rows:-0}" -ge 10 ]]; then
             return 0
@@ -130,8 +129,7 @@ ensure_herdr_ui() {
     echo "Opening Herdr UI in Kitty..."
     kitty --detach --directory "$TARGET_DIR" herdr
 
-    local i
-    for i in $(seq 1 50); do
+    for _ in $(seq 1 50); do
         # Any pane with a usable viewport means a client has sized the session
         if herdr pane list 2>/dev/null | python3 -c '
 import json, sys

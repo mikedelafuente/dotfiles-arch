@@ -21,25 +21,36 @@ fi
 # Enable multilib
 # --------------------------
 
-PACMAN_CONF="/etc/pacman.conf"
-
-if [ ! -f "$PACMAN_CONF" ]; then
-  echo "Error: $PACMAN_CONF not found."
-  exit 1
-fi
-
-if grep -q '^\[multilib\]' "$PACMAN_CONF"; then
-  echo "[multilib] already enabled in $PACMAN_CONF"
+if declare -F ensure_multilib_enabled >/dev/null 2>&1; then
+  ensure_multilib_enabled || true
 else
-  sudo sed -i '/^#\[multilib\]/{
+  PACMAN_CONF="/etc/pacman.conf"
+  if [ ! -f "$PACMAN_CONF" ]; then
+    echo "Error: $PACMAN_CONF not found."
+    exit 1
+  fi
+  if grep -q '^\[multilib\]' "$PACMAN_CONF"; then
+    echo "[multilib] already enabled in $PACMAN_CONF"
+  else
+    sudo sed -i '/^#\[multilib\]/{
     s/^#//
     n
     s/^#//
 }' "$PACMAN_CONF"
-  echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
+    echo "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
+  fi
 fi
 
-sudo pacman -Syu --noconfirm
+if declare -F safe_system_upgrade >/dev/null 2>&1; then
+  export DOTFILES_AUR_ASSUME_YES=true
+  if safe_system_upgrade --yes; then
+    record_system_upgrade_stamps 2>/dev/null || true
+  else
+    echo "Warning: guarded system update failed; continuing"
+  fi
+else
+  sudo pacman -Syu --noconfirm
+fi
 
 # --------------------------
 # NVIDIA (conditional)

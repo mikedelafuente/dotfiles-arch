@@ -57,38 +57,17 @@ print_info_message "NVIDIA hardware detected:  $HARDWARE_PRESENT"
 should_install=""
 if [ -n "$FORCE_INSTALL" ]; then
   should_install="$FORCE_INSTALL"
-elif [ -n "${INSTALL_NVIDIA:-}" ]; then
-  case "${INSTALL_NVIDIA,,}" in
-    1|true|yes|y) should_install=true ;;
-    0|false|no|n) should_install=false ;;
-  esac
+elif [[ "${INSTALL_NVIDIA:-}" == "true" || "${INSTALL_NVIDIA:-}" == "1" || "${INSTALL_NVIDIA:-}" == "yes" || "${INSTALL_NVIDIA:-}" == "y" ]]; then
+  should_install=true
+elif [[ "${INSTALL_NVIDIA:-}" == "false" || "${INSTALL_NVIDIA:-}" == "0" || "${INSTALL_NVIDIA:-}" == "no" || "${INSTALL_NVIDIA:-}" == "n" ]]; then
+  should_install=false
 fi
 
 if [ -z "$should_install" ]; then
-  # Smart default: already installed via archinstall, or GPU is present
-  DEFAULT="n"
-  if [ "$PACKAGES_PRESENT" = true ] || [ "$HARDWARE_PRESENT" = true ]; then
-    DEFAULT="y"
-  fi
-
-  if [ "$ASSUME_YES" = true ]; then
-    if [ "$DEFAULT" = "y" ]; then
-      should_install=true
-    else
-      should_install=false
-    fi
-  else
-    echo ""
-    print_info_message "Install NVIDIA drivers (nvidia-open-dkms + utils)?"
-    print_info_message "  Prefer 'y' if archinstall selected an NVIDIA gfx driver or this machine has an NVIDIA GPU."
-    print_info_message "  Prefer 'n' on AMD/Intel-only machines."
-    read -rp "Install NVIDIA drivers? [y/n] (Enter = $(fmt_choice "$DEFAULT")): " NVIDIA_INPUT
-    NVIDIA_INPUT="${NVIDIA_INPUT:-$DEFAULT}"
-    case "${NVIDIA_INPUT,,}" in
-      y|yes) should_install=true ;;
-      *) should_install=false ;;
-    esac
-  fi
+  # No explicit preference — detect / prompt (or auto with --yes)
+  export ASSUME_YES
+  resolve_nvidia_preference
+  should_install="$INSTALL_NVIDIA"
 fi
 
 # Persist preference for bootstrap/sync (preserve other identity fields)

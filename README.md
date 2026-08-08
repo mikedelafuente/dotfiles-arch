@@ -99,12 +99,13 @@ That will:
 ```bash
 bash scripts/sync.sh --profile work
 bash scripts/sync.sh --profile personal
+bash scripts/sync.sh --prompt               # re-ask profile / NVIDIA
 bash scripts/sync.sh --cleanup              # remove obsolete packages/configs
 bash scripts/sync.sh --skip-bootstrap       # skip setup-*.sh (still upgrades + links)
 bash scripts/sync.sh --yes --profile work --cleanup
 ```
 
-With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set.
+With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set. Saved profile/NVIDIA are kept silently unless unset or `--prompt`.
 
 **Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages). Use `update-system.sh` for day-to-day package-only updates without re-running setup scripts.
 
@@ -237,10 +238,16 @@ dotfiles-arch/
 ├── user_configuration.json
 ├── scripts/
 │   ├── bootstrap.sh       # new machine
-│   ├── sync.sh            # existing machine
+│   ├── sync.sh            # existing machine (always guarded upgrade)
+│   ├── run-profile-setup.sh
+│   ├── post-link-hooks.sh
 │   ├── link-dotfiles.sh
+│   ├── update-system.sh   # day-to-day pacman + yay
+│   ├── fn-lib.sh          # shared helpers / AUR IoC scan
+│   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
+│   └── .local/bin/        # sync-dotfiles, update-system, …
 └── config/                # → ~/.config
 ```
 

@@ -59,10 +59,10 @@ else
 fi
 
 if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    print_warning_message "~/.local/bin is not in PATH"
+    print_warning_message "\$HOME/.local/bin is not in PATH"
     print_info_message "This will be added to PATH when dotfiles are linked"
 else
-    print_info_message "~/.local/bin is already in PATH"
+    print_info_message "\$HOME/.local/bin is already in PATH"
 fi
 
 DOTFILES_DIR="$(cd "$CURRENT_FILE_DIR/.." && pwd)"

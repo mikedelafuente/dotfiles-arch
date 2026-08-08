@@ -156,6 +156,7 @@ validate_bootstrap_profile() {
 }
 
 # Write current identity/profile/NVIDIA prefs (full rewrite of known keys).
+# Values are shell-escaped so a sourced config cannot inject code via quotes/$().
 write_bootstrap_config() {
   local dir f
   dir="$(bootstrap_config_dir)"
@@ -163,10 +164,10 @@ write_bootstrap_config() {
   mkdir -p "$dir"
   {
     echo "# Configuration file for dotfiles bootstrap script"
-    echo "FULL_NAME=\"${FULL_NAME:-}\""
-    echo "EMAIL_ADDRESS=\"${EMAIL_ADDRESS:-}\""
-    echo "SETUP_PROFILE=\"${SETUP_PROFILE:-work}\""
-    echo "INSTALL_NVIDIA=\"${INSTALL_NVIDIA:-false}\""
+    printf 'FULL_NAME=%q\n' "${FULL_NAME:-}"
+    printf 'EMAIL_ADDRESS=%q\n' "${EMAIL_ADDRESS:-}"
+    printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE:-work}"
+    printf 'INSTALL_NVIDIA=%q\n' "${INSTALL_NVIDIA:-false}"
   } >"$f"
 }
 
@@ -310,11 +311,33 @@ ensure_pacman_pkgs() {
   sudo pacman -S --needed --noconfirm "${missing[@]}"
 }
 
+# Ensure [multilib] (and its Include) are uncommented in pacman.conf.
+# Sets MULTILIB_CHANGED=true when the file was modified; false otherwise.
+ensure_multilib_enabled() {
+  local conf="${1:-/etc/pacman.conf}"
+  export MULTILIB_CHANGED=false
+  if [[ ! -f "$conf" ]]; then
+    print_error_message "pacman.conf not found: $conf"
+    return 1
+  fi
+  if grep -q '^\[multilib\]' "$conf"; then
+    print_info_message "[multilib] is already enabled in $conf"
+    return 0
+  fi
+  if grep -q '^#\[multilib\]' "$conf"; then
+    sudo sed -i '/^#\[multilib\]/{ s/^#//; n; s/^#//; }' "$conf"
+    print_info_message "[multilib] and its Include line have been uncommented in $conf"
+    export MULTILIB_CHANGED=true
+    return 0
+  fi
+  print_warning_message "[multilib] section not found in $conf"
+  return 1
+}
+
 # --------------------------
 # AUR hardening (Atomic Arch / supply-chain guards)
 # --------------------------
-# Known IoCs from the June 2026 "Atomic Arch" AUR campaign and common
-# PKGBUILD footguns. Scan before any yay -S / yay -Syu.
+# Known-IoC gate (not a full PKGBUILD audit). Scan before any yay -S / yay -Syu.
 
 # Regex (ERE) matched case-insensitively against PKGBUILD and *.install files.
 aur_ioc_regex() {
@@ -322,7 +345,8 @@ aur_ioc_regex() {
     'atomic-lockfile|js-digest|lockfile-js|' \
     'npm[[:space:]]+install[[:space:]]+atomic|bun[[:space:]]+install[[:space:]]+js-digest|' \
     'curl[^|[:space:]]*\|[[:space:]]*(ba)?sh|wget[^|[:space:]]*\|[[:space:]]*(ba)?sh|' \
-    'pipefail.*curl|/dev/tcp/'
+    'pipefail.*curl|/dev/tcp/|' \
+    '[[:space:]]eval[[:space:]]|base64[[:space:]]+-d|base64[[:space:]]+--decode'
 }
 
 # Fetch AUR package sources into DIR (shallow clone). Returns 0 on success.
@@ -402,7 +426,87 @@ aur_scan_package() {
   return "$rc"
 }
 
-# Scan every package that yay would upgrade from the AUR (yay -Qua).
+# Extract bare package names from .SRCINFO depends lines (strip version constraints).
+aur_srcinfo_deps() {
+  local dir="$1"
+  local srcinfo="$dir/.SRCINFO"
+  [[ -f "$srcinfo" ]] || return 0
+  # Matches: depends = foo, depends = foo>=1, etc.
+  awk '
+    /^[[:space:]]*(depends|makedepends|checkdepends)[[:space:]]*=/ {
+      sub(/^[^=]*=[[:space:]]*/, "", $0)
+      sub(/[<>=].*$/, "", $0)
+      gsub(/[[:space:]]/, "", $0)
+      if ($0 != "" && $0 !~ /^[a-zA-Z0-9@._+-]+$/) next
+      if ($0 != "") print $0
+    }
+  ' "$srcinfo" | sort -u
+}
+
+# True when package is available from an official pacman sync DB (not AUR-only).
+aur_is_official_pkg() {
+  local pkg="$1"
+  pacman -Si "$pkg" &>/dev/null
+}
+
+# Scan an AUR package and recurse into AUR-only dependencies (.SRCINFO).
+# Caps: max depth 8, max 25 packages visited.
+aur_scan_package_tree() {
+  local root_pkg="$1"
+  local -A visited=()
+  local count=0
+  local max_pkgs=25
+  local max_depth=8
+
+  _aur_scan_tree_rec() {
+    local pkg="$1"
+    local depth="$2"
+    local tmp dep deps
+
+    if [[ -n "${visited[$pkg]:-}" ]]; then
+      return 0
+    fi
+    if [[ "$count" -ge "$max_pkgs" ]]; then
+      print_error_message "AUR scan: exceeded max packages ($max_pkgs) while scanning $root_pkg"
+      return 1
+    fi
+    if [[ "$depth" -gt "$max_depth" ]]; then
+      print_error_message "AUR scan: exceeded max depth ($max_depth) at $pkg (root $root_pkg)"
+      return 1
+    fi
+
+    visited[$pkg]=1
+    count=$((count + 1))
+
+    tmp="$(mktemp -d)"
+    print_info_message "Scanning AUR package: $pkg (depth $depth)"
+    if ! aur_fetch_pkgbuild "$pkg" "$tmp"; then
+      rm -rf "$tmp"
+      return 1
+    fi
+    if ! aur_scan_dir "$tmp" "$pkg"; then
+      rm -rf "$tmp"
+      return 1
+    fi
+
+    mapfile -t deps < <(aur_srcinfo_deps "$tmp")
+    rm -rf "$tmp"
+
+    for dep in "${deps[@]}"; do
+      [[ -n "$dep" ]] || continue
+      if aur_is_official_pkg "$dep"; then
+        continue
+      fi
+      # Already installed from somewhere — still scan if AUR-sourced upgrade path
+      _aur_scan_tree_rec "$dep" "$((depth + 1))" || return 1
+    done
+    return 0
+  }
+
+  _aur_scan_tree_rec "$root_pkg" 0
+}
+
+# Scan every package that yay would upgrade from the AUR (yay -Qua), including AUR deps.
 aur_scan_pending_upgrades() {
   local pkg
   local pending=()
@@ -414,16 +518,16 @@ aur_scan_pending_upgrades() {
     print_info_message "No pending AUR upgrades to scan"
     return 0
   fi
-  print_action_message "Scanning ${#pending[@]} pending AUR upgrade(s)"
+  print_action_message "Scanning ${#pending[@]} pending AUR upgrade(s) (with AUR deps)"
   for pkg in "${pending[@]}"; do
     [[ -n "$pkg" ]] || continue
-    aur_scan_package "$pkg" || return 1
+    aur_scan_package_tree "$pkg" || return 1
   done
   print_success_message "AUR upgrade scan clean"
   return 0
 }
 
-# Install yay from the AUR into a temp dir if missing (mktemp; no ~/yay collision).
+# Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {
   local tmp rc=0
   if command -v yay &>/dev/null; then
@@ -432,8 +536,16 @@ ensure_yay_installed() {
   print_action_message "Installing yay from AUR"
   ensure_pacman_pkgs base-devel git
   tmp="$(mktemp -d)"
-  if git clone https://aur.archlinux.org/yay.git "$tmp/yay" \
-    && (cd "$tmp/yay" && makepkg -si --noconfirm); then
+  if ! git clone https://aur.archlinux.org/yay.git "$tmp/yay"; then
+    print_error_message "Failed to clone yay from AUR"
+    rm -rf "$tmp"
+    return 1
+  fi
+  if ! aur_scan_dir "$tmp/yay" "yay"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  if (cd "$tmp/yay" && makepkg -si --noconfirm); then
     print_success_message "yay installed: $(command -v yay)"
   else
     print_error_message "yay installation failed"
@@ -443,8 +555,8 @@ ensure_yay_installed() {
   return "$rc"
 }
 
-# Install missing AUR packages via yay after IoC scan.
-# Env: DOTFILES_AUR_ASSUME_YES=true → --noconfirm after scan passes (bootstrap/sync).
+# Install missing AUR packages via yay after IoC scan (package + AUR deps).
+# Env: DOTFILES_AUR_ASSUME_YES=true → --noconfirm after scan passes (bootstrap/sync --yes).
 ensure_yay_pkgs() {
   local pkg
   local missing=()
@@ -466,7 +578,7 @@ ensure_yay_pkgs() {
 
   print_action_message "AUR install candidates: ${missing[*]}"
   for pkg in "${missing[@]}"; do
-    aur_scan_package "$pkg" || return 1
+    aur_scan_package_tree "$pkg" || return 1
   done
 
   if [[ "$assume_yes" == "true" || "$assume_yes" == "1" ]]; then

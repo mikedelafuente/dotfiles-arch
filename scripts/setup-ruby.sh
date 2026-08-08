@@ -70,12 +70,12 @@ fi
 
 print_info_message "Installing Rails dependencies"
 
-# Node.js (JavaScript runtime for Rails asset pipeline)
-if command -v node &> /dev/null; then
+# Node.js (JavaScript runtime for Rails asset pipeline) — prefer NVM, never pacman node
+load_nvm || true
+if command -v node &>/dev/null; then
     print_info_message "Node.js is already installed: $(node --version)"
 else
-    print_info_message "Installing Node.js"
-    sudo pacman -S --needed --noconfirm nodejs npm
+    print_warning_message "Node.js not found (run setup-node.sh / NVM). Skipping Rails JS runtime install."
 fi
 
 # Additional build dependencies for native gems

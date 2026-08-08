@@ -41,23 +41,23 @@ fi
 # Ensure Catppuccin Mocha Theme
 # --------------------------
 # kitty.conf includes themes/mocha.conf (linked by link-dotfiles.sh).
-# Keep a local copy under ~/.config/kitty/themes as a fallback.
+# Prefer the repo copy; never wget from the network.
 
 KITTY_CONFIG_DIR="$USER_HOME_DIR/.config/kitty"
 KITTY_THEME_DIR="$KITTY_CONFIG_DIR/themes"
 KITTY_THEME_FILE="$KITTY_THEME_DIR/mocha.conf"
+REPO_KITTY_THEME="$(cd "$CURRENT_FILE_DIR/.." && pwd)/config/kitty/themes/mocha.conf"
 
 mkdir -p "$KITTY_THEME_DIR"
 
-if [ ! -f "$KITTY_THEME_FILE" ] && [ ! -L "$KITTY_THEME_FILE" ]; then
-    print_info_message "Installing Catppuccin Mocha theme for Kitty"
-    if wget -q "https://raw.githubusercontent.com/catppuccin/kitty/main/themes/mocha.conf" -O "$KITTY_THEME_FILE"; then
-        print_success_message "Catppuccin Mocha theme installed"
-    else
-        print_error_message "Failed to download Catppuccin Mocha theme"
-    fi
-else
+if [ -e "$KITTY_THEME_FILE" ] || [ -L "$KITTY_THEME_FILE" ]; then
     print_info_message "Catppuccin Mocha theme already present"
+elif [ -f "$REPO_KITTY_THEME" ]; then
+    print_info_message "Copying Catppuccin Mocha theme from repo"
+    cp "$REPO_KITTY_THEME" "$KITTY_THEME_FILE"
+    print_success_message "Catppuccin Mocha theme installed"
+else
+    print_warning_message "Repo theme missing ($REPO_KITTY_THEME); run link-dotfiles.sh for kitty.conf themes/"
 fi
 
 # --------------------------

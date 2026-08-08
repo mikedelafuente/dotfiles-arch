@@ -3,7 +3,8 @@
 # Bootstrap Script for Arch
 # ----------------
 # Flags:
-#   --yes, -y   Non-interactive: use saved config / defaults (profile defaults to work)
+#   --yes, -y                 Non-interactive: use saved config / defaults
+#   --profile work|personal   Set profile (default: saved or work)
 # ----------------
 
 set -euo pipefail
@@ -19,20 +20,35 @@ else
 fi
 
 ASSUME_YES=false
+FORCE_PROFILE=""
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y)
       ASSUME_YES=true
       shift
       ;;
+    --profile=*)
+      FORCE_PROFILE="${1#*=}"
+      shift
+      ;;
+    --profile)
+      if [ -z "${2:-}" ]; then
+        print_error_message "--profile requires an argument (work|personal)"
+        exit 1
+      fi
+      FORCE_PROFILE="$2"
+      shift 2
+      ;;
     -h|--help)
       cat <<EOF
-Usage: $(basename "$0") [--yes|-y]
+Usage: $(basename "$0") [options]
 
 Full new-machine bootstrap for dotfiles-arch.
 Do not run with sudo.
 
-  --yes, -y   Non-interactive (saved config / hardware defaults)
+  --yes, -y                 Non-interactive (saved config / hardware defaults)
+  --profile work|personal   Set profile (default: saved or work)
 EOF
       exit 0
       ;;
@@ -59,27 +75,48 @@ fi
 FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
 SETUP_PROFILE="${SETUP_PROFILE:-work}"
-if ! SETUP_PROFILE="$(normalize_setup_profile "$SETUP_PROFILE")"; then
+
+if [ -n "$FORCE_PROFILE" ]; then
+  if ! SETUP_PROFILE="$(normalize_setup_profile "$FORCE_PROFILE")"; then
+    print_error_message "Invalid --profile '$FORCE_PROFILE' (use work or personal)"
+    exit 1
+  fi
+elif ! SETUP_PROFILE="$(normalize_setup_profile "$SETUP_PROFILE")"; then
   SETUP_PROFILE="work"
 fi
 
-if [ "$ASSUME_YES" = false ]; then
+if [ "$ASSUME_YES" = true ]; then
+  if [ -z "$FULL_NAME" ] || [ -z "$EMAIL_ADDRESS" ]; then
+    print_error_message "With --yes, FULL_NAME and EMAIL_ADDRESS must already be saved in bootstrap config."
+    exit 1
+  fi
+else
   if [ -z "$FULL_NAME" ]; then
-    read -rp "Enter your full name (e.g., John Doe): " FULL_NAME
+    while [ -z "$FULL_NAME" ]; do
+      read -rp "Enter your full name (e.g., John Doe): " FULL_NAME
+    done
   else
     read -rp "Enter your full name (e.g., John Doe) [$(fmt_choice "$FULL_NAME")]: " INPUT_FULL_NAME
     if [ -n "${INPUT_FULL_NAME:-}" ]; then
       FULL_NAME="$INPUT_FULL_NAME"
     fi
+    while [ -z "$FULL_NAME" ]; do
+      read -rp "Full name cannot be empty. Enter your full name: " FULL_NAME
+    done
   fi
 
   if [ -z "$EMAIL_ADDRESS" ]; then
-    read -rp "Enter your email address (e.g., john.doe@example.com): " EMAIL_ADDRESS
+    while [ -z "$EMAIL_ADDRESS" ]; do
+      read -rp "Enter your email address (e.g., john.doe@example.com): " EMAIL_ADDRESS
+    done
   else
     read -rp "Enter your email address (e.g., john.doe@example.com) [$(fmt_choice "$EMAIL_ADDRESS")]: " INPUT_EMAIL_ADDRESS
     if [ -n "${INPUT_EMAIL_ADDRESS:-}" ]; then
       EMAIL_ADDRESS="$INPUT_EMAIL_ADDRESS"
     fi
+    while [ -z "$EMAIL_ADDRESS" ]; do
+      read -rp "Email cannot be empty. Enter your email address: " EMAIL_ADDRESS
+    done
   fi
 
   echo ""
@@ -138,22 +175,10 @@ trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
 # Allow multilib in pacman
 # --------------------------
 
-PACMAN_CONF="/etc/pacman.conf"
+ensure_multilib_enabled || true
 PACMAN_CHANGES_MADE=false
-
-if [ ! -f "$PACMAN_CONF" ]; then
-  print_error_message "$PACMAN_CONF not found."
-  exit 1
-fi
-
-if grep -q "^\[multilib\]" "$PACMAN_CONF"; then
-  print_info_message "[multilib] is already enabled in $PACMAN_CONF"
-elif grep -q "^#\[multilib\]" "$PACMAN_CONF"; then
-  sudo sed -i '/^#\[multilib\]/{ s/^#//; n; s/^#//; }' "$PACMAN_CONF"
-  print_info_message "[multilib] and its Include line have been uncommented in $PACMAN_CONF"
+if [[ "${MULTILIB_CHANGED:-false}" == "true" ]]; then
   PACMAN_CHANGES_MADE=true
-else
-  print_warning_message "[multilib] section not found in $PACMAN_CONF"
 fi
 
 # --------------------------

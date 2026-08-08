@@ -36,7 +36,7 @@ if command -v cursor &> /dev/null; then
     cursor --version 2>/dev/null || true
 else
     print_action_message "Installing Cursor via yay (cursor-bin)"
-    if ! command -v yay &> /dev/null; then
+    if ! ensure_yay_installed; then
         print_error_message "yay is required to install Cursor from the AUR"
         exit 1
     fi
@@ -97,7 +97,7 @@ remove_legacy_agent_cli() {
 
 remove_legacy_agent_cli
 
-if ! command -v yay &>/dev/null; then
+if ! ensure_yay_installed; then
     print_error_message "yay is required to install the Cursor Agent CLI (cursor-cli)"
     exit 1
 fi

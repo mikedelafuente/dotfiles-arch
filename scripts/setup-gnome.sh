@@ -125,26 +125,11 @@ gsettings set org.gnome.desktop.wm.preferences titlebar-font "Adwaita Sans Bold 
 gsettings set org.gnome.desktop.wm.preferences button-layout "appmenu:minimize,maximize,close"
 
 # --------------------------
-# Install Catppuccin for GNOME Terminal (Optional)
+# GNOME Terminal theme
 # --------------------------
+# Kitty is the default terminal; skip remote GNOME Terminal theme installers.
 
-print_info_message "Setting up Catppuccin theme for GNOME Terminal"
-
-GNOME_TERMINAL_SCRIPT_URL="https://raw.githubusercontent.com/catppuccin/gnome-terminal/main/install.py"
-TEMP_TERMINAL_SCRIPT="/tmp/catppuccin-gnome-terminal-install.py"
-
-if command -v gnome-terminal &> /dev/null; then
-    if wget -O "$TEMP_TERMINAL_SCRIPT" "$GNOME_TERMINAL_SCRIPT_URL" 2>/dev/null; then
-        print_info_message "Installing Catppuccin theme for GNOME Terminal"
-        python3 "$TEMP_TERMINAL_SCRIPT" -f mocha -a lavender
-        rm -f "$TEMP_TERMINAL_SCRIPT"
-    else
-        print_warning_message "Could not download GNOME Terminal theme installer"
-        print_info_message "You can manually install from: https://github.com/catppuccin/gnome-terminal"
-    fi
-else
-    print_info_message "GNOME Terminal not found. Skipping terminal theme installation."
-fi
+print_info_message "Skipping GNOME Terminal Catppuccin theme (Kitty is the default terminal)"
 
 # --------------------------
 # Additional Theme Tweaks

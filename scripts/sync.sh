@@ -13,6 +13,7 @@
 #
 # Flags:
 #   --profile work|personal   Set/force profile (prompted if unset)
+#   --prompt                  Re-ask profile / NVIDIA even when saved
 #   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
 #   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
 #   --yes                     Non-interactive; requires --profile if none saved
@@ -35,6 +36,7 @@ FORCE_PROFILE=""
 DO_CLEANUP=false
 SKIP_BOOTSTRAP=false
 ASSUME_YES=false
+FORCE_PROMPT=false
 
 usage() {
   cat <<EOF
@@ -45,12 +47,13 @@ Always runs a guarded system upgrade (pacman + yay with AUR IoC scan).
 
 Options:
   --profile work|personal   Set profile (required with --yes if none is saved)
+  --prompt                  Re-ask profile / NVIDIA even when already saved
   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
-  --yes, -y                 Non-interactive where safe
+  --yes, -y                 Non-interactive where safe (also AUR --noconfirm after scan)
   -h, --help                Show this help
 
-If no profile is saved yet, sync will prompt you to choose work or personal.
+Saved profile/NVIDIA are kept silently unless unset, --profile, or --prompt.
 EOF
 }
 
@@ -67,6 +70,10 @@ while [ $# -gt 0 ]; do
       fi
       FORCE_PROFILE="$2"
       shift 2
+      ;;
+    --prompt)
+      FORCE_PROMPT=true
+      shift
       ;;
     --cleanup)
       DO_CLEANUP=true
@@ -106,7 +113,6 @@ if load_bootstrap_config; then
 fi
 
 SETUP_PROFILE=""
-PROFILE_WAS_UNSET=false
 
 if [ -n "$FORCE_PROFILE" ]; then
   if ! SETUP_PROFILE="$(normalize_setup_profile "$FORCE_PROFILE")"; then
@@ -116,11 +122,8 @@ if [ -n "$FORCE_PROFILE" ]; then
 elif [ -n "$SAVED_PROFILE" ]; then
   if ! SETUP_PROFILE="$(normalize_setup_profile "$SAVED_PROFILE")"; then
     print_warning_message "Saved profile '$SAVED_PROFILE' is invalid; you'll need to choose again"
-    PROFILE_WAS_UNSET=true
     SETUP_PROFILE=""
   fi
-else
-  PROFILE_WAS_UNSET=true
 fi
 
 if [ -z "$SETUP_PROFILE" ]; then
@@ -141,13 +144,9 @@ if [ -z "$SETUP_PROFILE" ]; then
     fi
     print_warning_message "Please choose 1/work or 2/personal"
   done
-elif [ "$ASSUME_YES" = false ]; then
+elif [ "$ASSUME_YES" = false ] && [ "$FORCE_PROMPT" = true ]; then
   echo ""
-  if [ "$PROFILE_WAS_UNSET" = true ]; then
-    print_info_message "Choose a setup profile for this machine:"
-  else
-    print_info_message "Current saved profile: $(fmt_choice "$SETUP_PROFILE")"
-  fi
+  print_info_message "Current saved profile: $(fmt_choice "$SETUP_PROFILE")"
   echo "  1) work      — shared stack + Zoom + Slack + Chrome"
   echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
   read -rp "Profile [1=work, 2=personal] (Enter keeps '$(fmt_choice "$SETUP_PROFILE")'): " PROFILE_INPUT
@@ -157,6 +156,8 @@ elif [ "$ASSUME_YES" = false ]; then
       exit 1
     fi
   fi
+else
+  print_info_message "Using profile: $(fmt_choice "$SETUP_PROFILE")"
 fi
 
 if ! validate_bootstrap_profile; then
@@ -165,7 +166,11 @@ if ! validate_bootstrap_profile; then
 fi
 
 INSTALL_NVIDIA="${SAVED_NVIDIA:-}"
-resolve_nvidia_preference
+if [ -z "$INSTALL_NVIDIA" ] || [ "$FORCE_PROMPT" = true ]; then
+  resolve_nvidia_preference
+else
+  print_info_message "Using INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
+fi
 
 FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
@@ -230,7 +235,11 @@ if [ "$SKIP_BOOTSTRAP" = false ]; then
 
   export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA
   export SETUP_CONTINUE_ON_ERROR=true
-  export DOTFILES_AUR_ASSUME_YES=true
+  if [ "$ASSUME_YES" = true ]; then
+    export DOTFILES_AUR_ASSUME_YES=true
+  else
+    unset DOTFILES_AUR_ASSUME_YES 2>/dev/null || true
+  fi
   set +e
   bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
   SETUP_RC=$?

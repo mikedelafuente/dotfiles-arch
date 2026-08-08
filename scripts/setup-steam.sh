@@ -39,14 +39,9 @@ print_tool_setup_start "Steam"
 # Enable Multilib Repository
 # --------------------------
 
-# Check if multilib repository is enabled
-if ! grep -q "^\[multilib\]" /etc/pacman.conf; then
-    print_info_message "Enabling multilib repository"
-    sudo sed -i '/^#\[multilib\]/,/^#Include = \/etc\/pacman.d\/mirrorlist/ s/^#//' /etc/pacman.conf
-    sudo pacman -Sy --noconfirm
-    print_info_message "Multilib repository enabled"
-else
-    print_info_message "Multilib repository already enabled"
+ensure_multilib_enabled || true
+if [[ "${MULTILIB_CHANGED:-false}" == "true" ]]; then
+  sudo pacman -Sy --noconfirm
 fi
 
 # --------------------------
