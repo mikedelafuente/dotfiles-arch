@@ -1,0 +1,53 @@
+#!/bin/bash
+# Pick a repo under ~/repos with fzf and print its path.
+# Usage:
+#   cd "$(repos)"      # or the r alias from ~/.bashrc
+#   repos <filter>     # pre-seed the fzf query
+#
+# Searches ~/repos two levels deep (owner/repo layouts included) and prefers
+# directories that contain a .git.
+
+set -euo pipefail
+
+ROOT_DIR="${REPOS_DIR:-$HOME/repos}"
+
+if [[ ! -d "$ROOT_DIR" ]]; then
+  echo "No repo directory at $ROOT_DIR (set REPOS_DIR to override)." >&2
+  exit 1
+fi
+
+list_repos() {
+  # Depth 1 and 2 so both ~/repos/project and ~/repos/owner/project work.
+  find "$ROOT_DIR" -mindepth 1 -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null
+  find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null
+}
+
+CANDIDATES="$(list_repos | sort -u)"
+
+if [[ -z "$CANDIDATES" ]]; then
+  echo "No repositories found under $ROOT_DIR" >&2
+  exit 1
+fi
+
+if ! command -v fzf &>/dev/null; then
+  echo "fzf is not installed. Directories under $ROOT_DIR:" >&2
+  echo "$CANDIDATES" >&2
+  exit 1
+fi
+
+if [[ ! -t 0 ]] || [[ ! -t 2 ]]; then
+  echo "repos needs an interactive terminal (use: cd \"\$(repos)\")." >&2
+  exit 1
+fi
+
+SELECTED="$(printf '%s\n' "$CANDIDATES" \
+  | sed "s|^$HOME/|~/|" \
+  | fzf --height=40% --layout=reverse --border --prompt='repo> ' --query="${1:-}" --select-1 --exit-0)"
+
+if [[ -z "$SELECTED" ]]; then
+  # Nothing picked: stay where we are so `cd "$(repos)"` is a no-op.
+  pwd
+  exit 0
+fi
+
+printf '%s\n' "${SELECTED/#\~\//$HOME/}"

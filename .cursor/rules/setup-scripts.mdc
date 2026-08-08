@@ -1,0 +1,39 @@
+---
+description: Conventions for the bash setup scripts
+globs: scripts/**/*.sh,post_install.sh,home/.local/bin/*
+alwaysApply: false
+---
+
+# Setup script conventions
+
+Every script starts by sourcing the shared header, which loads `fn-lib.sh`:
+
+```bash
+CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$CURRENT_FILE_DIR/dotheader.sh"
+else
+  echo "Missing header file: $CURRENT_FILE_DIR/dotheader.sh"
+  exit 1
+fi
+```
+
+- Install with `ensure_pacman_pkgs` / `ensure_yay_pkgs`; call `ensure_yay_installed`
+  before the first AUR use. Check installs with `pacman -Q`, not `command -v` alone.
+- Scripts must be idempotent — they are re-run on every `sync.sh`.
+- Output goes through `print_info_message` / `print_warning_message` /
+  `print_error_message`; prompt defaults are highlighted with `fmt_choice`.
+- Use `USER_HOME_DIR`, never `/home/<user>` or `~` inside double quotes.
+- Honor `MACHINE_TYPE` (via `machine_is_laptop`) for anything power- or laptop-specific.
+- Keep `ESSENTIAL_PACKAGES` in [setup-essentials.sh](../../scripts/setup-essentials.sh)
+  and [PACKAGES.md](../../PACKAGES.md) in sync.
+
+## Helpers in `home/.local/bin/`
+
+Resolve the repo through `dotfiles-arch-lib.sh` (`resolve_dotfiles_arch`) before sourcing
+anything from `scripts/` — `dotheader.sh` is not next to the installed symlink.
+
+## Before finishing
+
+Run `bash scripts/check.sh` (`bash -n` + `shellcheck -x`); CI runs the same check.

@@ -1,21 +1,41 @@
 #!/bin/bash
 
 # code - Open a Herdr workspace with Neovim for a git repo
-# Usage: code [directory]
+# Usage: code [--force|-f] [directory]
 #   directory: Path to project directory (defaults to current directory)
+#   --force:   Open even when the directory is not a git repository
 #
 # - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
 # - Inside Herdr: create a new focused workspace and start nvim there
 
 set -euo pipefail
 
-TARGET_DIR="${1:-.}"
+FORCE=0
+TARGET_DIR="."
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force|-f)
+            FORCE=1
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: code [--force|-f] [directory]"
+            exit 0
+            ;;
+        *)
+            TARGET_DIR="$1"
+            shift
+            ;;
+    esac
+done
+
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 LABEL="$(basename "$TARGET_DIR")"
 
-if [[ ! -d "$TARGET_DIR/.git" ]]; then
+if [[ ! -d "$TARGET_DIR/.git" ]] && [[ "$FORCE" -eq 0 ]]; then
     echo "Error: $TARGET_DIR is not a git repository"
-    echo "The 'code' command should only be used from the base of a git repository."
+    echo "Use 'code --force' to open it anyway."
     exit 1
 fi
 

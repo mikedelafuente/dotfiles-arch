@@ -8,6 +8,7 @@
 #   SETUP_PROFILE   work|personal
 # Optional env:
 #   FULL_NAME / EMAIL_ADDRESS   (skips setup-git.sh if either missing)
+#   MACHINE_TYPE                laptop|desktop — power policy in setup-gnome.sh
 #   SETUP_CONTINUE_ON_ERROR     true (default) | false  — abort on first failure
 #
 # Exit status: 0 if all succeeded, 1 if any script failed (when continuing).

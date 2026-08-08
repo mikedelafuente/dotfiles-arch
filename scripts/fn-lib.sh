@@ -125,7 +125,8 @@ bootstrap_config_file() {
   echo "$(bootstrap_config_dir)/.dotfiles_bootstrap_config"
 }
 
-# Source saved bootstrap config if present (FULL_NAME, EMAIL, SETUP_PROFILE, INSTALL_NVIDIA).
+# Source saved bootstrap config if present
+# (FULL_NAME, EMAIL, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE).
 load_bootstrap_config() {
   local f
   f="$(bootstrap_config_file)"
@@ -155,7 +156,7 @@ validate_bootstrap_profile() {
   esac
 }
 
-# Write current identity/profile/NVIDIA prefs (full rewrite of known keys).
+# Write current identity/profile/NVIDIA/machine prefs (full rewrite of known keys).
 # Values are shell-escaped so a sourced config cannot inject code via quotes/$().
 write_bootstrap_config() {
   local dir f
@@ -168,7 +169,9 @@ write_bootstrap_config() {
     printf 'EMAIL_ADDRESS=%q\n' "${EMAIL_ADDRESS:-}"
     printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE:-work}"
     printf 'INSTALL_NVIDIA=%q\n' "${INSTALL_NVIDIA:-false}"
+    printf 'MACHINE_TYPE=%q\n' "${MACHINE_TYPE:-}"
   } >"$f"
+  chmod 600 "$f" 2>/dev/null || true
 }
 
 # Normalize profile input to work|personal (stdout). Maps productivity → work. Returns 1 if invalid.
@@ -177,6 +180,79 @@ normalize_setup_profile() {
     1|work|Work|WORK|productivity|Productivity) echo "work" ;;
     2|personal|Personal|PERSONAL) echo "personal" ;;
     *) return 1 ;;
+  esac
+}
+
+# Normalize machine type input to laptop|desktop (stdout). Returns 1 if invalid.
+normalize_machine_type() {
+  case "${1,,}" in
+    1|laptop|notebook|portable) echo "laptop" ;;
+    2|desktop|workstation|tower|pc) echo "desktop" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve MACHINE_TYPE from saved value / battery detect / prompt.
+# Uses ASSUME_YES=true|false (default false). Sets MACHINE_TYPE to laptop|desktop.
+resolve_machine_type() {
+  local assume_yes="${ASSUME_YES:-false}"
+  local machine_default="desktop"
+  local machine_input normalized
+
+  if [[ "${MACHINE_TYPE:-}" == "laptop" || "${MACHINE_TYPE:-}" == "desktop" ]]; then
+    if [[ "$assume_yes" == "true" ]]; then
+      return 0
+    fi
+    echo ""
+    print_info_message "Current MACHINE_TYPE: $(fmt_choice "$MACHINE_TYPE")"
+    read -rp "Press Enter to keep MACHINE_TYPE=$(fmt_choice "$MACHINE_TYPE"), or type laptop/desktop: " machine_input
+    case "${machine_input:-}" in
+      "") ;; # Enter → keep
+      *)
+        if normalized="$(normalize_machine_type "$machine_input")"; then
+          MACHINE_TYPE="$normalized"
+        else
+          print_warning_message "Unrecognized input '$machine_input'; keeping MACHINE_TYPE=$MACHINE_TYPE"
+        fi
+        ;;
+    esac
+    return 0
+  fi
+
+  if has_battery; then
+    machine_default="laptop"
+  fi
+
+  if [[ "$assume_yes" == "true" ]]; then
+    MACHINE_TYPE="$machine_default"
+    print_info_message "MACHINE_TYPE not saved — auto-set to $MACHINE_TYPE (battery detect)"
+    return 0
+  fi
+
+  echo ""
+  print_info_message "Machine type drives power profile, lid behavior, and audio power saving."
+  if has_battery; then
+    print_info_message "Detected: battery present (looks like a laptop)"
+  else
+    print_info_message "Detected: no battery (looks like a desktop)"
+  fi
+  read -rp "Is this a laptop or desktop? [laptop/desktop] (Enter = $(fmt_choice "$machine_default")): " machine_input
+  machine_input="${machine_input:-$machine_default}"
+  if normalized="$(normalize_machine_type "$machine_input")"; then
+    MACHINE_TYPE="$normalized"
+  else
+    print_warning_message "Unrecognized input '$machine_input'; using $machine_default"
+    MACHINE_TYPE="$machine_default"
+  fi
+}
+
+# True when this machine should use laptop power policy.
+# Prefers saved MACHINE_TYPE; falls back to battery detection.
+machine_is_laptop() {
+  case "${MACHINE_TYPE:-}" in
+    laptop) return 0 ;;
+    desktop) return 1 ;;
+    *) has_battery ;;
   esac
 }
 

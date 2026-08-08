@@ -4,6 +4,21 @@
 	path = ~/.config/git/identity
 [core]
 	editor = nvim
+	# Quoted so the semicolons are not read as git-config comments.
+	# Falls back to less/cat on machines where git-delta is not installed yet.
+	pager = "if command -v delta >/dev/null 2>&1; then delta; else ${PAGER:-less}; fi"
+[interactive]
+	diffFilter = "if command -v delta >/dev/null 2>&1; then delta --color-only; else cat; fi"
+[delta]
+	navigate = true
+	line-numbers = true
+	side-by-side = false
+	syntax-theme = Catppuccin Mocha
+	hyperlinks = true
+[merge]
+	conflictStyle = zdiff3
+[diff]
+	colorMoved = default
 [init]
 	defaultBranch = main
 [credential "https://github.com"]

@@ -1,0 +1,39 @@
+---
+description: Core context for the dotfiles-arch repo (stack, orchestration, config keys)
+alwaysApply: true
+---
+
+# dotfiles-arch
+
+Arch Linux workstation automation: GNOME (Wayland), Kitty, Herdr, Neovim, Cursor,
+Claude Code. `work` and `personal` profiles differ only in extra apps.
+
+## Orchestration
+
+- `scripts/bootstrap.sh` (new machine) and `scripts/sync.sh` (drifted machine) both run
+  a guarded upgrade → `scripts/run-profile-setup.sh` → `link-dotfiles.sh` → `post-link-hooks.sh`.
+- Never duplicate the setup-script list; it lives only in `run-profile-setup.sh`.
+- Dotfiles are symlinks: `home/` → `$HOME`, `config/` → `$HOME/.config`.
+
+## Paths and config
+
+- Use `USER_HOME_DIR` (from `dotheader.sh`), never a hardcoded `/home/<user>`.
+- Read and write saved settings only through `load_bootstrap_config` /
+  `write_bootstrap_config` — never hand-edit `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`.
+- Keys: `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`, `MACHINE_TYPE`.
+- `MACHINE_TYPE` is `laptop|desktop` and drives power policy in `setup-gnome.sh`
+  (`power-profiles-daemon`, the logind lid drop-in, audio powersave). Fall back to
+  `machine_is_laptop` / `has_battery` when it is unset.
+
+## Security
+
+- AUR installs go through `ensure_yay_pkgs` / `ensure_yay_installed`, which IoC-scan
+  PKGBUILDs (and AUR deps) first. Do not bypass them with raw `yay -S`.
+- Do not add `curl | bash` installers. Download to a temp file and verify a checksum,
+  or use a repo/AUR package.
+
+## Detail
+
+[CLAUDE.md](../../CLAUDE.md) (architecture) ·
+[PACKAGES.md](../../PACKAGES.md) (why each package exists) ·
+[README.md](../../README.md) (user-facing flows)

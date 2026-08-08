@@ -31,19 +31,24 @@ If packages need installing, sync will ask for sudo.
 | Want | Do this |
 |------|---------|
 | Terminal | **Super+Return** |
+| Herdr session | **Super+Shift+Return** |
 | Files | **Super+E** |
 | Browser | **Super+B** |
 | App search | **Super+Space** |
 | Clipboard history | **Super+V** |
+| Emoji picker | **Super+.** |
+| Screenshot (region/window/screen) | **Super+Shift+S** (or Print) |
+| Minimize a window | **Super+Shift+N** |
 | Close a window | **Super+Q** |
 
 ### …edit a project in Neovim the “right” way
 
 ```bash
 cd /path/to/git-repo
-code          # Herdr + nvim .  (must be a git repo)
+code            # Herdr + nvim .  (must be a git repo)
+code --force    # same, for a directory without .git
 # or
-v .           # plain Neovim in current Kitty window
+v .             # plain Neovim in current Kitty window
 ```
 
 Neovim cheat sheet: `vimcheat` (leader key is **Space**).
@@ -87,8 +92,11 @@ gh     # GitHub CLI
 ```bash
 z project-name     # zoxide smart cd
 zi                 # interactive pick
+r                  # fzf-pick a repo under ~/repos and cd into it
 ..  ...  -         # up / back
 ```
+
+Shell fuzzy keys: **Ctrl+R** history · **Ctrl+T** files · **Alt+C** cd into a subdirectory.
 
 ### …tile windows / move to another monitor
 
@@ -111,6 +119,10 @@ bash scripts/update-system.sh --scan-only
 ```
 
 Scans pending AUR PKGBUILDs for known supply-chain IoCs before upgrading.
+On Btrfs installs it also reminds you about Snapper: `sudo snapper -c root list`,
+or `sudo snapper -c root create -d "before <change>"` ahead of a risky upgrade.
+
+Housekeeping: `orphans` removes orphaned packages, `check` runs shellcheck over the repo scripts.
 
 ### …fix ugly Courier-like title / UI fonts
 
@@ -140,7 +152,7 @@ bash scripts/sync.sh --cleanup           # drop old tmux/hypr/ghostty junk
 
 1. archinstall with `user_configuration.json` (set disk + creds — see NOTES)
 2. `./post_install.sh`
-3. `bash scripts/bootstrap.sh` (name, email, work|personal, NVIDIA y/n)
+3. `bash scripts/bootstrap.sh` (name, email, work|personal, NVIDIA y/n, laptop|desktop)
 
 ### …remember work vs personal
 
@@ -149,16 +161,19 @@ bash scripts/sync.sh --cleanup           # drop old tmux/hypr/ghostty junk
 | **work** | Zoom, Slack, Chrome | Chrome |
 | **personal** | Steam, Discord, Firefox, Mullvad | Firefox |
 
-Saved in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`.
+Saved in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`, along with
+`MACHINE_TYPE=laptop|desktop`, which drives the power profile, lid behavior, and
+audio power saving. Re-ask any saved answer with `bash scripts/sync.sh --prompt`.
 
 ### …find a tool that should already be installed
 
-Shared highlights: Kitty, Herdr, Neovim, Cursor + `agent`, Claude, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
-
 ```bash
-aliases          # lists tools + whether they are on PATH
+packages         # what every installed package is for (PACKAGES.md)
+aliases          # aliases + key bindings
 command -v herdr kitty nvim agent claude
 ```
+
+Shared highlights: Kitty, Herdr, Neovim, Cursor + `agent`, Claude, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
 
 ### …reload shell config after editing bashrc
 
@@ -176,11 +191,15 @@ Dotfiles are **symlinks** into this repo — edit in the repo, changes apply imm
 
 ```
 Super+Return     terminal          Ctrl+B …     Herdr prefix
-Super+E          files             Ctrl+B q     detach Herdr
-Super+B          browser           code         herdr + nvim
-Super+V          clipboard hist    lzg / lzd    git / docker TUI
-Super+Space      apps              z / zi       smart cd
-Super+Q          close             welcome      this environment
+Super+Shift+Ret  herdr session     Ctrl+B q     detach Herdr
+Super+E          files             code         herdr + nvim
+Super+B          browser           lzg / lzd    git / docker TUI
+Super+V          clipboard hist    z / zi / r   smart cd / repo pick
+Super+.          emoji             Ctrl+R       fuzzy history
+Super+Shift+S    screenshot        Ctrl+T       fuzzy file
+Super+Shift+N    minimize          Alt+C        fuzzy cd
+Super+Space      apps              welcome      this environment
+Super+Q          close             packages     what each package is for
 Super+1-9        workspaces        sync.sh      update machine
 ```
 
@@ -188,7 +207,8 @@ Super+1-9        workspaces        sync.sh      update machine
 
 ## Still stuck?
 
-1. `welcome` / `aliases` / `vimcheat` in the shell  
+1. `welcome` / `aliases` / `packages` / `vimcheat` in the shell  
 2. [README.md](README.md) — full shortcuts + install/sync  
-3. [NOTES.md](NOTES.md) — WiFi, archinstall, NVIDIA  
-4. Ask the agent: `agent --mode ask "…"`
+3. [PACKAGES.md](PACKAGES.md) — what each installed package is for  
+4. [NOTES.md](NOTES.md) — WiFi, archinstall, NVIDIA  
+5. Ask the agent: `agent --mode ask "…"`

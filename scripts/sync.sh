@@ -13,7 +13,7 @@
 #
 # Flags:
 #   --profile work|personal   Set/force profile (prompted if unset)
-#   --prompt                  Re-ask profile / NVIDIA even when saved
+#   --prompt                  Re-ask profile / NVIDIA / machine type even when saved
 #   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
 #   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
 #   --yes                     Non-interactive; requires --profile if none saved
@@ -47,13 +47,13 @@ Always runs a guarded system upgrade (pacman + yay with AUR IoC scan).
 
 Options:
   --profile work|personal   Set profile (required with --yes if none is saved)
-  --prompt                  Re-ask profile / NVIDIA even when already saved
+  --prompt                  Re-ask profile / NVIDIA / machine type even when saved
   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
   --yes, -y                 Non-interactive where safe (also AUR --noconfirm after scan)
   -h, --help                Show this help
 
-Saved profile/NVIDIA are kept silently unless unset, --profile, or --prompt.
+Saved profile/NVIDIA/machine type are kept silently unless unset, --profile, or --prompt.
 EOF
 }
 
@@ -107,9 +107,11 @@ mkdir -p "$(bootstrap_config_dir)"
 
 SAVED_PROFILE=""
 SAVED_NVIDIA=""
+SAVED_MACHINE_TYPE=""
 if load_bootstrap_config; then
   SAVED_PROFILE="${SETUP_PROFILE:-}"
   SAVED_NVIDIA="${INSTALL_NVIDIA:-}"
+  SAVED_MACHINE_TYPE="${MACHINE_TYPE:-}"
 fi
 
 SETUP_PROFILE=""
@@ -170,6 +172,13 @@ if [ -z "$INSTALL_NVIDIA" ] || [ "$FORCE_PROMPT" = true ]; then
   resolve_nvidia_preference
 else
   print_info_message "Using INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
+fi
+
+MACHINE_TYPE="${SAVED_MACHINE_TYPE:-}"
+if [ -z "$MACHINE_TYPE" ] || [ "$FORCE_PROMPT" = true ]; then
+  resolve_machine_type
+else
+  print_info_message "Using MACHINE_TYPE: $(fmt_choice "$MACHINE_TYPE")"
 fi
 
 FULL_NAME="${FULL_NAME:-}"
@@ -233,7 +242,7 @@ fi
 if [ "$SKIP_BOOTSTRAP" = false ]; then
   print_line_break "Running setup scripts (safe to re-run)"
 
-  export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA
+  export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
   export SETUP_CONTINUE_ON_ERROR=true
   if [ "$ASSUME_YES" = true ]; then
     export DOTFILES_AUR_ASSUME_YES=true

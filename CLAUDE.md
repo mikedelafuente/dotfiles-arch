@@ -29,14 +29,19 @@ dotfiles-arch/
 ├── home/                         # Dotfiles for ~/
 │   ├── .bashrc
 │   ├── .gitconfig                # Shared only; includes ~/.config/git/identity
-│   └── .local/bin/               # Helpers (code, hide-gnome-overview, sync-dotfiles, update-system, …)
+│   ├── .packages.md              # → ../PACKAGES.md (shown by `packages`)
+│   └── .local/bin/               # Helpers (code, repos, check-dotfiles, remove-orphans, sync-dotfiles, update-system, …)
 ├── config/                       # ~/.config application configs
 │   ├── fontconfig/fonts.conf
 │   ├── nvim/
 │   ├── kitty/
 │   ├── herdr/
+│   ├── bat/config
 │   ├── starship.toml
 │   └── ...
+├── .cursor/rules/                # Repo conventions for AI agents
+├── AGENTS.md                     # Short pointer file for agents
+├── PACKAGES.md                   # Why each installed package exists
 ├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty)
 ├── user_configuration.json       # archinstall 4.4 template
 └── NOTES.md                      # Install / sync notes
@@ -51,7 +56,7 @@ cd /path/to/dotfiles-arch
 bash scripts/bootstrap.sh
 ```
 
-Prompts for name, email, **work|personal** profile, and **INSTALL_NVIDIA** (or `--yes` for non-interactive). Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
+Prompts for name, email, **work|personal** profile, **INSTALL_NVIDIA**, and **MACHINE_TYPE** (laptop|desktop; default from `has_battery`), or `--yes` for non-interactive. Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
 
 ### Sync (existing / drifted machine)
 
@@ -60,7 +65,7 @@ bash scripts/sync.sh
 # bash scripts/sync.sh --profile work|personal --yes
 ```
 
-Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan of packages + AUR deps), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup. Saved profile/NVIDIA are kept silently; pass `--prompt` to re-ask. AUR `--noconfirm` only with `--yes`.
+Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan of packages + AUR deps), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup. Saved profile/NVIDIA/machine type are kept silently; pass `--prompt` to re-ask. AUR `--noconfirm` only with `--yes`.
 
 ### Individual setups
 
@@ -93,7 +98,7 @@ Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DI
 - Packages: `ensure_pacman_pkgs`, `ensure_yay_installed` (scanned before makepkg), `ensure_yay_pkgs`, `ensure_multilib_enabled`, `safe_system_upgrade`, `remove_orphaned_packages`
 - AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `resolve_nvidia_preference`
+- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`
 - Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 
@@ -112,7 +117,9 @@ Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config
 
 Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
 
-- `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`
+- `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`, `MACHINE_TYPE`
+
+`bootstrap.sh` / `sync.sh` export `MACHINE_TYPE` for the setup scripts; `setup-gnome.sh` also falls back to `load_bootstrap_config` + `has_battery`.
 
 ### Profiles
 
@@ -128,11 +135,12 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 - **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes `~/.config/git/identity` (not the shared `.gitconfig`)
 - **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` (checksummed install.sh, never `curl|bash`); Claude uses user-level `npm` (never `sudo npm`)
 - **setup-herdr.sh**: AUR `herdr-bin` only (no curl|bash fallback); calls `ensure_yay_installed` if needed
-- **setup-gnome.sh**: Only when `gnome-shell` is installed; battery detection via power_supply `type`
+- **setup-gnome.sh**: Only when `gnome-shell` is installed; power policy from `MACHINE_TYPE` (`power-profiles-daemon` profile, `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf`, audio powersave), falling back to `has_battery`
 - **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
 - **setup-cursor.sh**: IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`
-- **`code`**: Creates a Herdr workspace and starts `nvim .`
+- **setup-essentials.sh**: `ESSENTIAL_PACKAGES` is the canonical CLI list — update `PACKAGES.md` in the same change
+- **`code`**: Creates a Herdr workspace and starts `nvim .` (`--force` skips the git-repo requirement)
 
 ## Key design decisions
 
@@ -142,10 +150,13 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 4. Portable `$HOME` / `$USER_HOME_DIR` paths for multi-username machines
 5. GNOME-first Wayland; Pop Shell for tiling
 6. Do not append PATH hacks into the symlinked `~/.bashrc` from setup scripts
+7. User-facing commands are documented where the user looks: `home/.welcome.md`, `aliases()`, `PACKAGES.md`, README/REFRESHER
 
 ## Important files
 
 - `README.md` / `REFRESHER.md` — human starting point and short memory jogger
+- `PACKAGES.md` — why each installed package exists; linked to `~/.packages.md` and shown by `packages`
+- `AGENTS.md` + `.cursor/rules/*.mdc` — conventions for AI agents (docs, packages, scripts)
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
 - `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
 - `scripts/update-system.sh` — guarded day-to-day `pacman` + `yay` updater (AUR IoC scan)
@@ -158,6 +169,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 ## Development notes
 
 - Scripts use bash; prefer `pacman -Q` for install checks
+- Run `bash scripts/check.sh` (or `check`) after shell changes — `bash -n` + `shellcheck -x`
 - Config persistence: `~/.config/dotfiles-arch/`
 - Dotfiles link to `$USER_HOME_DIR`, not root’s home when run with sudo
 - Overview at login: `no-overview@fthx` plus optional `hide-gnome-overview` autostart fallback

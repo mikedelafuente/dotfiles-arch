@@ -33,6 +33,21 @@ fi
 print_tool_setup_start "GNOME with Catppuccin Theme"
 
 # --------------------------
+# Machine type (laptop|desktop) drives power policy below
+# --------------------------
+
+# Prefer the exported/saved value; fall back to battery detection.
+if [[ "${MACHINE_TYPE:-}" != "laptop" && "${MACHINE_TYPE:-}" != "desktop" ]]; then
+    load_bootstrap_config || true
+fi
+if machine_is_laptop; then
+    MACHINE_TYPE="laptop"
+else
+    MACHINE_TYPE="desktop"
+fi
+print_info_message "Machine type: $MACHINE_TYPE"
+
+# --------------------------
 # Install GNOME Tools
 # --------------------------
 
@@ -46,13 +61,13 @@ ensure_pacman_pkgs \
 # Change how sound power works in order to stop popping
 # --------------------------
 
-# Only disable audio power saving on desktops (systems without batteries)
-if has_battery; then
-    print_info_message "Battery detected - keeping audio power saving enabled for better battery life"
+# Keep audio power saving only on laptops; desktops pop when the codec sleeps.
+if [ "$MACHINE_TYPE" = "laptop" ]; then
+    print_info_message "Laptop - keeping audio power saving enabled for better battery life"
     print_info_message "If you experience audio popping, you can manually disable with:"
     print_info_message "  echo 'options snd_hda_intel power_save=0' | sudo tee /etc/modprobe.d/audio_disable_powersave.conf"
 else
-    print_info_message "No battery detected (desktop system) - disabling audio power saving to prevent popping sounds"
+    print_info_message "Desktop - disabling audio power saving to prevent popping sounds"
     echo "options snd_hda_intel power_save=0" | sudo tee /etc/modprobe.d/audio_disable_powersave.conf > /dev/null
 fi
 
@@ -201,6 +216,50 @@ gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-tim
 # Screen blanking (MPRIS-aware players will prevent this during playback)
 # Set to 20 minutes so screen blanks when you walk away, but videos keep screen on
 gsettings set org.gnome.desktop.session idle-delay 1200  # Blank screen after 20 minutes of inactivity (but NOT during video playback)
+
+# --------------------------
+# Power profile + lid behavior (MACHINE_TYPE driven)
+# --------------------------
+
+print_info_message "Applying $MACHINE_TYPE power policy"
+ensure_pacman_pkgs power-profiles-daemon
+
+if systemctl list-unit-files power-profiles-daemon.service 2>/dev/null | grep -q power-profiles-daemon; then
+    sudo systemctl enable --now power-profiles-daemon.service \
+      || print_warning_message "Could not enable power-profiles-daemon.service"
+fi
+
+if command -v powerprofilesctl &>/dev/null; then
+    if [ "$MACHINE_TYPE" = "laptop" ]; then
+        DESIRED_POWER_PROFILE="balanced"
+    else
+        DESIRED_POWER_PROFILE="performance"
+    fi
+    if powerprofilesctl list 2>/dev/null | grep -q "$DESIRED_POWER_PROFILE"; then
+        powerprofilesctl set "$DESIRED_POWER_PROFILE" \
+          || print_warning_message "Could not set power profile to $DESIRED_POWER_PROFILE"
+        print_info_message "Power profile: $DESIRED_POWER_PROFILE"
+    else
+        print_warning_message "Power profile '$DESIRED_POWER_PROFILE' unavailable on this hardware"
+    fi
+fi
+
+# Lid handling lives in systemd-logind, not gsettings.
+LOGIND_LID_DROPIN="/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf"
+if [ "$MACHINE_TYPE" = "laptop" ]; then
+    LID_ACTION="suspend"
+else
+    LID_ACTION="ignore"
+fi
+sudo mkdir -p /etc/systemd/logind.conf.d
+sudo tee "$LOGIND_LID_DROPIN" >/dev/null <<EOF
+# Managed by dotfiles-arch (setup-gnome.sh) — MACHINE_TYPE=$MACHINE_TYPE
+[Login]
+HandleLidSwitch=$LID_ACTION
+HandleLidSwitchExternalPower=$LID_ACTION
+HandleLidSwitchDocked=ignore
+EOF
+print_info_message "Lid switch: $LID_ACTION (takes effect after re-login or reboot)"
 
 print_info_message ""
 print_info_message "Sleep and screen blanking prevention configured!"
@@ -438,9 +497,32 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_CLIPBOARD command 'gpaste-client show-history'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_CLIPBOARD binding '<Super>v'
 
+# Super+. for the emoji picker
+ensure_pacman_pkgs gnome-characters
+CUSTOM_KB_EMOJI="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI name 'Emoji Picker'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI command 'gnome-characters'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI binding '<Super>period'
+
+# Super+Shift+Return for a Herdr session (Super+Return stays a plain terminal)
+CUSTOM_KB_HERDR="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR name 'Launch Herdr'
+if command -v kitty &> /dev/null; then
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR command 'kitty herdr'
+else
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR command 'gnome-terminal -- herdr'
+fi
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR binding '<Super><Shift>Return'
+
 # Update the custom keybindings list (no empty custom0; Super+E uses built-in Home)
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \
-  "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_BROWSER', '$CUSTOM_KB_CLIPBOARD']"
+  "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_EMOJI', '$CUSTOM_KB_BROWSER', '$CUSTOM_KB_CLIPBOARD', '$CUSTOM_KB_HERDR']"
+
+# Screenshot UI (region/window/screen picker, includes copy to clipboard)
+gsettings set org.gnome.shell.keybindings show-screenshot-ui "['<Super><Shift>s', 'Print']"
+
+# Minimize — Super+Shift+N (never Super+H: Pop Shell uses it for focus-left)
+gsettings set org.gnome.desktop.wm.keybindings minimize "['<Super><Shift>n']"
 
 # Configure Super+Space for app launcher (GNOME overview with app grid)
 gsettings set org.gnome.shell.keybindings toggle-application-view "['<Super>space']"
@@ -467,6 +549,7 @@ print_info_message "Window Management:"
 print_info_message "  - Close window: Super+Q"
 print_info_message "  - Toggle fullscreen: Super+F"
 print_info_message "  - Toggle maximize: Super+M"
+print_info_message "  - Minimize window: Super+Shift+N"
 print_info_message "  - Tile left/right (this monitor): Super+Ctrl+Left/Right"
 print_info_message "  - Move window to other monitor: Super+Ctrl+Up/Down"
 print_info_message "  - Pop Shell toggle auto-tiling: Super+Y"
@@ -477,9 +560,12 @@ print_info_message ""
 print_info_message "Application Launchers:"
 print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
+print_info_message "  - Herdr session: Super+Shift+Return"
 print_info_message "  - File Explorer: Super+E"
 print_info_message "  - Browser: Super+B"
 print_info_message "  - Clipboard history (GPaste): Super+V"
+print_info_message "  - Emoji picker: Super+."
+print_info_message "  - Screenshot UI: Super+Shift+S (or Print)"
 print_info_message ""
 print_warning_message "Log out and back in so GNOME reloads extensions (GPaste, AppIndicator, Pop Shell)."
 print_warning_message "Until then Super+V / Super+Y / tray icons may not work."

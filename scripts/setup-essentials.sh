@@ -15,9 +15,11 @@ fi
 
 print_tool_setup_start "Essential Packages"
 
-# Keep these in sync with aliases/tools listed in home/.bashrc
+# Keep PACKAGES.md in sync when changing this list
+# (also keep aliases/tools listed in home/.bashrc consistent)
 ESSENTIAL_PACKAGES=(
   git
+  git-delta
   curl
   wget
   xsel
@@ -57,6 +59,12 @@ fi
 if pacman -Q zoxide &>/dev/null && command -v zoxide &>/dev/null; then
   print_info_message "Initializing zoxide for current session"
   eval "$(zoxide init bash)"
+fi
+
+# Refresh the bat theme/syntax cache so the configured theme resolves
+if command -v bat &>/dev/null; then
+  print_info_message "Rebuilding bat cache"
+  bat cache --build >/dev/null 2>&1 || print_warning_message "bat cache --build failed (non-fatal)"
 fi
 
 print_tool_setup_complete "Essential Packages"

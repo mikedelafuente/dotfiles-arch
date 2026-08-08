@@ -65,7 +65,7 @@ link_path() {
 
 print_info_message "Linking home directory dotfiles..."
 
-for file in .bashrc .inputrc .profile .gitconfig .gitignore_global .nvim-cheatsheet.md .welcome.md; do
+for file in .bashrc .inputrc .profile .gitconfig .gitignore_global .nvim-cheatsheet.md .welcome.md .packages.md; do
   link_path "$DOTFILES_HOME_DIR/$file" "$USER_HOME_DIR/$file"
   print_info_message "Linked: $file"
 done

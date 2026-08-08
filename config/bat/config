@@ -1,0 +1,8 @@
+# bat configuration (~/.config/bat/config)
+# Catppuccin Mocha ships with bat on Arch — no vendored theme needed.
+
+--theme="Catppuccin Mocha"
+--style="numbers,changes,header"
+--italic-text=always
+--map-syntax=".gitconfig:INI"
+--map-syntax="*.conf:INI"

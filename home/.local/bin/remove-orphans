@@ -1,0 +1,19 @@
+#!/bin/bash
+# Remove orphaned pacman packages (pacman -Qtdq) using the repo helper.
+# Usage: remove-orphans
+
+set -euo pipefail
+
+_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+source "$_LIB_DIR/dotfiles-arch-lib.sh"
+
+ROOT="$(resolve_dotfiles_arch)" || {
+  echo "Could not find dotfiles-arch (set DOTFILES_ARCH=/path/to/dotfiles-arch)." >&2
+  exit 1
+}
+
+# shellcheck source=/dev/null
+source "$ROOT/scripts/dotheader.sh"
+
+remove_orphaned_packages

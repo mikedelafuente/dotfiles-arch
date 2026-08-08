@@ -1,0 +1,29 @@
+---
+description: Where to document new commands, aliases, keybindings, and packages
+alwaysApply: true
+---
+
+# Document user-facing changes
+
+Any new or changed command, alias, keybinding, or installed package must be documented
+in the same change. A feature that is not in `welcome` does not exist to the user.
+
+| Change | Update |
+|--------|--------|
+| Shell alias or function | [home/.bashrc](../../home/.bashrc) + [home/.welcome.md](../../home/.welcome.md) |
+| Script in `home/.local/bin/` | [home/.welcome.md](../../home/.welcome.md) + [README.md](../../README.md) shell table |
+| Readline / fzf key | `.inputrc` or `.bashrc`, the key-bindings section of `aliases()`, and `welcome` |
+| GNOME `Super+…` shortcut | [scripts/setup-gnome.sh](../../scripts/setup-gnome.sh) summary output, [README.md](../../README.md), [REFRESHER.md](../../REFRESHER.md), `welcome` |
+| Kitty map | [config/kitty/kitty.conf](../../config/kitty/kitty.conf) + `welcome` |
+| New package | [PACKAGES.md](../../PACKAGES.md) row with purpose and related commands |
+
+## Rules
+
+- `PACKAGES.md` is the single catalog of package purposes. `aliases()` must not grow a
+  second package description list — it points at `packages` instead.
+- `PACKAGES.md` is read in the shell through `~/.packages.md` (a link to
+  `home/.packages.md` → `../PACKAGES.md`). New top-level home files must be added to the
+  file list in [scripts/link-dotfiles.sh](../../scripts/link-dotfiles.sh).
+- Do not bind `Super+H` (Pop Shell uses it for focus-left). Minimize is `Super+Shift+N`.
+- Keep custom GNOME keybinding paths and the `custom-keybindings` array in sync in
+  `setup-gnome.sh`; an entry missing from the array silently does nothing.

@@ -87,3 +87,8 @@ fi
 
 print_info_message "Tip: use this instead of raw 'yay -Syu' day to day."
 print_info_message "Re-run with --scan-only anytime to check pending AUR upgrades without installing."
+
+# Snapper rollback reminder (Btrfs installs from user_configuration.json)
+if command -v snapper &>/dev/null && sudo snapper list-configs 2>/dev/null | grep -qw root; then
+  print_info_message "Snapper: 'sudo snapper -c root list' shows snapshots; 'sudo snapper -c root create -d \"before <change>\"' before risky upgrades."
+fi

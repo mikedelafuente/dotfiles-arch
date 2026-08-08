@@ -69,8 +69,10 @@ You will be prompted for:
 - Full name + email (git)
 - Profile: **work** or **personal**
 - Whether to install NVIDIA (`nvidia-open-dkms`)
+- Machine type: **laptop** or **desktop** (defaults to battery detection)
 
-Config is saved at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`.
+Config is saved at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
+(`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`, `MACHINE_TYPE`).
 
 Bootstrap then: updates pacman/yay → runs all setup scripts → configures GNOME (if present) → symlinks dotfiles.
 
@@ -87,7 +89,7 @@ bash scripts/sync.sh
 
 That will:
 
-1. Resolve/save profile + NVIDIA preference (`load_bootstrap_config` / `write_bootstrap_config`)
+1. Resolve/save profile + NVIDIA + machine type (`load_bootstrap_config` / `write_bootstrap_config`)
 2. `git pull --ff-only`
 3. Run a guarded system upgrade (`pacman` + AUR IoC scan + `yay`) every time
 4. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
@@ -99,13 +101,13 @@ That will:
 ```bash
 bash scripts/sync.sh --profile work
 bash scripts/sync.sh --profile personal
-bash scripts/sync.sh --prompt               # re-ask profile / NVIDIA
+bash scripts/sync.sh --prompt               # re-ask profile / NVIDIA / machine type
 bash scripts/sync.sh --cleanup              # remove obsolete packages/configs
 bash scripts/sync.sh --skip-bootstrap       # skip setup-*.sh (still upgrades + links)
 bash scripts/sync.sh --yes --profile work --cleanup
 ```
 
-With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set. Saved profile/NVIDIA are kept silently unless unset or `--prompt`.
+With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set. Saved profile/NVIDIA/machine type are kept silently unless unset or `--prompt`.
 
 **Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages). Use `update-system.sh` for day-to-day package-only updates without re-running setup scripts.
 
@@ -128,7 +130,7 @@ Everything else in the stack is shared.
 
 | Area | Tools |
 |------|--------|
-| **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
+| **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
 | **Multiplexer** | Herdr (+ Claude & Cursor agent integrations) |
 | **Editors / AI** | Neovim (LazyVim-style), Cursor IDE + Agent CLI (`agent`), Claude Code (`claude`) |
@@ -147,6 +149,20 @@ Everything else in the stack is shared.
 - Tray icons (AppIndicator)
 - Night Light, dark theme, battery % in panel
 - Tap-to-click **off**
+- Emoji picker (`gnome-characters`) and the screenshot UI on Super shortcuts
+
+### Power policy (`MACHINE_TYPE`)
+
+`setup-gnome.sh` applies the saved machine type:
+
+| | laptop | desktop |
+|---|--------|---------|
+| `power-profiles-daemon` | `balanced` | `performance` |
+| Sleep on battery | 30 min | n/a |
+| Lid switch (`/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf`) | `suspend` | `ignore` |
+| Audio power saving | on (battery life) | off (prevents popping) |
+
+Lid changes take effect after a re-login or reboot.
 
 ### NVIDIA
 
@@ -161,10 +177,14 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | Shortcut | Action |
 |----------|--------|
 | **Super+Return** | Kitty terminal |
+| **Super+Shift+Return** | Kitty running Herdr |
 | **Super+E** | Files (Home) |
 | **Super+B** | Browser (Chrome or Firefox by profile) |
 | **Super+Space** | Application launcher |
 | **Super+V** | Clipboard history (GPaste) |
+| **Super+.** | Emoji picker (`gnome-characters`) |
+| **Super+Shift+S** | Screenshot UI (region / window / screen; Print also works) |
+| **Super+Shift+N** | Minimize window |
 | **Super+Y** | Toggle Pop Shell auto-tiling |
 | **Super+G** | Float / unfloat focused window |
 | **Super+Escape** | Pop Shell tile adjustment mode |
@@ -197,19 +217,28 @@ Agents: `herdr agent start <name> -- cursor` or `claude`.
 
 | Command | What it does |
 |---------|----------------|
-| `code [dir]` | Herdr workspace + `nvim .` (git repo) |
+| `code [dir]` | Herdr workspace + `nvim .` (git repo; `--force` for non-git) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
 | `z` / `zi` | Smart cd (zoxide) |
-| `gs` `ga` `gc` `gp` `gpush` … | Git aliases |
+| `r` / `repos` | fzf-pick a repo under `~/repos` and cd into it |
+| `pbcopy` / `pbpaste` | Wayland clipboard in/out |
+| `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
+| `check` | Syntax + shellcheck the repo scripts |
+| `orphans` | Remove orphaned pacman packages |
+| `gs` `ga` `gc` `gp` `gpush` … | Git aliases (diffs paged through delta) |
 | `welcome` | Shell cheat sheet |
-| `aliases` | Full alias / tool list |
+| `aliases` | Aliases + key bindings |
+| `packages` | What every installed package is for ([PACKAGES.md](PACKAGES.md)) |
 | `agent --mode ask "…"` | Ask Cursor Agent from the CLI |
 | `claude` | Claude Code CLI |
 | `reload` | Reload `~/.bashrc` |
 
 Readline (Tab menu-complete, history search, word jumps): see `welcome` or `~/.inputrc`.
+fzf adds **Ctrl+R** (history), **Ctrl+T** (files), and **Alt+C** (cd into a subdirectory).
+
+Kitty: **Ctrl+Shift+=/-** font size, **Ctrl+Shift+Backspace** reset, **Ctrl+Shift+F** scrollback pager, **Ctrl+Shift+E** URL hints.
 
 Neovim: leader is **Space** — full map in `~/.nvim-cheatsheet.md` (`vimcheat`).
 
@@ -232,8 +261,11 @@ Neovim: leader is **Space** — full map in `~/.nvim-cheatsheet.md` (`vimcheat`)
 dotfiles-arch/
 ├── README.md              ← you are here
 ├── REFRESHER.md           ← short memory jogger
+├── PACKAGES.md            ← what each installed package is for (`packages`)
 ├── NOTES.md               ← WiFi, archinstall, NVIDIA, sync details
 ├── CLAUDE.md              ← architecture notes for AI agents
+├── AGENTS.md              ← pointer file for Cursor / other agents
+├── .cursor/rules/         ← repo conventions for AI agents
 ├── post_install.sh        ← minimal post-archinstall
 ├── user_configuration.json
 ├── scripts/
@@ -247,7 +279,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # sync-dotfiles, update-system, …
+│   └── .local/bin/        # sync-dotfiles, update-system, check-dotfiles, remove-orphans, repos, code, …
 └── config/                # → ~/.config
 ```
 
@@ -258,7 +290,9 @@ dotfiles-arch/
 | Doc | Use when |
 |-----|----------|
 | [REFRESHER.md](REFRESHER.md) | You forgot how things work after time away |
+| [PACKAGES.md](PACKAGES.md) | You want to know why a package is installed (`packages`) |
 | [NOTES.md](NOTES.md) | Installing Arch or debugging GPU/sync |
 | [CLAUDE.md](CLAUDE.md) | Changing scripts / understanding design |
+| [AGENTS.md](AGENTS.md) | An AI agent needs the short version of the conventions |
 | `welcome` (in shell) | Alias and Herdr quick reference |
 | `vimcheat` | Neovim keybindings |

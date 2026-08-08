@@ -5,7 +5,47 @@
 # See: man readline
 # ============================================================================
 
+# -------------------------
+# Completion
+# -------------------------
 
+# Case-insensitive completion, and treat - and _ as interchangeable
+set completion-ignore-case on
+set completion-map-case on
+
+# Show the list immediately instead of requiring a second Tab
+set show-all-if-ambiguous on
+set show-all-if-unmodified on
+
+# Mark directories/symlinks in completion lists and append / to directories
+set visible-stats on
+set mark-symlinked-directories on
+set colored-stats on
+
+# Highlight the common prefix of completions
+set colored-completion-prefix on
+
+# Ask before dumping huge completion lists
+set completion-query-items 200
+set page-completions off
+
+# -------------------------
+# Editing / display
+# -------------------------
+
+# No terminal bell
+set bell-style none
+
+# Keep the whole line visible instead of horizontal scrolling
+set horizontal-scroll-mode off
+
+# Show the current editing mode (harmless in emacs mode)
+set show-mode-in-prompt off
+
+# Allow UTF-8 input/output
+set input-meta on
+set output-meta on
+set convert-meta off
 
 # -------------------------
 # Mode-specific Settings
@@ -13,6 +53,31 @@
 
 # Settings for Emacs mode
 $if mode=emacs
+    # Tab cycles through matches (Shift+Tab goes backward)
+    "\t": menu-complete
+    "\e[Z": menu-complete-backward
+
+    # Up/Down search history using what is already typed as a prefix
+    "\e[A": history-search-backward
+    "\e[B": history-search-forward
+    "\eOA": history-search-backward
+    "\eOB": history-search-forward
+
+    # Word-wise movement with Ctrl+Left / Ctrl+Right
+    "\e[1;5C": forward-word
+    "\e[1;5D": backward-word
+    "\e[5C": forward-word
+    "\e[5D": backward-word
+
+    # Home / End (both common terminal encodings)
+    "\e[H": beginning-of-line
+    "\e[F": end-of-line
+    "\e[1~": beginning-of-line
+    "\e[4~": end-of-line
+
+    # Delete key
+    "\e[3~": delete-char
+
     # Meta key bindings (Alt+key)
     "\e\C-h": backward-kill-word  # Alt+Ctrl+H - delete word backward
     "\e\C-?": backward-kill-word  # Alt+Backspace - delete word backward

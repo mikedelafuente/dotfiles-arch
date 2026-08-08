@@ -138,6 +138,7 @@ if ! validate_bootstrap_profile; then
 fi
 
 resolve_nvidia_preference
+resolve_machine_type
 
 if [ "$ASSUME_YES" = false ]; then
   echo ""
@@ -146,6 +147,7 @@ if [ "$ASSUME_YES" = false ]; then
   echo "Email Address: $(fmt_choice "$EMAIL_ADDRESS")"
   echo "Setup Profile: $(fmt_choice "$SETUP_PROFILE")"
   echo "Install NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
+  echo "Machine Type: $(fmt_choice "$MACHINE_TYPE")"
   read -rp "Is this information correct? [y/n] (Enter = $(fmt_choice "no")): " CONFIRMATION
   if [[ ! "${CONFIRMATION:-}" =~ ^[Yy]$ ]]; then
     print_error_message "Aborting. Please run the script again to enter the correct information."
@@ -158,7 +160,7 @@ write_bootstrap_config
 print_line_break "Starting bootstrap"
 print_info_message "Display server: ${XDG_SESSION_TYPE:-unknown}"
 print_info_message "User: $(whoami)  Home: $USER_HOME_DIR"
-print_info_message "Profile: $SETUP_PROFILE  INSTALL_NVIDIA: $INSTALL_NVIDIA"
+print_info_message "Profile: $SETUP_PROFILE  INSTALL_NVIDIA: $INSTALL_NVIDIA  MACHINE_TYPE: $MACHINE_TYPE"
 
 sudo -v
 {
@@ -209,7 +211,7 @@ fi
 
 print_info_message "Running bootstrap with profile: $SETUP_PROFILE"
 
-export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA
+export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
 export SETUP_CONTINUE_ON_ERROR=true
 export DOTFILES_AUR_ASSUME_YES=true
 set +e

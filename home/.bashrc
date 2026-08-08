@@ -22,6 +22,17 @@ case $- in
     ;;
 esac
 
+# -------------------------
+# History
+# -------------------------
+# Long, de-duplicated history that survives multiple terminals.
+HISTCONTROL=ignoreboth        # skip duplicates and lines starting with a space
+HISTSIZE=50000
+HISTFILESIZE=100000
+HISTTIMEFORMAT='%F %T '
+HISTIGNORE='ls:ll:la:c:clear:h:history:exit:qq:pwd'
+shopt -s histappend cmdhist checkwinsize
+
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
 # sources /etc/bash.bashrc).
@@ -38,6 +49,13 @@ fi
 if command -v nvim &> /dev/null; then
     export EDITOR=nvim
     export VISUAL=nvim
+fi
+
+# bat as the man pager and colorizer (theme also set in ~/.config/bat/config)
+if command -v bat &> /dev/null; then
+    export BAT_THEME="Catppuccin Mocha"
+    export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+    export MANROFFOPT="-c"
 fi
 
 # set PATH so it includes user's private bin if it exists
@@ -137,6 +155,28 @@ alias serve='python3 -m http.server'
 alias jsonpp='python3 -m json.tool'
 alias myip='curl ifconfig.me'
 
+# Clipboard (Wayland) — macOS-style names
+if command -v wl-copy &> /dev/null; then
+    alias pbcopy='wl-copy'
+    alias pbpaste='wl-paste'
+fi
+
+# Mullvad VPN (personal profile)
+if command -v mullvad &> /dev/null; then
+    alias mvup='mullvad connect'
+    alias mvdown='mullvad disconnect'
+    alias mvst='mullvad status'
+fi
+
+# Maintenance (helpers live in ~/.local/bin)
+alias check='check-dotfiles'
+alias orphans='remove-orphans'
+
+# Jump to a repo with fzf: r → cd "$(repos)"
+if command -v fzf &> /dev/null; then
+    alias r='cd "$(repos)"'
+fi
+
 # Functions
 
 # Better touch that creates directories if they don't exist
@@ -164,6 +204,19 @@ welcome() {
         fi
     else
         echo "Welcome message file not found at $HOME/.welcome.md"
+    fi
+}
+
+# Function to display the package catalog (what each installed tool is for)
+packages() {
+    if [ -f "$HOME/.packages.md" ]; then
+        if command -v bat &> /dev/null; then
+            bat --style=grid --paging=always "$HOME/.packages.md"
+        else
+            less "$HOME/.packages.md"
+        fi
+    else
+        echo "Package catalog not found at $HOME/.packages.md (run sync-dotfiles to link it)"
     fi
 }
 
@@ -205,72 +258,25 @@ aliases() {
         printf "  %-22s → %s\n" "Ctrl+W" "Delete word backward"
         printf "  %-22s → %s\n" "Ctrl+A" "Go to beginning of line"
         printf "  %-22s → %s\n" "Ctrl+E" "Go to end of line"
-        
+
+        if command -v fzf &> /dev/null; then
+            printf "  %-22s → %s\n" "Ctrl+R" "Fuzzy search command history (fzf)"
+            printf "  %-22s → %s\n" "Ctrl+T" "Fuzzy pick a file into the command line (fzf)"
+            printf "  %-22s → %s\n" "Alt+C" "Fuzzy cd into a subdirectory (fzf)"
+        fi
+
         echo ""
-        echo "  💡 Note: All key bindings configured in ~/.inputrc"
+        echo "  💡 Note: Editing keys are configured in ~/.inputrc; Ctrl+R/T and Alt+C come from fzf"
         echo "     Run 'bat ~/.inputrc' to see full readline configuration"
         
         
         echo ""
         echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-        echo "║                        🛠️  Essential Tools Installed                         ║"
+        echo "║                        🛠️  Installed Tools                                   ║"
         echo "╚══════════════════════════════════════════════════════════════════════════════╝"
         echo ""
-        
-        # Show essential packages from bootstrap.sh (keep in sync with ESSENTIAL_PACKAGES)
-        # Alphabetically sorted for easier reading
-        local tools=(
-            "bat:Cat clone with syntax highlighting"
-            "btop:Resource monitor (better than htop)"
-            "curl:Transfer data from/to servers"
-            "duf:Better disk usage utility (modern df)"
-            "eza:Modern ls with icons (aliases: ls, ll, la, lt)"
-            "fastfetch:System information display (neofetch successor)"
-            "fd:Fast alternative to find (fd command)"
-            "fzf:Fuzzy finder for command-line"
-            "gh:GitHub CLI"
-            "git:Version control system"
-            "htop:Interactive process viewer"
-            "jq:JSON processor for command line"
-            "ncdu:Disk usage analyzer with ncurses"
-            "netstat:Network utilities (netstat, ifconfig)"
-            "ripgrep:Fast recursive search (rg command)"
-            "shellcheck:Shell script analysis tool"
-            "starship:Cross-shell prompt (Catppuccin)"
-            "stow:Symlink farm manager for dotfiles"
-            "tldr:Simplified man pages with examples"
-            "herdr:Agent-friendly terminal multiplexer"
-            "tree:Display directory structure as tree"
-            "wget:Download files from the web"
-            "wl-copy:Wayland clipboard (wl-clipboard)"
-            "xsel:X11 clipboard helper"
-            "zoxide:Smart cd - learns your navigation habits - current aliases z, zi, zq"
-        )
-        
-        for tool_info in "${tools[@]}"; do
-            local tool="${tool_info%%:*}"
-            local desc="${tool_info#*:}"
-            # Special case for ripgrep which uses 'rg' command
-            if [ "$tool" = "ripgrep" ]; then
-                if command -v rg &> /dev/null; then
-                    printf "  %-12s → %s\n" "$tool" "$desc"
-                else
-                    printf "  \033[0;31m%-12s\033[0m → %s\n" "MISSING" "$tool" "$desc"
-                fi
-            elif [ "$tool" = "wl-copy" ]; then
-                if command -v wl-copy &> /dev/null; then
-                    printf "  %-12s → %s\n" "wl-clipboard" "$desc"
-                else
-                    printf "  \033[0;31m%-12s\033[0m → %s\n" "MISSING" "wl-clipboard" "$desc"
-                fi
-            else
-                if command -v "$tool" &> /dev/null; then
-                    printf "  %-12s → %s\n" "$tool" "$desc"
-                else
-                    printf "  \033[0;31m%-12s\033[0m → %s\n" "MISSING" "$tool" "$desc"
-                fi
-            fi
-        done
+        echo "  Tools catalog: run 'packages' (what every installed package is for)"
+        echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"
         
         if command -v zoxide &> /dev/null; then
             
@@ -352,6 +358,20 @@ export NVM_DIR="$HOME/.config/nvm"
 # Initialize zoxide if installed
 if command -v zoxide &> /dev/null; then
     eval "$(zoxide init bash)"
+fi
+
+# fzf key bindings + completion (Ctrl-R history, Ctrl-T files, Alt-C cd)
+if command -v fzf &> /dev/null; then
+    export FZF_DEFAULT_OPTS='--height=40% --layout=reverse --border --info=inline'
+    if command -v fd &> /dev/null; then
+        export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+        export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+        export FZF_ALT_C_COMMAND='fd --type d --hidden --follow --exclude .git'
+    fi
+    if command -v bat &> /dev/null; then
+        export FZF_CTRL_T_OPTS="--preview 'bat --style=numbers --color=always --line-range=:200 {}'"
+    fi
+    eval "$(fzf --bash)"
 fi
 
 # Starship prompt (config: ~/.config/starship.toml)
