@@ -160,11 +160,11 @@ elif [ "$ASSUME_YES" = false ]; then
   if [ "$PROFILE_WAS_UNSET" = true ]; then
     print_info_message "Choose a setup profile for this machine:"
   else
-    print_info_message "Current saved profile: $SETUP_PROFILE"
+    print_info_message "Current saved profile: $(fmt_choice "$SETUP_PROFILE")"
   fi
   echo "  1) work      — shared stack + Zoom + Slack + Chrome"
   echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
-  read -rp "Profile [1=work, 2=personal] (Enter keeps '$SETUP_PROFILE'): " PROFILE_INPUT
+  read -rp "Profile [1=work, 2=personal] (Enter keeps '$(fmt_choice "$SETUP_PROFILE")'): " PROFILE_INPUT
   if [ -n "${PROFILE_INPUT:-}" ]; then
     if ! SETUP_PROFILE="$(normalize_profile "$PROFILE_INPUT")"; then
       print_error_message "Unknown choice '$PROFILE_INPUT'"
@@ -198,28 +198,28 @@ if [ -z "$INSTALL_NVIDIA" ]; then
     if has_nvidia_hardware; then
       print_info_message "Detected: NVIDIA GPU on PCI bus"
     fi
-    DEFAULT_YN="n"
-    [[ "$NVIDIA_DEFAULT" == "true" ]] && DEFAULT_YN="y"
-    read -rp "Install/keep NVIDIA drivers on this machine? [y/N] (default: $DEFAULT_YN): " NVIDIA_INPUT
-    NVIDIA_INPUT="${NVIDIA_INPUT:-$DEFAULT_YN}"
+    if [[ "$NVIDIA_DEFAULT" == "true" ]]; then
+      NVIDIA_DEFAULT_LABEL="yes"
+    else
+      NVIDIA_DEFAULT_LABEL="no"
+    fi
+    read -rp "Install/keep NVIDIA drivers on this machine? [y/n] (Enter = $(fmt_choice "$NVIDIA_DEFAULT_LABEL")): " NVIDIA_INPUT
+    NVIDIA_INPUT="${NVIDIA_INPUT:-$NVIDIA_DEFAULT}"
     case "${NVIDIA_INPUT,,}" in
-      y|yes) INSTALL_NVIDIA="true" ;;
+      y|yes|true) INSTALL_NVIDIA="true" ;;
       *) INSTALL_NVIDIA="false" ;;
     esac
   fi
 elif [ "$ASSUME_YES" = false ]; then
   echo ""
-  print_info_message "Current INSTALL_NVIDIA: $INSTALL_NVIDIA"
-  read -rp "Change NVIDIA preference? [y/N to keep, or true/false]: " NVIDIA_INPUT
-  case "${NVIDIA_INPUT:-}" in
-    ""|n|N|no|No) ;;
-    y|Y|yes|Yes|true|TRUE) INSTALL_NVIDIA="true" ;;
-    false|FALSE|0) INSTALL_NVIDIA="false" ;;
+  print_info_message "Current INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
+  read -rp "Press Enter to keep INSTALL_NVIDIA=$(fmt_choice "$INSTALL_NVIDIA"), or type true/false: " NVIDIA_INPUT
+  case "${NVIDIA_INPUT,,}" in
+    "") ;; # Enter → keep current
+    true|y|yes) INSTALL_NVIDIA="true" ;;
+    false|n|no|0) INSTALL_NVIDIA="false" ;;
     *)
-      case "${NVIDIA_INPUT,,}" in
-        true|y|yes) INSTALL_NVIDIA="true" ;;
-        false|n|no) INSTALL_NVIDIA="false" ;;
-      esac
+      print_warning_message "Unrecognized input '$NVIDIA_INPUT'; keeping INSTALL_NVIDIA=$INSTALL_NVIDIA"
       ;;
   esac
 fi
@@ -336,7 +336,7 @@ cleanup_obsolete() {
     if [ "$ASSUME_YES" = true ]; then
       CONFIRM_RM=y
     else
-      read -rp "Remove these packages? [y/N]: " CONFIRM_RM
+      read -rp "Remove these packages? [y/n] (Enter = $(fmt_choice "no")): " CONFIRM_RM
     fi
     if [[ "${CONFIRM_RM:-}" =~ ^[Yy]$ ]]; then
       sudo pacman -Rns --noconfirm "${pkgs_to_remove[@]}" || print_warning_message "Some packages could not be removed"
@@ -401,7 +401,7 @@ elif [ ${#OBSOLETE_PKGS_INSTALLED[@]} -eq 0 ]; then
   print_info_message "No obsolete packages installed; skipping cleanup"
 elif [ "$ASSUME_YES" = false ]; then
   echo ""
-  read -rp "Also remove obsolete packages (${OBSOLETE_PKGS_INSTALLED[*]})? [y/N]: " ASK_CLEAN
+  read -rp "Also remove obsolete packages (${OBSOLETE_PKGS_INSTALLED[*]})? [y/n] (Enter = $(fmt_choice "no")): " ASK_CLEAN
   if [[ "${ASK_CLEAN:-}" =~ ^[Yy]$ ]]; then
     cleanup_obsolete
   else

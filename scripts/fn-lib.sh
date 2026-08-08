@@ -55,6 +55,11 @@ print_error_message() {
   echo -e "\e[31m$message\e[0m"
 }
 
+# Turquoise highlight for the current/default choice in interactive prompts (no newline).
+fmt_choice() {
+  printf '\e[38;5;44m%s\e[0m' "$1"
+}
+
 # True when an NVIDIA GPU is visible to the system (PCI).
 has_nvidia_hardware() {
   if command -v lspci &>/dev/null; then
