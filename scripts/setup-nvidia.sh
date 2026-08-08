@@ -31,10 +31,8 @@ for arg in "$@"; do
 done
 
 # Load saved bootstrap preference when not already set
-BOOTSTRAP_CONFIG_FILE="$USER_HOME_DIR/.config/dotfiles-arch/.dotfiles_bootstrap_config"
-if [ -z "${INSTALL_NVIDIA:-}" ] && [ -r "$BOOTSTRAP_CONFIG_FILE" ]; then
-  # shellcheck source=/dev/null
-  source "$BOOTSTRAP_CONFIG_FILE"
+if [ -z "${INSTALL_NVIDIA:-}" ]; then
+  load_bootstrap_config || true
 fi
 
 print_tool_setup_start "NVIDIA drivers"
@@ -84,7 +82,7 @@ if [ -z "$should_install" ]; then
     print_info_message "Install NVIDIA drivers (nvidia-open-dkms + utils)?"
     print_info_message "  Prefer 'y' if archinstall selected an NVIDIA gfx driver or this machine has an NVIDIA GPU."
     print_info_message "  Prefer 'n' on AMD/Intel-only machines."
-    read -rp "Install NVIDIA drivers? [y/N] (default: $DEFAULT): " NVIDIA_INPUT
+    read -rp "Install NVIDIA drivers? [y/n] (Enter = $(fmt_choice "$DEFAULT")): " NVIDIA_INPUT
     NVIDIA_INPUT="${NVIDIA_INPUT:-$DEFAULT}"
     case "${NVIDIA_INPUT,,}" in
       y|yes) should_install=true ;;
@@ -93,20 +91,12 @@ if [ -z "$should_install" ]; then
   fi
 fi
 
-# Persist preference for bootstrap/sync
-mkdir -p "$(dirname "$BOOTSTRAP_CONFIG_FILE")"
-if [ -r "$BOOTSTRAP_CONFIG_FILE" ]; then
-  if grep -q '^INSTALL_NVIDIA=' "$BOOTSTRAP_CONFIG_FILE" 2>/dev/null; then
-    sed -i "s/^INSTALL_NVIDIA=.*/INSTALL_NVIDIA=\"$should_install\"/" "$BOOTSTRAP_CONFIG_FILE"
-  else
-    echo "INSTALL_NVIDIA=\"$should_install\"" >> "$BOOTSTRAP_CONFIG_FILE"
-  fi
-else
-  {
-    echo "# Configuration file for dotfiles bootstrap script"
-    echo "INSTALL_NVIDIA=\"$should_install\""
-  } > "$BOOTSTRAP_CONFIG_FILE"
-fi
+# Persist preference for bootstrap/sync (preserve other identity fields)
+_nvidia_decision="$should_install"
+load_bootstrap_config || true
+INSTALL_NVIDIA="$_nvidia_decision"
+unset _nvidia_decision
+write_bootstrap_config
 
 if [ "$should_install" != true ]; then
   print_info_message "Skipping NVIDIA driver install (INSTALL_NVIDIA=false)"

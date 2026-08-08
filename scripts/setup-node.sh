@@ -20,7 +20,7 @@ fi
 
 print_tool_setup_start "NVM and Node.js"
 
-ensure_pacman_pkgs curl
+ensure_pacman_pkgs curl coreutils
 
 NVM_DIR="$(nvm_dir)"
 export NVM_DIR
@@ -30,9 +30,29 @@ mkdir -p "$NVM_DIR"
 load_nvm || true
 
 if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
-  print_action_message "Installing NVM v0.40.3 into $NVM_DIR"
+  # Pin version + SHA-256 together. To bump NVM:
+  #   curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/vX.Y.Z/install.sh | sha256sum
+  # then update NVM_VERSION and NVM_INSTALL_SHA256 below.
+  NVM_VERSION="v0.40.3"
+  NVM_INSTALL_SHA256="2d8359a64a3cb07c02389ad88ceecd43f2fa469c06104f92f98df5b6f315275f"
+  NVM_INSTALL_URL="https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh"
+
+  print_action_message "Installing NVM ${NVM_VERSION} into $NVM_DIR"
+  tmp_install="$(mktemp)"
+  if ! curl -fsSL "$NVM_INSTALL_URL" -o "$tmp_install"; then
+    rm -f "$tmp_install"
+    print_error_message "Failed to download NVM install.sh"
+    exit 1
+  fi
+  actual_sha="$(sha256sum "$tmp_install" | awk '{print $1}')"
+  if [[ "$actual_sha" != "$NVM_INSTALL_SHA256" ]]; then
+    rm -f "$tmp_install"
+    print_error_message "NVM install.sh checksum mismatch (got $actual_sha, expected $NVM_INSTALL_SHA256)"
+    exit 1
+  fi
   # Do not append to the symlinked ~/.bashrc
-  PROFILE=/dev/null curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+  PROFILE=/dev/null bash "$tmp_install"
+  rm -f "$tmp_install"
 else
   print_info_message "NVM already installed at $NVM_DIR"
 fi

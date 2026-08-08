@@ -9,10 +9,12 @@
 #   git pull
 #   bash scripts/sync.sh
 #
+# Always runs a guarded pacman + yay upgrade (same path as update-system.sh).
+#
 # Flags:
 #   --profile work|personal   Set/force profile (prompted if unset)
 #   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
-#   --skip-bootstrap          Only pull + link + cleanup; skip setup-*.sh runs
+#   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
 #   --yes                     Non-interactive; requires --profile if none saved
 # -----------------------------------------------------------------------------
 
@@ -39,11 +41,12 @@ usage() {
 Usage: $(basename "$0") [options]
 
 Bring this machine in line with the current dotfiles-arch repo.
+Always runs a guarded system upgrade (pacman + yay with AUR IoC scan).
 
 Options:
   --profile work|personal   Set profile (required with --yes if none is saved)
   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
-  --skip-bootstrap          Only pull + link + cleanup; skip setup-*.sh runs
+  --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
   --yes, -y                 Non-interactive where safe
   -h, --help                Show this help
 
@@ -93,42 +96,25 @@ done
 # Resolve profile
 # --------------------------
 
-BOOTSTRAP_CONFIG_DIR="$USER_HOME_DIR/.config/dotfiles-arch"
-mkdir -p "$BOOTSTRAP_CONFIG_DIR"
-CONFIG_FILE="$BOOTSTRAP_CONFIG_DIR/.dotfiles_bootstrap_config"
+mkdir -p "$(bootstrap_config_dir)"
 
 SAVED_PROFILE=""
 SAVED_NVIDIA=""
-if [ -r "$CONFIG_FILE" ]; then
-  # shellcheck source=/dev/null
-  source "$CONFIG_FILE"
+if load_bootstrap_config; then
   SAVED_PROFILE="${SETUP_PROFILE:-}"
   SAVED_NVIDIA="${INSTALL_NVIDIA:-}"
 fi
-
-# Migrate legacy name from saved config
-if [ "${SAVED_PROFILE}" = "productivity" ]; then
-  SAVED_PROFILE="work"
-fi
-
-normalize_profile() {
-  case "$1" in
-    1|work|Work|WORK|productivity|Productivity) echo "work" ;;
-    2|personal|Personal|PERSONAL) echo "personal" ;;
-    *) return 1 ;;
-  esac
-}
 
 SETUP_PROFILE=""
 PROFILE_WAS_UNSET=false
 
 if [ -n "$FORCE_PROFILE" ]; then
-  if ! SETUP_PROFILE="$(normalize_profile "$FORCE_PROFILE")"; then
+  if ! SETUP_PROFILE="$(normalize_setup_profile "$FORCE_PROFILE")"; then
     print_error_message "Invalid --profile '$FORCE_PROFILE' (use work or personal)"
     exit 1
   fi
 elif [ -n "$SAVED_PROFILE" ]; then
-  if ! SETUP_PROFILE="$(normalize_profile "$SAVED_PROFILE")"; then
+  if ! SETUP_PROFILE="$(normalize_setup_profile "$SAVED_PROFILE")"; then
     print_warning_message "Saved profile '$SAVED_PROFILE' is invalid; you'll need to choose again"
     PROFILE_WAS_UNSET=true
     SETUP_PROFILE=""
@@ -150,7 +136,7 @@ if [ -z "$SETUP_PROFILE" ]; then
   echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
   while true; do
     read -rp "Profile [1=work, 2=personal]: " PROFILE_INPUT
-    if SETUP_PROFILE="$(normalize_profile "${PROFILE_INPUT:-}")"; then
+    if SETUP_PROFILE="$(normalize_setup_profile "${PROFILE_INPUT:-}")"; then
       break
     fi
     print_warning_message "Please choose 1/work or 2/personal"
@@ -166,74 +152,24 @@ elif [ "$ASSUME_YES" = false ]; then
   echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
   read -rp "Profile [1=work, 2=personal] (Enter keeps '$(fmt_choice "$SETUP_PROFILE")'): " PROFILE_INPUT
   if [ -n "${PROFILE_INPUT:-}" ]; then
-    if ! SETUP_PROFILE="$(normalize_profile "$PROFILE_INPUT")"; then
+    if ! SETUP_PROFILE="$(normalize_setup_profile "$PROFILE_INPUT")"; then
       print_error_message "Unknown choice '$PROFILE_INPUT'"
       exit 1
     fi
   fi
 fi
 
-if [[ "$SETUP_PROFILE" != "work" && "$SETUP_PROFILE" != "personal" ]]; then
-  print_error_message "Profile must be 'work' or 'personal' (got: $SETUP_PROFILE)"
+if ! validate_bootstrap_profile; then
+  print_error_message "Profile must be 'work' or 'personal' (got: ${SETUP_PROFILE:-})"
   exit 1
 fi
 
-# Resolve NVIDIA preference (detect archinstall packages / hardware for default)
 INSTALL_NVIDIA="${SAVED_NVIDIA:-}"
-if [ -z "$INSTALL_NVIDIA" ]; then
-  NVIDIA_DEFAULT="false"
-  if has_nvidia_packages || has_nvidia_hardware; then
-    NVIDIA_DEFAULT="true"
-  fi
+resolve_nvidia_preference
 
-  if [ "$ASSUME_YES" = true ]; then
-    INSTALL_NVIDIA="$NVIDIA_DEFAULT"
-    print_info_message "INSTALL_NVIDIA not saved — auto-set to $INSTALL_NVIDIA (packages/hardware detect)"
-  else
-    echo ""
-    print_info_message "NVIDIA drivers are optional (skip on AMD/Intel-only machines)."
-    if has_nvidia_packages; then
-      print_info_message "Detected: NVIDIA packages already installed (likely from archinstall)"
-    fi
-    if has_nvidia_hardware; then
-      print_info_message "Detected: NVIDIA GPU on PCI bus"
-    fi
-    if [[ "$NVIDIA_DEFAULT" == "true" ]]; then
-      NVIDIA_DEFAULT_LABEL="yes"
-    else
-      NVIDIA_DEFAULT_LABEL="no"
-    fi
-    read -rp "Install/keep NVIDIA drivers on this machine? [y/n] (Enter = $(fmt_choice "$NVIDIA_DEFAULT_LABEL")): " NVIDIA_INPUT
-    NVIDIA_INPUT="${NVIDIA_INPUT:-$NVIDIA_DEFAULT}"
-    case "${NVIDIA_INPUT,,}" in
-      y|yes|true) INSTALL_NVIDIA="true" ;;
-      *) INSTALL_NVIDIA="false" ;;
-    esac
-  fi
-elif [ "$ASSUME_YES" = false ]; then
-  echo ""
-  print_info_message "Current INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
-  read -rp "Press Enter to keep INSTALL_NVIDIA=$(fmt_choice "$INSTALL_NVIDIA"), or type true/false: " NVIDIA_INPUT
-  case "${NVIDIA_INPUT,,}" in
-    "") ;; # Enter → keep current
-    true|y|yes) INSTALL_NVIDIA="true" ;;
-    false|n|no|0) INSTALL_NVIDIA="false" ;;
-    *)
-      print_warning_message "Unrecognized input '$NVIDIA_INPUT'; keeping INSTALL_NVIDIA=$INSTALL_NVIDIA"
-      ;;
-  esac
-fi
-
-# Preserve identity fields; refresh profile + NVIDIA preference
 FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
-{
-  echo "# Configuration file for dotfiles bootstrap script"
-  echo "FULL_NAME=\"$FULL_NAME\""
-  echo "EMAIL_ADDRESS=\"$EMAIL_ADDRESS\""
-  echo "SETUP_PROFILE=\"$SETUP_PROFILE\""
-  echo "INSTALL_NVIDIA=\"$INSTALL_NVIDIA\""
-} > "$CONFIG_FILE"
+write_bootstrap_config
 
 print_line_break "Syncing machine to dotfiles-arch ($SETUP_PROFILE)"
 print_info_message "Repo: $REPO_ROOT"
@@ -252,31 +188,49 @@ if [ -d "$REPO_ROOT/.git" ]; then
 fi
 
 # --------------------------
+# Guarded system upgrade (always)
+# --------------------------
+
+if [ "$(whoami)" = "${SUDO_USER:-$(whoami)}" ]; then
+  sudo -v
+fi
+
+{
+  while true; do
+    sudo -n true
+    sleep 60
+    kill -0 "$$" 2>/dev/null || exit
+  done
+} &
+SUDO_KEEPALIVE_PID=$!
+trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
+
+ensure_yay_installed || print_warning_message "yay install failed — AUR steps may fail"
+
+set +e
+if [ "$ASSUME_YES" = true ]; then
+  safe_system_upgrade --yes
+else
+  safe_system_upgrade
+fi
+UPGRADE_RC=$?
+set -e
+if [ "$UPGRADE_RC" -eq 0 ]; then
+  record_system_upgrade_stamps
+else
+  print_warning_message "Guarded system update failed — continuing with link/setup/cleanup."
+fi
+
+# --------------------------
 # Re-apply setup scripts (idempotent)
 # --------------------------
 
 if [ "$SKIP_BOOTSTRAP" = false ]; then
   print_line_break "Running setup scripts (safe to re-run)"
 
-  if [ "$(whoami)" = "${SUDO_USER:-$(whoami)}" ]; then
-    sudo -v
-  fi
-
-  # Keep sudo alive
-  {
-    while true; do
-      sudo -n true
-      sleep 60
-      kill -0 "$$" 2>/dev/null || exit
-    done
-  } &
-  SUDO_KEEPALIVE_PID=$!
-  trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
-
-  export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS
+  export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA
   export SETUP_CONTINUE_ON_ERROR=true
   export DOTFILES_AUR_ASSUME_YES=true
-  # Shared list with bootstrap — continue on error, exit 1 if any failed
   set +e
   bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
   SETUP_RC=$?
@@ -347,10 +301,14 @@ cleanup_obsolete() {
     print_info_message "No obsolete pacman packages found"
   fi
 
-  # npm global Copilot CLI
-  if command -v npm &>/dev/null && npm list -g --depth=0 @githubnext/github-copilot-cli &>/dev/null 2>&1; then
-    print_action_message "Removing global npm package @githubnext/github-copilot-cli"
-    sudo npm uninstall -g @githubnext/github-copilot-cli || true
+  # npm global Copilot CLI (user-level NVM npm — never sudo npm)
+  if load_nvm && command -v npm &>/dev/null; then
+    if npm list -g --depth=0 @githubnext/github-copilot-cli &>/dev/null 2>&1; then
+      print_action_message "Removing global npm package @githubnext/github-copilot-cli"
+      npm uninstall -g @githubnext/github-copilot-cli || true
+    fi
+  else
+    print_info_message "NVM/npm not available — skip Copilot CLI cleanup"
   fi
 
   # Stale config dirs that are no longer linked from this repo

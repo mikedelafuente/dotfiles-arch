@@ -24,15 +24,14 @@ fi
 
 print_tool_setup_start "Herdr"
 
-# Prefer AUR package; fall back to official install script
+# Prefer AUR package only (no curl|bash installer)
 if ! command -v herdr &> /dev/null; then
-    if command -v yay &> /dev/null; then
-        print_info_message "Installing Herdr via yay (herdr-bin)"
-        ensure_yay_pkgs herdr-bin
-    else
-        print_warning_message "yay missing — falling back to official herdr.dev curl|bash installer"
-        curl -fsSL https://herdr.dev/install.sh | sh
+    if ! ensure_yay_installed; then
+        print_error_message "yay is required to install Herdr (herdr-bin)"
+        exit 1
     fi
+    print_info_message "Installing Herdr via yay (herdr-bin)"
+    ensure_yay_pkgs herdr-bin
 else
     print_info_message "Herdr is already installed. Skipping installation."
 fi

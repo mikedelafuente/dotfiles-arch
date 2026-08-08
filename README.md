@@ -27,7 +27,7 @@ bash scripts/update-system.sh --yes        # non-interactive after clean AUR sca
 bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
 ```
 
-This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Bootstrap/sync use the same scan before any `--noconfirm` AUR install.
+This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Sync always runs the same upgrade path; bootstrap uses it behind a 1-day cooldown. Both use the same scan before any `--noconfirm` AUR install.
 
 ---
 
@@ -61,6 +61,7 @@ Enables multilib, updates packages, optional NVIDIA (`setup-nvidia.sh`), and ins
 ```bash
 # Do not run with sudo
 bash scripts/bootstrap.sh
+# bash scripts/bootstrap.sh --yes   # non-interactive (saved config / defaults)
 ```
 
 You will be prompted for:
@@ -86,11 +87,12 @@ bash scripts/sync.sh
 
 That will:
 
-1. Resolve/save profile + NVIDIA preference
+1. Resolve/save profile + NVIDIA preference (`load_bootstrap_config` / `write_bootstrap_config`)
 2. `git pull --ff-only`
-3. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
-4. Relink dotfiles + `post-link-hooks.sh` (font cache, GNOME checklist)
-5. Optionally remove obsolete packages (tmux, Hyprland stack, etc.)
+3. Run a guarded system upgrade (`pacman` + AUR IoC scan + `yay`) every time
+4. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
+5. Relink dotfiles + `post-link-hooks.sh` (font cache, GNOME checklist)
+6. Optionally remove obsolete packages (tmux, Hyprland stack, etc.)
 
 ### Useful flags
 
@@ -98,13 +100,13 @@ That will:
 bash scripts/sync.sh --profile work
 bash scripts/sync.sh --profile personal
 bash scripts/sync.sh --cleanup              # remove obsolete packages/configs
-bash scripts/sync.sh --skip-bootstrap       # pull + link only (+ optional cleanup)
+bash scripts/sync.sh --skip-bootstrap       # skip setup-*.sh (still upgrades + links)
 bash scripts/sync.sh --yes --profile work --cleanup
 ```
 
 With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set.
 
-**Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages).
+**Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages). Use `update-system.sh` for day-to-day package-only updates without re-running setup scripts.
 
 ---
 

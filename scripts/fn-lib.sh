@@ -155,18 +155,108 @@ validate_bootstrap_profile() {
   esac
 }
 
-# Write current identity/profile/NVIDIA prefs (preserves unknown keys by rewrite).
+# Write current identity/profile/NVIDIA prefs (full rewrite of known keys).
 write_bootstrap_config() {
   local dir f
   dir="$(bootstrap_config_dir)"
   f="$(bootstrap_config_file)"
   mkdir -p "$dir"
   {
+    echo "# Configuration file for dotfiles bootstrap script"
     echo "FULL_NAME=\"${FULL_NAME:-}\""
     echo "EMAIL_ADDRESS=\"${EMAIL_ADDRESS:-}\""
     echo "SETUP_PROFILE=\"${SETUP_PROFILE:-work}\""
     echo "INSTALL_NVIDIA=\"${INSTALL_NVIDIA:-false}\""
   } >"$f"
+}
+
+# Normalize profile input to work|personal (stdout). Maps productivity → work. Returns 1 if invalid.
+normalize_setup_profile() {
+  case "$1" in
+    1|work|Work|WORK|productivity|Productivity) echo "work" ;;
+    2|personal|Personal|PERSONAL) echo "personal" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve INSTALL_NVIDIA from saved value / hardware / prompts.
+# Uses ASSUME_YES=true|false (default false). Sets INSTALL_NVIDIA to true|false.
+resolve_nvidia_preference() {
+  local assume_yes="${ASSUME_YES:-false}"
+  local nvidia_default="false"
+  local default_label nvidia_input
+
+  if [[ "${INSTALL_NVIDIA:-}" == "true" || "${INSTALL_NVIDIA:-}" == "false" ]]; then
+    if [[ "$assume_yes" == "true" ]]; then
+      return 0
+    fi
+    echo ""
+    print_info_message "Current INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
+    read -rp "Press Enter to keep INSTALL_NVIDIA=$(fmt_choice "$INSTALL_NVIDIA"), or type true/false: " nvidia_input
+    case "${nvidia_input,,}" in
+      "") ;; # Enter → keep
+      true|y|yes) INSTALL_NVIDIA="true" ;;
+      false|n|no|0) INSTALL_NVIDIA="false" ;;
+      *)
+        print_warning_message "Unrecognized input '$nvidia_input'; keeping INSTALL_NVIDIA=$INSTALL_NVIDIA"
+        ;;
+    esac
+    return 0
+  fi
+
+  if has_nvidia_packages || has_nvidia_hardware; then
+    nvidia_default="true"
+  fi
+
+  if [[ "$assume_yes" == "true" ]]; then
+    INSTALL_NVIDIA="$nvidia_default"
+    print_info_message "INSTALL_NVIDIA not saved — auto-set to $INSTALL_NVIDIA (packages/hardware detect)"
+    return 0
+  fi
+
+  echo ""
+  print_info_message "NVIDIA drivers are optional (skip on AMD/Intel-only machines)."
+  if has_nvidia_packages; then
+    print_info_message "Detected: NVIDIA packages already installed (likely from archinstall)"
+  fi
+  if has_nvidia_hardware; then
+    print_info_message "Detected: NVIDIA GPU on PCI bus"
+  fi
+  if [[ "$nvidia_default" == "true" ]]; then
+    default_label="yes"
+  else
+    default_label="no"
+  fi
+  read -rp "Install/keep NVIDIA drivers on this machine? [y/n] (Enter = $(fmt_choice "$default_label")): " nvidia_input
+  nvidia_input="${nvidia_input:-$nvidia_default}"
+  case "${nvidia_input,,}" in
+    y|yes|true) INSTALL_NVIDIA="true" ;;
+    *) INSTALL_NVIDIA="false" ;;
+  esac
+}
+
+# Record pacman/yay cooldown stamps (call only after a successful safe_system_upgrade).
+record_system_upgrade_stamps() {
+  local dir
+  dir="$(bootstrap_config_dir)"
+  mkdir -p "$dir"
+  date +%s >"$dir/.last_pacman_update"
+  date +%s >"$dir/.last_pacman_upgrade"
+  date +%s >"$dir/.last_yay_update"
+}
+
+# True when any upgrade stamp is missing or older than 1 day (86400s).
+system_upgrade_cooldown_expired() {
+  local dir now age stamp
+  dir="$(bootstrap_config_dir)"
+  now="$(date +%s)"
+  for stamp in .last_pacman_update .last_pacman_upgrade .last_yay_update; do
+    age=$((now - $(cat "$dir/$stamp" 2>/dev/null || echo 0)))
+    if [[ "$age" -ge 86400 ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 # --------------------------
@@ -252,21 +342,40 @@ aur_fetch_pkgbuild() {
   return 1
 }
 
-# Scan a directory of AUR sources (PKGBUILD, *.install, *.sh). Returns 1 if IoC hit.
+# Scan a directory of AUR sources (PKGBUILD, *.install, *.sh). Returns 1 if IoC hit
+# or if no scanner (rg/grep) is available (fail closed).
 aur_scan_dir() {
   local dir="$1"
   local label="${2:-$dir}"
-  local hits
+  local hits=""
+  local files=()
+
   if [[ ! -d "$dir" ]]; then
     print_error_message "AUR scan: directory missing ($dir)"
     return 1
   fi
-  hits="$(
+
+  mapfile -d '' files < <(
     find "$dir" -maxdepth 2 -type f \( \
       -name PKGBUILD -o -name '*.install' -o -name '*.sh' -o -name '*.bash' \
-    \) -print0 2>/dev/null \
-      | xargs -0 rg -n -i -e "$(aur_ioc_regex)" 2>/dev/null || true
-  )"
+    \) -print0 2>/dev/null
+  )
+
+  # No scannable files — nothing to match (fetch already succeeded).
+  if [[ ${#files[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  if command -v rg &>/dev/null; then
+    # rg exits 1 when no matches; that is clean, not a scanner failure.
+    hits="$(rg -n -i -e "$(aur_ioc_regex)" -- "${files[@]}" 2>/dev/null || true)"
+  elif command -v grep &>/dev/null; then
+    hits="$(grep -n -i -E "$(aur_ioc_regex)" -- "${files[@]}" 2>/dev/null || true)"
+  else
+    print_error_message "AUR scan: need rg or grep to scan $label (fail closed)"
+    return 1
+  fi
+
   if [[ -n "$hits" ]]; then
     print_error_message "AUR SECURITY: suspicious content in $label"
     echo "$hits" >&2
@@ -312,6 +421,26 @@ aur_scan_pending_upgrades() {
   done
   print_success_message "AUR upgrade scan clean"
   return 0
+}
+
+# Install yay from the AUR into a temp dir if missing (mktemp; no ~/yay collision).
+ensure_yay_installed() {
+  local tmp rc=0
+  if command -v yay &>/dev/null; then
+    return 0
+  fi
+  print_action_message "Installing yay from AUR"
+  ensure_pacman_pkgs base-devel git
+  tmp="$(mktemp -d)"
+  if git clone https://aur.archlinux.org/yay.git "$tmp/yay" \
+    && (cd "$tmp/yay" && makepkg -si --noconfirm); then
+    print_success_message "yay installed: $(command -v yay)"
+  else
+    print_error_message "yay installation failed"
+    rc=1
+  fi
+  rm -rf "$tmp"
+  return "$rc"
 }
 
 # Install missing AUR packages via yay after IoC scan.

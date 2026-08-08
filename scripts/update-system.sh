@@ -70,17 +70,20 @@ if [ "$(whoami)" = "${SUDO_USER:-$(whoami)}" ]; then
 fi
 
 if [ "$ASSUME_YES" = true ]; then
-  safe_system_upgrade --yes
+  if safe_system_upgrade --yes; then
+    record_system_upgrade_stamps
+  else
+    print_error_message "Guarded system update failed"
+    exit 1
+  fi
 else
-  safe_system_upgrade
+  if safe_system_upgrade; then
+    record_system_upgrade_stamps
+  else
+    print_error_message "Guarded system update failed"
+    exit 1
+  fi
 fi
-
-# Record timestamps used by bootstrap rate-limiting (optional convenience)
-BOOTSTRAP_CONFIG_DIR="$(bootstrap_config_dir)"
-mkdir -p "$BOOTSTRAP_CONFIG_DIR"
-date +%s >"$BOOTSTRAP_CONFIG_DIR/.last_pacman_update"
-date +%s >"$BOOTSTRAP_CONFIG_DIR/.last_pacman_upgrade"
-date +%s >"$BOOTSTRAP_CONFIG_DIR/.last_yay_update"
 
 print_info_message "Tip: use this instead of raw 'yay -Syu' day to day."
 print_info_message "Re-run with --scan-only anytime to check pending AUR upgrades without installing."

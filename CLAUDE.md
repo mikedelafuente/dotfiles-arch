@@ -51,7 +51,7 @@ cd /path/to/dotfiles-arch
 bash scripts/bootstrap.sh
 ```
 
-Prompts for name, email, **work|personal** profile, and **INSTALL_NVIDIA**. Then enables multilib, updates packages, installs yay, runs setup scripts, links dotfiles.
+Prompts for name, email, **work|personal** profile, and **INSTALL_NVIDIA** (or `--yes` for non-interactive). Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
 
 ### Sync (existing / drifted machine)
 
@@ -59,6 +59,8 @@ Prompts for name, email, **work|personal** profile, and **INSTALL_NVIDIA**. Then
 bash scripts/sync.sh
 # bash scripts/sync.sh --profile work|personal --yes
 ```
+
+Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup.
 
 ### Individual setups
 
@@ -86,20 +88,25 @@ Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DI
 
 **fn-lib.sh** includes:
 
-- `print_*` helpers
+- `print_*` helpers / `fmt_choice` (turquoise prompt defaults)
 - Hardware: `has_nvidia_*`, `has_intel_hardware`, `has_battery`
-- Packages: `ensure_pacman_pkgs`, `ensure_yay_pkgs`, `remove_orphaned_packages`
+- Packages: `ensure_pacman_pkgs`, `ensure_yay_installed`, `ensure_yay_pkgs`, `safe_system_upgrade`, `remove_orphaned_packages`
+- AUR IoC scan: `aur_scan_*` (fail closed if neither `rg` nor `grep` is available)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `validate_bootstrap_profile`, `write_bootstrap_config`
+- Config: `load_bootstrap_config`, `write_bootstrap_config`, `validate_bootstrap_profile`, `normalize_setup_profile`, `resolve_nvidia_preference`
+- Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 
 ### Orchestration
 
 `bootstrap.sh` and `sync.sh` both call:
 
-1. `run-profile-setup.sh` — single shared setup-* list; continues on error and prints a failure summary
-2. `link-dotfiles.sh`
-3. `post-link-hooks.sh` — `fc-cache` after `fonts.conf` is linked; GNOME logout checklist
+1. Guarded system upgrade (`safe_system_upgrade`) — sync always; bootstrap when cooldown expired / multilib just enabled
+2. `run-profile-setup.sh` — single shared setup-* list; continues on error and prints a failure summary
+3. `link-dotfiles.sh`
+4. `post-link-hooks.sh` — `fc-cache` after `fonts.conf` is linked; GNOME logout checklist
+
+Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config` (including `setup-nvidia.sh`).
 
 ### Bootstrap config
 
@@ -119,9 +126,10 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 ### Special cases
 
 - **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes `~/.config/git/identity` (not the shared `.gitconfig`)
-- **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm`; Claude uses user-level `npm` (never `sudo npm`)
+- **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` (checksummed install.sh, never `curl|bash`); Claude uses user-level `npm` (never `sudo npm`)
+- **setup-herdr.sh**: AUR `herdr-bin` only (no curl|bash fallback); calls `ensure_yay_installed` if needed
 - **setup-gnome.sh**: Only when `gnome-shell` is installed; battery detection via power_supply `type`
-- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor
+- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
 - **setup-cursor.sh**: IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`
 - **`code`**: Creates a Herdr workspace and starts `nvim .`
@@ -130,7 +138,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 
 1. Modular setup scripts for independent re-runs
 2. Symlink-based dotfiles (edit in repo, re-link / sync)
-3. Rate-limited pacman/yay updates (1-day cooldown)
+3. Rate-limited pacman/yay updates on bootstrap (1-day cooldown); sync always upgrades
 4. Portable `$HOME` / `$USER_HOME_DIR` paths for multi-username machines
 5. GNOME-first Wayland; Pop Shell for tiling
 6. Do not append PATH hacks into the symlinked `~/.bashrc` from setup scripts
