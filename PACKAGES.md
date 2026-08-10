@@ -118,13 +118,16 @@ directly-installed packages are listed; transitive dependencies are not.
 
 ## Profile extras
 
+Profiles are **additive multi-select** — enable any combination on one machine
+(`SETUP_PROFILES`, e.g. `work devcontainer`). Shared stack always installs first.
+
 ### work — `setup-zoom.sh`, `setup-slack.sh`, `setup-chrome.sh`
 
 | Package | Purpose |
 |---------|---------|
 | `zoom` (AUR) | Meetings |
 | `slack-desktop` (AUR) | Team chat |
-| `google-chrome` (AUR) | Work browser (Super+B) |
+| `google-chrome` (AUR) | Work browser (Super+B when work is selected) |
 
 ### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`
 
@@ -132,8 +135,24 @@ directly-installed packages are listed; transitive dependencies are not.
 |---------|---------|------------------|
 | `steam` (multilib) | Games | — |
 | `discord` (AUR) | Chat | — |
-| `firefox` | Personal browser (Super+B) | — |
+| `firefox` | Personal browser (Super+B when personal is selected and work is not) | — |
 | `mullvad-vpn-bin` (AUR) | VPN | `mvup`, `mvdown`, `mvst` |
+
+### devcontainer — `setup-devcontainer.sh`
+
+Host prerequisites for the platform / work devcontainer sandbox.
+Docker, GitHub CLI, and Cursor are already on the shared stack; this profile adds
+the rest of the host checklist (tools, DNS, watches, CA trust).
+
+| Package / config | Purpose | Related commands |
+|------------------|---------|------------------|
+| `just` | Host lifecycle recipes in the devcontainer repo | `just`, `just --list` |
+| `mkcert` | Local TLS CA + certs for project `*.test` domains | `mkcert -install` |
+| `nss` | Firefox/trust-store support used by mkcert | — |
+| `bind` | `dig` for DNS smoke checks to port 5354 | `dig @127.0.0.1 -p 5354 …` |
+| Cursor extension `ms-vscode-remote.remote-containers` | “Reopen in Container” | — |
+| `/etc/systemd/resolved.conf.d/dotfiles-arch-test.conf` | Route `Domains=~test` to `127.0.0.1:5354` | restart `systemd-resolved` |
+| `/etc/sysctl.d/99-dotfiles-arch-inotify.conf` | Raise `fs.inotify.max_user_watches` to 524288 | — |
 
 ## Graphics (optional)
 

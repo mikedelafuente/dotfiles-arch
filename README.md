@@ -67,12 +67,12 @@ bash scripts/bootstrap.sh
 You will be prompted for:
 
 - Full name + email (git)
-- Profile: **work** or **personal**
+- Profiles (multi-select): **work**, **personal**, and/or **devcontainer**
 - Whether to install NVIDIA (`nvidia-open-dkms`)
 - Machine type: **laptop** or **desktop** (defaults to battery detection)
 
 Config is saved at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
-(`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`, `MACHINE_TYPE`).
+(`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES`, `SETUP_PROFILE` primary, `INSTALL_NVIDIA`, `MACHINE_TYPE`).
 
 Bootstrap then: updates pacman/yay → runs all setup scripts → configures GNOME (if present) → symlinks dotfiles.
 
@@ -89,7 +89,7 @@ bash scripts/sync.sh
 
 That will:
 
-1. Resolve/save profile + NVIDIA + machine type (`load_bootstrap_config` / `write_bootstrap_config`)
+1. Resolve/save profiles + NVIDIA + machine type (`load_bootstrap_config` / `write_bootstrap_config`)
 2. `git pull --ff-only`
 3. Run a guarded system upgrade (`pacman` + AUR IoC scan + `yay`) every time
 4. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
@@ -100,14 +100,15 @@ That will:
 
 ```bash
 bash scripts/sync.sh --profile work
+bash scripts/sync.sh --profile work,devcontainer
 bash scripts/sync.sh --profile personal
-bash scripts/sync.sh --prompt               # re-ask profile / NVIDIA / machine type
+bash scripts/sync.sh --prompt               # re-ask profiles / NVIDIA / machine type
 bash scripts/sync.sh --cleanup              # remove obsolete packages/configs
 bash scripts/sync.sh --skip-bootstrap       # skip setup-*.sh (still upgrades + links)
-bash scripts/sync.sh --yes --profile work --cleanup
+bash scripts/sync.sh --yes --profile work,devcontainer --cleanup
 ```
 
-With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set. Saved profile/NVIDIA/machine type are kept silently unless unset or `--prompt`.
+With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set. Saved profiles/NVIDIA/machine type are kept silently unless unset or `--prompt`.
 
 **Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages). Use `update-system.sh` for day-to-day package-only updates without re-running setup scripts.
 
@@ -115,12 +116,15 @@ With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only r
 
 ## Profiles
 
-| Profile | Extra apps | Default browser (Super+B) |
-|---------|------------|---------------------------|
-| **work** | Zoom, Slack, Chrome | Chrome |
-| **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox |
+Profiles are **additive** — select any combination on one machine (e.g. work + devcontainer).
 
-Everything else in the stack is shared.
+| Profile | Extra setup | Default browser (Super+B) |
+|---------|-------------|---------------------------|
+| **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
+| **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
+| **devcontainer** | just, mkcert, DNS for `~test`, inotify watches, Dev Containers extension | — (no browser change) |
+
+Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup).
 
 ---
 

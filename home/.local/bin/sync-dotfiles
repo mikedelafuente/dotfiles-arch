@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bring this machine in line with the current dotfiles-arch repo.
-# Usage: sync-dotfiles [--profile work|personal] [--prompt] [--cleanup] [--skip-bootstrap] [--yes|-y]
+# Usage: sync-dotfiles [--profile work,devcontainer|personal|…] [--prompt] [--cleanup] [--skip-bootstrap] [--yes|-y]
 
 set -euo pipefail
 

@@ -125,62 +125,172 @@ bootstrap_config_file() {
   echo "$(bootstrap_config_dir)/.dotfiles_bootstrap_config"
 }
 
+# Canonical profile names in menu / display order.
+# Multiple profiles can be active on one machine (e.g. work + devcontainer).
+KNOWN_SETUP_PROFILES=(work personal devcontainer)
+
 # Source saved bootstrap config if present
-# (FULL_NAME, EMAIL, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE).
+# (FULL_NAME, EMAIL, SETUP_PROFILES, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE).
 load_bootstrap_config() {
   local f
   f="$(bootstrap_config_file)"
   if [[ -r "$f" ]]; then
     # shellcheck source=/dev/null
     source "$f"
-    # Migrate legacy profile name
+    # Migrate legacy profile name (single) and multi-select
     if [[ "${SETUP_PROFILE:-}" == "productivity" ]]; then
       SETUP_PROFILE="work"
     fi
+    migrate_setup_profiles_from_legacy
     return 0
   fi
   return 1
 }
 
-# Validate / normalize SETUP_PROFILE. Returns 1 if unset/invalid.
-validate_bootstrap_profile() {
-  case "${SETUP_PROFILE:-}" in
-    work|personal) return 0 ;;
-    productivity)
-      SETUP_PROFILE="work"
+# Ensure SETUP_PROFILES is set from SETUP_PROFILE (legacy single value) when needed.
+# Normalizes both; sets SETUP_PROFILE to primary for older readers.
+migrate_setup_profiles_from_legacy() {
+  local normalized primary
+  if [[ -n "${SETUP_PROFILES:-}" ]]; then
+    if normalized="$(normalize_setup_profiles "$SETUP_PROFILES")"; then
+      SETUP_PROFILES="$normalized"
+    else
+      SETUP_PROFILES=""
+    fi
+  fi
+  if [[ -z "${SETUP_PROFILES:-}" && -n "${SETUP_PROFILE:-}" ]]; then
+    if normalized="$(normalize_setup_profiles "$SETUP_PROFILE")"; then
+      SETUP_PROFILES="$normalized"
+    fi
+  fi
+  if [[ -n "${SETUP_PROFILES:-}" ]]; then
+    primary="$(primary_setup_profile)"
+    SETUP_PROFILE="$primary"
+  fi
+}
+
+# True if profile $1 is in the active SETUP_PROFILES list.
+has_setup_profile() {
+  local needle="${1:-}"
+  local p
+  [[ -z "$needle" ]] && return 1
+  # shellcheck disable=SC2086
+  for p in ${SETUP_PROFILES:-}; do
+    [[ "$p" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+# Primary profile for single-value consumers (link label, Super+B preference).
+# Prefer work when selected; otherwise first known profile that is active.
+primary_setup_profile() {
+  local p
+  if has_setup_profile work; then
+    echo "work"
+    return 0
+  fi
+  for p in "${KNOWN_SETUP_PROFILES[@]}"; do
+    if has_setup_profile "$p"; then
+      echo "$p"
       return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+    fi
+  done
+  echo "work"
+}
+
+# Space-separated → comma-separated for display / CLI examples.
+format_setup_profiles() {
+  local s="${1:-${SETUP_PROFILES:-}}"
+  echo "${s// /,}"
+}
+
+# Validate SETUP_PROFILES is a non-empty set of known names. Returns 1 if invalid.
+# Also keeps SETUP_PROFILE in sync as primary.
+validate_bootstrap_profile() {
+  migrate_setup_profiles_from_legacy
+  if [[ -z "${SETUP_PROFILES:-}" ]]; then
+    return 1
+  fi
+  if ! normalize_setup_profiles "$SETUP_PROFILES" >/dev/null; then
+    return 1
+  fi
+  SETUP_PROFILE="$(primary_setup_profile)"
+  return 0
 }
 
 # Write current identity/profile/NVIDIA/machine prefs (full rewrite of known keys).
 # Values are shell-escaped so a sourced config cannot inject code via quotes/$().
+# SETUP_PROFILES is canonical (space-separated multi-select); SETUP_PROFILE is primary (compat).
 write_bootstrap_config() {
-  local dir f
+  local dir f primary
   dir="$(bootstrap_config_dir)"
   f="$(bootstrap_config_file)"
+  migrate_setup_profiles_from_legacy
+  if [[ -z "${SETUP_PROFILES:-}" ]]; then
+    SETUP_PROFILES="work"
+  fi
+  primary="$(primary_setup_profile)"
+  SETUP_PROFILE="$primary"
   mkdir -p "$dir"
   {
     echo "# Configuration file for dotfiles bootstrap script"
     printf 'FULL_NAME=%q\n' "${FULL_NAME:-}"
     printf 'EMAIL_ADDRESS=%q\n' "${EMAIL_ADDRESS:-}"
-    printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE:-work}"
+    printf 'SETUP_PROFILES=%q\n' "${SETUP_PROFILES}"
+    printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE}"
     printf 'INSTALL_NVIDIA=%q\n' "${INSTALL_NVIDIA:-false}"
     printf 'MACHINE_TYPE=%q\n' "${MACHINE_TYPE:-}"
   } >"$f"
   chmod 600 "$f" 2>/dev/null || true
 }
 
-# Normalize profile input to work|personal (stdout). Maps productivity → work. Returns 1 if invalid.
+# Normalize a single profile token to work|personal|devcontainer (stdout).
+# Maps productivity → work. Returns 1 if invalid.
+# Prefer normalize_setup_profiles for multi-select CLI args.
 normalize_setup_profile() {
-  case "$1" in
-    1|work|Work|WORK|productivity|Productivity) echo "work" ;;
-    2|personal|Personal|PERSONAL) echo "personal" ;;
+  case "${1,,}" in
+    1|work|productivity) echo "work" ;;
+    2|personal) echo "personal" ;;
+    3|devcontainer|dev-container|dev_container) echo "devcontainer" ;;
     *) return 1 ;;
   esac
+}
+
+# Normalize one or more profiles to a unique space-separated list in KNOWN_SETUP_PROFILES
+# order (stdout). Accepts comma/space/plus-separated names or numbers (1 3, work,devcontainer).
+# Returns 1 if empty or any token is invalid.
+normalize_setup_profiles() {
+  local raw="${1:-}"
+  local -A selected=()
+  local token normalized p out=""
+  raw="${raw//+/ }"
+  raw="${raw//,/ }"
+  # shellcheck disable=SC2086
+  for token in $raw; do
+    [[ -z "$token" ]] && continue
+    if ! normalized="$(normalize_setup_profile "$token")"; then
+      return 1
+    fi
+    selected["$normalized"]=1
+  done
+  if [[ ${#selected[@]} -eq 0 ]]; then
+    return 1
+  fi
+  for p in "${KNOWN_SETUP_PROFILES[@]}"; do
+    if [[ -n "${selected[$p]:-}" ]]; then
+      out+="${out:+ }$p"
+    fi
+  done
+  echo "$out"
+}
+
+# Print multi-select profile menu lines (for bootstrap/sync prompts).
+print_setup_profile_menu() {
+  echo "  1) work         — Zoom + Slack + Chrome"
+  echo "  2) personal     — Steam + Discord + Firefox + Mullvad"
+  echo "  3) devcontainer — host tools for platform devcontainer (just, mkcert, DNS, …)"
+  echo "Select one or more (comma/space-separated numbers or names)."
+  echo "Examples: 1,3   or   work,devcontainer   or   1 2 3"
 }
 
 # Normalize machine type input to laptop|desktop (stdout). Returns 1 if invalid.

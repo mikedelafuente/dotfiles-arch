@@ -165,37 +165,32 @@ gsettings set org.gnome.desktop.interface show-battery-percentage true
 # Touchpad: never use tap-to-click (physical click only)
 gsettings set org.gnome.desktop.peripherals.touchpad tap-to-click false
 
-# Default browser + Super+B launcher (work=Chrome, personal=Firefox)
-BOOTSTRAP_CONFIG_FILE="$USER_HOME_DIR/.config/dotfiles-arch/.dotfiles_bootstrap_config"
-SETUP_PROFILE=""
-if [ -r "$BOOTSTRAP_CONFIG_FILE" ]; then
-  # shellcheck source=/dev/null
-  source "$BOOTSTRAP_CONFIG_FILE"
+# Default browser + Super+B launcher
+# Prefer Chrome when the work profile is selected (even alongside personal/devcontainer).
+if ! load_bootstrap_config; then
+  SETUP_PROFILES="${SETUP_PROFILES:-}"
+  SETUP_PROFILE="${SETUP_PROFILE:-}"
 fi
 
 DEFAULT_BROWSER_DESKTOP="firefox.desktop"
 BROWSER_COMMAND="firefox"
-case "${SETUP_PROFILE:-}" in
-  work)
+if has_setup_profile work || [[ "${SETUP_PROFILE:-}" == "work" ]]; then
+  DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
+  if command -v google-chrome-stable &>/dev/null; then
+    BROWSER_COMMAND="google-chrome-stable"
+  else
+    BROWSER_COMMAND="google-chrome"
+  fi
+elif has_setup_profile personal || [[ "${SETUP_PROFILE:-}" == "personal" ]]; then
+  DEFAULT_BROWSER_DESKTOP="firefox.desktop"
+  BROWSER_COMMAND="firefox"
+else
+  # Fallback when no browser profile: prefer whatever is installed
+  if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
     DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
-    if command -v google-chrome-stable &>/dev/null; then
-      BROWSER_COMMAND="google-chrome-stable"
-    else
-      BROWSER_COMMAND="google-chrome"
-    fi
-    ;;
-  personal)
-    DEFAULT_BROWSER_DESKTOP="firefox.desktop"
-    BROWSER_COMMAND="firefox"
-    ;;
-  *)
-    # Fallback when profile is unknown: prefer whatever is installed
-    if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
-      DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
-      BROWSER_COMMAND="$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome)"
-    fi
-    ;;
-esac
+    BROWSER_COMMAND="$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome)"
+  fi
+fi
 
 print_info_message "Setting default browser to $DEFAULT_BROWSER_DESKTOP ($BROWSER_COMMAND)"
 xdg-settings set default-web-browser "$DEFAULT_BROWSER_DESKTOP" 2>/dev/null \

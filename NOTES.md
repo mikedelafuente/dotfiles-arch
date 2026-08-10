@@ -106,12 +106,20 @@ GNOME + GDM are installed by archinstall. For multilib, optional NVIDIA, Kitty, 
 ./post_install.sh
 ```
 
-Then run bootstrap for the rest of the tooling. You will be prompted for a profile:
+Then run bootstrap for the rest of the tooling. You will be prompted for profiles
+(multi-select; any combination):
 
 - **work** — shared stack + Zoom + Slack + Chrome
 - **personal** — shared stack + Steam + Discord + Firefox + Mullvad
+- **devcontainer** — host tools for the platform sandbox (just, mkcert, `~test` DNS, …)
 
-Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, Obsidian, etc.) is shared. Mullvad is personal-only; browsers are profile-specific (Chrome / Firefox).
+Example for a work laptop that also runs the platform sandbox:
+
+```shell
+bash scripts/bootstrap.sh --profile work,devcontainer
+```
+
+Everything else (Kitty, Cursor, Claude, Herdr, languages, containers, Spotify, Obsidian, etc.) is shared. Mullvad is personal-only; Super+B prefers Chrome when **work** is selected.
 
 ```shell
 bash scripts/bootstrap.sh
@@ -144,7 +152,7 @@ bash scripts/sync.sh
 
 That will:
 
-1. Resolve profile + NVIDIA (keeps saved values silently; use `--prompt` to re-ask)
+1. Resolve profiles + NVIDIA (keeps saved values silently; use `--prompt` to re-ask)
 2. `git pull --ff-only` (if this is a git clone)
 3. Guarded system upgrade (`pacman` + AUR IoC scan + `yay`) **every run**
 4. Re-run the setup scripts (idempotent installs for Kitty, Herdr, Cursor, Claude, …)
@@ -155,14 +163,15 @@ Useful flags:
 
 ```shell
 bash scripts/sync.sh --profile work
+bash scripts/sync.sh --profile work,devcontainer
 bash scripts/sync.sh --profile personal
-bash scripts/sync.sh --prompt            # re-ask profile / NVIDIA
+bash scripts/sync.sh --prompt            # re-ask profiles / NVIDIA
 bash scripts/sync.sh --cleanup           # remove obsolete packages
 bash scripts/sync.sh --skip-bootstrap    # skip setup-*.sh (still upgrades + links)
-bash scripts/sync.sh --yes --profile work --cleanup
+bash scripts/sync.sh --yes --profile work,devcontainer --cleanup
 ```
 
-If no profile is saved yet, sync prompts you to choose **work** or **personal** (with `--yes`, you must pass `--profile`).
+If no profiles are saved yet, sync prompts you to choose one or more of **work**, **personal**, **devcontainer** (with `--yes`, you must pass `--profile`).
 
 Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`. For day-to-day package-only updates, prefer `update-system`.
 

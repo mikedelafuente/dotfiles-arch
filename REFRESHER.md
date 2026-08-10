@@ -144,7 +144,7 @@ bash scripts/sync.sh
 Or let sync pull for you:
 
 ```bash
-bash scripts/sync.sh --profile work      # or personal
+bash scripts/sync.sh --profile work,devcontainer   # or personal / work only
 bash scripts/sync.sh --cleanup           # drop old tmux/hypr/ghostty junk
 ```
 

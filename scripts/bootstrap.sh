@@ -3,8 +3,8 @@
 # Bootstrap Script for Arch
 # ----------------
 # Flags:
-#   --yes, -y                 Non-interactive: use saved config / defaults
-#   --profile work|personal   Set profile (default: saved or work)
+#   --yes, -y                              Non-interactive: use saved config / defaults
+#   --profile work|personal|devcontainer   One or more profiles (comma/space; default: saved or work)
 # ----------------
 
 set -euo pipefail
@@ -28,13 +28,13 @@ while [ $# -gt 0 ]; do
       ASSUME_YES=true
       shift
       ;;
-    --profile=*)
+    --profile=*|--profiles=*)
       FORCE_PROFILE="${1#*=}"
       shift
       ;;
-    --profile)
+    --profile|--profiles)
       if [ -z "${2:-}" ]; then
-        print_error_message "--profile requires an argument (work|personal)"
+        print_error_message "--profile requires an argument (e.g. work,devcontainer)"
         exit 1
       fi
       FORCE_PROFILE="$2"
@@ -48,7 +48,8 @@ Full new-machine bootstrap for dotfiles-arch.
 Do not run with sudo.
 
   --yes, -y                 Non-interactive (saved config / hardware defaults)
-  --profile work|personal   Set profile (default: saved or work)
+  --profile LIST            One or more profiles: work, personal, devcontainer
+                            (comma/space-separated; default: saved or work)
 EOF
       exit 0
       ;;
@@ -74,16 +75,21 @@ fi
 
 FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
-SETUP_PROFILE="${SETUP_PROFILE:-work}"
+SETUP_PROFILES="${SETUP_PROFILES:-work}"
+migrate_setup_profiles_from_legacy
+if [[ -z "${SETUP_PROFILES:-}" ]]; then
+  SETUP_PROFILES="work"
+fi
 
 if [ -n "$FORCE_PROFILE" ]; then
-  if ! SETUP_PROFILE="$(normalize_setup_profile "$FORCE_PROFILE")"; then
-    print_error_message "Invalid --profile '$FORCE_PROFILE' (use work or personal)"
+  if ! SETUP_PROFILES="$(normalize_setup_profiles "$FORCE_PROFILE")"; then
+    print_error_message "Invalid --profile '$FORCE_PROFILE' (use work, personal, and/or devcontainer)"
     exit 1
   fi
-elif ! SETUP_PROFILE="$(normalize_setup_profile "$SETUP_PROFILE")"; then
-  SETUP_PROFILE="work"
+elif ! SETUP_PROFILES="$(normalize_setup_profiles "$SETUP_PROFILES")"; then
+  SETUP_PROFILES="work"
 fi
+SETUP_PROFILE="$(primary_setup_profile)"
 
 if [ "$ASSUME_YES" = true ]; then
   if [ -z "$FULL_NAME" ] || [ -z "$EMAIL_ADDRESS" ]; then
@@ -120,20 +126,20 @@ else
   fi
 
   echo ""
-  print_info_message "Select setup profile (current: $(fmt_choice "$SETUP_PROFILE")):"
-  echo "  1) work      — shared tooling + Zoom + Slack + Chrome"
-  echo "  2) personal — shared tooling + Steam + Discord + Firefox + Mullvad"
-  read -rp "Profile [1=work, 2=personal] (Enter keeps '$(fmt_choice "$SETUP_PROFILE")'): " PROFILE_INPUT
+  print_info_message "Select setup profiles (current: $(fmt_choice "$(format_setup_profiles)"))."
+  print_setup_profile_menu
+  read -rp "Profiles (Enter keeps '$(fmt_choice "$(format_setup_profiles)")'): " PROFILE_INPUT
   if [ -n "${PROFILE_INPUT:-}" ]; then
-    if ! SETUP_PROFILE="$(normalize_setup_profile "$PROFILE_INPUT")"; then
-      print_error_message "Unknown choice '$PROFILE_INPUT'. Use 1/work or 2/personal."
+    if ! SETUP_PROFILES="$(normalize_setup_profiles "$PROFILE_INPUT")"; then
+      print_error_message "Unknown choice '$PROFILE_INPUT'. Use numbers/names as shown above."
       exit 1
     fi
   fi
+  SETUP_PROFILE="$(primary_setup_profile)"
 fi
 
 if ! validate_bootstrap_profile; then
-  print_error_message "Profile must be 'work' or 'personal' (got: ${SETUP_PROFILE:-})"
+  print_error_message "Profiles must be a non-empty subset of work|personal|devcontainer (got: ${SETUP_PROFILES:-})"
   exit 1
 fi
 
@@ -145,7 +151,7 @@ if [ "$ASSUME_YES" = false ]; then
   echo "Please confirm the following information:"
   echo "Full Name: $(fmt_choice "$FULL_NAME")"
   echo "Email Address: $(fmt_choice "$EMAIL_ADDRESS")"
-  echo "Setup Profile: $(fmt_choice "$SETUP_PROFILE")"
+  echo "Setup Profiles: $(fmt_choice "$(format_setup_profiles)")"
   echo "Install NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
   echo "Machine Type: $(fmt_choice "$MACHINE_TYPE")"
   read -rp "Is this information correct? [y/n] (Enter = $(fmt_choice "no")): " CONFIRMATION
@@ -160,7 +166,7 @@ write_bootstrap_config
 print_line_break "Starting bootstrap"
 print_info_message "Display server: ${XDG_SESSION_TYPE:-unknown}"
 print_info_message "User: $(whoami)  Home: $USER_HOME_DIR"
-print_info_message "Profile: $SETUP_PROFILE  INSTALL_NVIDIA: $INSTALL_NVIDIA  MACHINE_TYPE: $MACHINE_TYPE"
+print_info_message "Profiles: $(format_setup_profiles)  INSTALL_NVIDIA: $INSTALL_NVIDIA  MACHINE_TYPE: $MACHINE_TYPE"
 
 sudo -v
 {
@@ -209,9 +215,9 @@ fi
 # Run Individual Setup Scripts
 # --------------------------
 
-print_info_message "Running bootstrap with profile: $SETUP_PROFILE"
+print_info_message "Running bootstrap with profiles: $(format_setup_profiles)"
 
-export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
+export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
 export SETUP_CONTINUE_ON_ERROR=true
 export DOTFILES_AUR_ASSUME_YES=true
 set +e
@@ -222,7 +228,7 @@ if [ "$SETUP_RC" -ne 0 ]; then
   print_warning_message "Some setup scripts failed (see above). Continuing with link/cleanup."
 fi
 
-bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$SETUP_PROFILE"
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)"
 bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 
 print_line_break "Cleaning up"

@@ -5,7 +5,8 @@
 # Used by bootstrap.sh and sync.sh so the script list cannot drift.
 #
 # Required env:
-#   SETUP_PROFILE   work|personal
+#   SETUP_PROFILES   space-separated multi-select: work personal devcontainer
+#                    (legacy SETUP_PROFILE=work|personal still accepted via migrate)
 # Optional env:
 #   FULL_NAME / EMAIL_ADDRESS   (skips setup-git.sh if either missing)
 #   MACHINE_TYPE                laptop|desktop — power policy in setup-gnome.sh
@@ -25,12 +26,13 @@ fi
 
 SETUP_CONTINUE_ON_ERROR="${SETUP_CONTINUE_ON_ERROR:-true}"
 
+migrate_setup_profiles_from_legacy
 if ! validate_bootstrap_profile; then
-  print_error_message "SETUP_PROFILE must be 'work' or 'personal' (got: ${SETUP_PROFILE:-unset})"
+  print_error_message "SETUP_PROFILES must include work, personal, and/or devcontainer (got: ${SETUP_PROFILES:-unset})"
   exit 1
 fi
 
-print_line_break "Profile setup: $SETUP_PROFILE"
+print_line_break "Profile setup: $(format_setup_profiles)"
 
 SETUP_FAILURES=()
 
@@ -90,17 +92,25 @@ run_setup setup-moonlander.sh
 run_setup setup-spotify.sh
 run_setup setup-obsidian.sh
 
-if [[ "$SETUP_PROFILE" == "work" ]]; then
+# Additive profile extras (multi-select — all selected profiles are installed)
+if has_setup_profile work; then
   print_line_break "Work profile — Zoom + Slack + Chrome"
   run_setup setup-zoom.sh
   run_setup setup-slack.sh
   run_setup setup-chrome.sh
-else
+fi
+
+if has_setup_profile personal; then
   print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad"
   run_setup setup-steam.sh
   run_setup setup-discord.sh
   run_setup setup-firefox.sh
   run_setup setup-mullvad.sh
+fi
+
+if has_setup_profile devcontainer; then
+  print_line_break "Devcontainer profile — host prerequisites for platform sandbox"
+  run_setup setup-devcontainer.sh
 fi
 
 if pacman -Q gnome-shell &>/dev/null; then

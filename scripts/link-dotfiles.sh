@@ -16,13 +16,19 @@ else
   exit 1
 fi
 
-if ! PROFILE_NAME="$(normalize_setup_profile "$PROFILE_ARG")"; then
-  print_warning_message "Invalid profile arg '$PROFILE_ARG' — linking is profile-agnostic; continuing as work"
+# Linking is profile-agnostic; accept single or multi (comma/space) for log only.
+PROFILE_NAME="$PROFILE_ARG"
+if NORMALIZED="$(normalize_setup_profiles "$PROFILE_ARG" 2>/dev/null)"; then
+  PROFILE_NAME="$(format_setup_profiles "$NORMALIZED")"
+elif NORMALIZED="$(normalize_setup_profile "$PROFILE_ARG" 2>/dev/null)"; then
+  PROFILE_NAME="$NORMALIZED"
+else
+  print_warning_message "Invalid profile arg '$PROFILE_ARG' — linking is profile-agnostic; continuing"
   PROFILE_NAME="work"
 fi
 
 print_tool_setup_start "Linking dotfiles"
-print_info_message "Linking dotfiles for profile: $PROFILE_NAME"
+print_info_message "Linking dotfiles for profiles: $PROFILE_NAME"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOTFILES_HOME_DIR="$REPO_ROOT/home"

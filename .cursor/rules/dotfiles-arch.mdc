@@ -6,7 +6,7 @@ alwaysApply: true
 # dotfiles-arch
 
 Arch Linux workstation automation: GNOME (Wayland), Kitty, Herdr, Neovim, Cursor,
-Claude Code. `work` and `personal` profiles differ only in extra apps.
+Claude Code. Profiles are **additive multi-select** (`work`, `personal`, `devcontainer`).
 
 ## Orchestration
 
@@ -20,7 +20,10 @@ Claude Code. `work` and `personal` profiles differ only in extra apps.
 - Use `USER_HOME_DIR` (from `dotheader.sh`), never a hardcoded `/home/<user>`.
 - Read and write saved settings only through `load_bootstrap_config` /
   `write_bootstrap_config` — never hand-edit `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`.
-- Keys: `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`, `MACHINE_TYPE`.
+- Keys: `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
+  `SETUP_PROFILE` (primary, for older readers / Super+B preference), `INSTALL_NVIDIA`,
+  `MACHINE_TYPE`.
+- Profile helpers: `has_setup_profile`, `normalize_setup_profiles`, `primary_setup_profile`.
 - `MACHINE_TYPE` is `laptop|desktop` and drives power policy in `setup-gnome.sh`
   (`power-profiles-daemon`, the logind lid drop-in, audio powersave). Fall back to
   `machine_is_laptop` / `has_battery` when it is unset.

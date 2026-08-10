@@ -12,8 +12,8 @@
 # Always runs a guarded pacman + yay upgrade (same path as update-system.sh).
 #
 # Flags:
-#   --profile work|personal   Set/force profile (prompted if unset)
-#   --prompt                  Re-ask profile / NVIDIA / machine type even when saved
+#   --profile LIST            One or more profiles: work, personal, devcontainer
+#   --prompt                  Re-ask profiles / NVIDIA / machine type even when saved
 #   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
 #   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
 #   --yes                     Non-interactive; requires --profile if none saved
@@ -46,26 +46,27 @@ Bring this machine in line with the current dotfiles-arch repo.
 Always runs a guarded system upgrade (pacman + yay with AUR IoC scan).
 
 Options:
-  --profile work|personal   Set profile (required with --yes if none is saved)
-  --prompt                  Re-ask profile / NVIDIA / machine type even when saved
+  --profile LIST            One or more profiles (comma/space): work, personal, devcontainer
+                            Required with --yes if none is saved. Example: work,devcontainer
+  --prompt                  Re-ask profiles / NVIDIA / machine type even when saved
   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
   --yes, -y                 Non-interactive where safe (also AUR --noconfirm after scan)
   -h, --help                Show this help
 
-Saved profile/NVIDIA/machine type are kept silently unless unset, --profile, or --prompt.
+Saved profiles/NVIDIA/machine type are kept silently unless unset, --profile, or --prompt.
 EOF
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --profile=*)
+    --profile=*|--profiles=*)
       FORCE_PROFILE="${1#*=}"
       shift
       ;;
-    --profile)
+    --profile|--profiles)
       if [ -z "${2:-}" ]; then
-        print_error_message "--profile requires an argument (work|personal)"
+        print_error_message "--profile requires an argument (e.g. work,devcontainer)"
         exit 1
       fi
       FORCE_PROFILE="$2"
@@ -100,70 +101,68 @@ while [ $# -gt 0 ]; do
 done
 
 # --------------------------
-# Resolve profile
+# Resolve profiles (multi-select)
 # --------------------------
 
 mkdir -p "$(bootstrap_config_dir)"
 
-SAVED_PROFILE=""
+SAVED_PROFILES=""
 SAVED_NVIDIA=""
 SAVED_MACHINE_TYPE=""
 if load_bootstrap_config; then
-  SAVED_PROFILE="${SETUP_PROFILE:-}"
+  SAVED_PROFILES="${SETUP_PROFILES:-}"
   SAVED_NVIDIA="${INSTALL_NVIDIA:-}"
   SAVED_MACHINE_TYPE="${MACHINE_TYPE:-}"
 fi
 
-SETUP_PROFILE=""
+SETUP_PROFILES=""
 
 if [ -n "$FORCE_PROFILE" ]; then
-  if ! SETUP_PROFILE="$(normalize_setup_profile "$FORCE_PROFILE")"; then
-    print_error_message "Invalid --profile '$FORCE_PROFILE' (use work or personal)"
+  if ! SETUP_PROFILES="$(normalize_setup_profiles "$FORCE_PROFILE")"; then
+    print_error_message "Invalid --profile '$FORCE_PROFILE' (use work, personal, and/or devcontainer)"
     exit 1
   fi
-elif [ -n "$SAVED_PROFILE" ]; then
-  if ! SETUP_PROFILE="$(normalize_setup_profile "$SAVED_PROFILE")"; then
-    print_warning_message "Saved profile '$SAVED_PROFILE' is invalid; you'll need to choose again"
-    SETUP_PROFILE=""
+elif [ -n "$SAVED_PROFILES" ]; then
+  if ! SETUP_PROFILES="$(normalize_setup_profiles "$SAVED_PROFILES")"; then
+    print_warning_message "Saved profiles '$SAVED_PROFILES' are invalid; you'll need to choose again"
+    SETUP_PROFILES=""
   fi
 fi
 
-if [ -z "$SETUP_PROFILE" ]; then
+if [ -z "$SETUP_PROFILES" ]; then
   if [ "$ASSUME_YES" = true ]; then
-    print_error_message "No profile is set. Pass --profile work|personal (required with --yes)."
+    print_error_message "No profiles set. Pass --profile work,devcontainer (required with --yes)."
     exit 1
   fi
 
   echo ""
-  print_info_message "No setup profile is configured for this machine yet."
-  echo "Select which profile to use:"
-  echo "  1) work      — shared stack + Zoom + Slack + Chrome"
-  echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
+  print_info_message "No setup profiles are configured for this machine yet."
+  print_setup_profile_menu
   while true; do
-    read -rp "Profile [1=work, 2=personal]: " PROFILE_INPUT
-    if SETUP_PROFILE="$(normalize_setup_profile "${PROFILE_INPUT:-}")"; then
+    read -rp "Profiles: " PROFILE_INPUT
+    if SETUP_PROFILES="$(normalize_setup_profiles "${PROFILE_INPUT:-}")"; then
       break
     fi
-    print_warning_message "Please choose 1/work or 2/personal"
+    print_warning_message "Please choose valid numbers/names (e.g. 1,3 or work,devcontainer)"
   done
 elif [ "$ASSUME_YES" = false ] && [ "$FORCE_PROMPT" = true ]; then
   echo ""
-  print_info_message "Current saved profile: $(fmt_choice "$SETUP_PROFILE")"
-  echo "  1) work      — shared stack + Zoom + Slack + Chrome"
-  echo "  2) personal — shared stack + Steam + Discord + Firefox + Mullvad"
-  read -rp "Profile [1=work, 2=personal] (Enter keeps '$(fmt_choice "$SETUP_PROFILE")'): " PROFILE_INPUT
+  print_info_message "Current saved profiles: $(fmt_choice "$(format_setup_profiles "$SETUP_PROFILES")")"
+  print_setup_profile_menu
+  read -rp "Profiles (Enter keeps '$(fmt_choice "$(format_setup_profiles "$SETUP_PROFILES")")'): " PROFILE_INPUT
   if [ -n "${PROFILE_INPUT:-}" ]; then
-    if ! SETUP_PROFILE="$(normalize_setup_profile "$PROFILE_INPUT")"; then
+    if ! SETUP_PROFILES="$(normalize_setup_profiles "$PROFILE_INPUT")"; then
       print_error_message "Unknown choice '$PROFILE_INPUT'"
       exit 1
     fi
   fi
 else
-  print_info_message "Using profile: $(fmt_choice "$SETUP_PROFILE")"
+  print_info_message "Using profiles: $(fmt_choice "$(format_setup_profiles "$SETUP_PROFILES")")"
 fi
 
+SETUP_PROFILE="$(primary_setup_profile)"
 if ! validate_bootstrap_profile; then
-  print_error_message "Profile must be 'work' or 'personal' (got: ${SETUP_PROFILE:-})"
+  print_error_message "Profiles must be a non-empty subset of work|personal|devcontainer (got: ${SETUP_PROFILES:-})"
   exit 1
 fi
 
@@ -185,7 +184,7 @@ FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
 write_bootstrap_config
 
-print_line_break "Syncing machine to dotfiles-arch ($SETUP_PROFILE)"
+print_line_break "Syncing machine to dotfiles-arch ($(format_setup_profiles))"
 print_info_message "Repo: $REPO_ROOT"
 
 # --------------------------
@@ -242,7 +241,7 @@ fi
 if [ "$SKIP_BOOTSTRAP" = false ]; then
   print_line_break "Running setup scripts (safe to re-run)"
 
-  export SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
+  export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
   export SETUP_CONTINUE_ON_ERROR=true
   if [ "$ASSUME_YES" = true ]; then
     export DOTFILES_AUR_ASSUME_YES=true
@@ -265,7 +264,7 @@ fi
 # --------------------------
 
 print_line_break "Linking dotfiles"
-bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$SETUP_PROFILE"
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)"
 bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 
 # --------------------------
@@ -388,7 +387,7 @@ else
 fi
 
 print_line_break "Sync complete"
-print_success_message "Profile: $SETUP_PROFILE"
+print_success_message "Profiles: $(format_setup_profiles)"
 print_info_message "Commands on PATH (via ~/.local/bin): sync-dotfiles, update-system"
 print_info_message "Restart the terminal (or log out/in) so PATH, Kitty defaults, and shell aliases refresh."
 print_info_message "If GNOME shortcuts/tray/fonts look wrong: log out and back in so extensions reload."

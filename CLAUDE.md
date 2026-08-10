@@ -56,16 +56,16 @@ cd /path/to/dotfiles-arch
 bash scripts/bootstrap.sh
 ```
 
-Prompts for name, email, **work|personal** profile, **INSTALL_NVIDIA**, and **MACHINE_TYPE** (laptop|desktop; default from `has_battery`), or `--yes` for non-interactive. Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
+Prompts for name, email, **multi-select profiles** (`work`, `personal`, `devcontainer`), **INSTALL_NVIDIA**, and **MACHINE_TYPE** (laptop|desktop; default from `has_battery`), or `--yes` for non-interactive. Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
 
 ### Sync (existing / drifted machine)
 
 ```bash
 bash scripts/sync.sh
-# bash scripts/sync.sh --profile work|personal --yes
+# bash scripts/sync.sh --profile work,devcontainer --yes
 ```
 
-Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan of packages + AUR deps), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup. Saved profile/NVIDIA/machine type are kept silently; pass `--prompt` to re-ask. AUR `--noconfirm` only with `--yes`.
+Always runs a guarded `pacman` + `yay` upgrade (with AUR IoC scan of packages + AUR deps), then setup scripts (unless `--skip-bootstrap`), link, and optional cleanup. Saved profiles/NVIDIA/machine type are kept silently; pass `--prompt` to re-ask. AUR `--noconfirm` only with `--yes`.
 
 ### Individual setups
 
@@ -98,7 +98,7 @@ Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DI
 - Packages: `ensure_pacman_pkgs`, `ensure_yay_installed` (scanned before makepkg), `ensure_yay_pkgs`, `ensure_multilib_enabled`, `safe_system_upgrade`, `remove_orphaned_packages`
 - AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`
+- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`
 - Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 
@@ -117,16 +117,20 @@ Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config
 
 Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
 
-- `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILE`, `INSTALL_NVIDIA`, `MACHINE_TYPE`
+- `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
+  `SETUP_PROFILE` (primary for older readers), `INSTALL_NVIDIA`, `MACHINE_TYPE`
 
 `bootstrap.sh` / `sync.sh` export `MACHINE_TYPE` for the setup scripts; `setup-gnome.sh` also falls back to `load_bootstrap_config` + `has_battery`.
 
 ### Profiles
 
-| Profile   | Extra apps                          |
-|-----------|-------------------------------------|
-| work      | Zoom, Slack, Chrome                 |
-| personal  | Steam, Discord, Firefox, Mullvad    |
+Profiles are **additive** — select any combination (e.g. `work,devcontainer`).
+
+| Profile | Extra setup |
+|---------|-----------------------------------------------|
+| work | Zoom, Slack, Chrome |
+| personal | Steam, Discord, Firefox, Mullvad |
+| devcontainer | just, mkcert, bind/`dig`, Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
 
 Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc.
 
@@ -139,6 +143,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 - **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
 - **setup-cursor.sh**: IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`
+- **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh`/Cursor already shared)
 - **setup-essentials.sh**: `ESSENTIAL_PACKAGES` is the canonical CLI list — update `PACKAGES.md` in the same change
 - **`code`**: Creates a Herdr workspace and starts `nvim .` (`--force` skips the git-repo requirement)
 
