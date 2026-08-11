@@ -288,7 +288,7 @@ normalize_setup_profiles() {
 print_setup_profile_menu() {
   echo "  1) work         — Zoom + Slack + Chrome"
   echo "  2) personal     — Steam + Discord + Firefox + Mullvad"
-  echo "  3) devcontainer — host tools for platform devcontainer (just, mkcert, DNS, …)"
+  echo "  3) devcontainer — host tools for platform sandbox (just, mkcert, openvpn3, DNS, …)"
   echo "Select one or more (comma/space-separated numbers or names)."
   echo "Examples: 1,3   or   work,devcontainer   or   1 2 3"
 }

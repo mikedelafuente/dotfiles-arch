@@ -25,3 +25,6 @@
     helper = !/usr/bin/gh auth git-credential
 [credential "https://gist.github.com"]
     helper = !/usr/bin/gh auth git-credential
+[user]
+	name = Mike de la Fuente
+	email = mdelafuente@revolutionparts.com

@@ -150,6 +150,7 @@ the rest of the host checklist (tools, DNS, watches, CA trust).
 | `mkcert` | Local TLS CA + certs for project `*.test` domains | `mkcert -install` |
 | `nss` | Firefox/trust-store support used by mkcert | — |
 | `bind` | `dig` for DNS smoke checks to port 5354 | `dig @127.0.0.1 -p 5354 …` |
+| `openvpn3` (AUR) | OpenVPN 3 Linux client (CloudConnexa / work VPN). Official docs only cover apt/dnf; AUR ships the same `openvpn3-linux` project. | `openvpn3 config-import`, `session-start`, `sessions-list`, `session-manage` |
 | Cursor extension `ms-vscode-remote.remote-containers` | “Reopen in Container” | — |
 | `/etc/systemd/resolved.conf.d/dotfiles-arch-test.conf` | Route `Domains=~test` to `127.0.0.1:5354` | restart `systemd-resolved` |
 | `/etc/sysctl.d/99-dotfiles-arch-inotify.conf` | Raise `fs.inotify.max_user_watches` to 524288 | — |

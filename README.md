@@ -122,7 +122,7 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 |---------|-------------|---------------------------|
 | **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
 | **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
-| **devcontainer** | just, mkcert, DNS for `~test`, inotify watches, Dev Containers extension | — (no browser change) |
+| **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches, Dev Containers extension | — (no browser change) |
 
 Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup).
 

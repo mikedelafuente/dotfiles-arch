@@ -130,7 +130,7 @@ Profiles are **additive** — select any combination (e.g. `work,devcontainer`).
 |---------|-----------------------------------------------|
 | work | Zoom, Slack, Chrome |
 | personal | Steam, Discord, Firefox, Mullvad |
-| devcontainer | just, mkcert, bind/`dig`, Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
+| devcontainer | just, mkcert, bind/`dig`, OpenVPN 3 (`openvpn3` AUR), Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
 
 Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc.
 

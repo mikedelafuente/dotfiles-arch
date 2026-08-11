@@ -111,7 +111,7 @@ Then run bootstrap for the rest of the tooling. You will be prompted for profile
 
 - **work** — shared stack + Zoom + Slack + Chrome
 - **personal** — shared stack + Steam + Discord + Firefox + Mullvad
-- **devcontainer** — host tools for the platform sandbox (just, mkcert, `~test` DNS, …)
+- **devcontainer** — host tools for the platform sandbox (just, mkcert, openvpn3, `~test` DNS, …)
 
 Example for a work laptop that also runs the platform sandbox:
 

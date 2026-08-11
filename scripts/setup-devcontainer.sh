@@ -5,6 +5,7 @@
 # Installs CLI tools + OS config for devcontainer host setup:
 #   - just, mkcert (+ nss for Firefox trust store)
 #   - dig (bind) for DNS smoke checks
+#   - OpenVPN 3 Linux client (AUR openvpn3 — CloudConnexa / work VPN)
 #   - Cursor Dev Containers extension
 #   - systemd-resolved: route ~test to 127.0.0.1:5354
 #   - fs.inotify max_user_watches (large monorepo watchers)
@@ -51,6 +52,51 @@ if ! command -v gh &>/dev/null; then
   print_warning_message "GitHub CLI not found — installing via setup-github-cli.sh"
   bash "$DF_SCRIPT_DIR/setup-github-cli.sh" || print_error_message "setup-github-cli.sh failed"
 fi
+
+# --------------------------
+# OpenVPN 3 Linux client (official CloudConnexa path — Arch via AUR)
+# --------------------------
+# Upstream prebuilt repos only cover Debian/Ubuntu/Fedora/RHEL. On Arch we
+# install the same openvpn3-linux project from the AUR (package: openvpn3).
+# Docs: OpenVPN CloudConnexa "Install and Control the OpenVPN 3 Client" tutorial.
+
+install_openvpn3_client() {
+  if command -v openvpn3 &>/dev/null && pacman -Q openvpn3 &>/dev/null; then
+    print_info_message "OpenVPN 3 client already installed: $(command -v openvpn3)"
+  else
+    print_action_message "Installing OpenVPN 3 Linux client from AUR (openvpn3)"
+    if ! ensure_yay_installed; then
+      print_error_message "yay is required to install openvpn3 from the AUR"
+      return 1
+    fi
+    if ! ensure_yay_pkgs openvpn3; then
+      print_error_message "Failed to install openvpn3 (AUR)"
+      return 1
+    fi
+  fi
+
+  # Package .install runs init-config, but re-run is safe and covers older partial installs
+  if command -v openvpn3-admin &>/dev/null; then
+    print_info_message "Ensuring OpenVPN 3 backend configs (openvpn3-admin init-config)"
+    sudo openvpn3-admin init-config --write-configs 2>/dev/null \
+      || print_warning_message "openvpn3-admin init-config failed — try: sudo openvpn3-admin init-config --write-configs"
+    sudo systemctl reload dbus 2>/dev/null \
+      || print_warning_message "Could not reload dbus after openvpn3 config"
+  fi
+
+  if command -v openvpn3 &>/dev/null; then
+    print_success_message "openvpn3 available: $(command -v openvpn3)"
+    print_info_message "Import CloudConnexa .ovpn (once), then connect:"
+    print_info_message "  openvpn3 config-import --config /path/to/profile.ovpn --name CloudConnexa --persistent"
+    print_info_message "  openvpn3 session-start --config CloudConnexa"
+    print_info_message "  openvpn3 sessions-list"
+    print_info_message "  openvpn3 session-manage --config CloudConnexa --disconnect"
+  else
+    print_warning_message "openvpn3 not on PATH after install — re-login or check: pacman -Ql openvpn3"
+  fi
+}
+
+install_openvpn3_client || print_warning_message "OpenVPN 3 setup had errors (devcontainer VPN may be unavailable)"
 
 # --------------------------
 # Cursor: Dev Containers extension
@@ -168,6 +214,7 @@ echo ""
 print_info_message "Host prereqs for the platform devcontainer:"
 print_info_message "  just=$(command -v just 2>/dev/null || echo missing)"
 print_info_message "  mkcert=$(command -v mkcert 2>/dev/null || echo missing)"
+print_info_message "  openvpn3=$(command -v openvpn3 2>/dev/null || echo missing)"
 print_info_message "  gh=$(command -v gh 2>/dev/null || echo missing)"
 print_info_message "  docker=$(command -v docker 2>/dev/null || echo missing)"
 print_info_message "  dig=$(command -v dig 2>/dev/null || echo missing)"
