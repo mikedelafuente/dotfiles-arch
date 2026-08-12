@@ -25,7 +25,8 @@ Claude Code. Profiles are **additive multi-select** (`work`, `personal`, `devcon
   `MACHINE_TYPE`.
 - Profile helpers: `has_setup_profile`, `normalize_setup_profiles`, `primary_setup_profile`.
 - `MACHINE_TYPE` is `laptop|desktop` and drives power policy in `setup-gnome.sh`
-  (`power-profiles-daemon`, the logind lid drop-in, audio powersave). Fall back to
+  (`power-profiles-daemon`, the logind lid drop-in — laptop: suspend on battery,
+  ignore lid on AC/docked — USB HID wake udev rules, audio powersave). Fall back to
   `machine_is_laptop` / `has_battery` when it is unset.
 
 ## Security

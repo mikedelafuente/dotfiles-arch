@@ -240,21 +240,41 @@ if command -v powerprofilesctl &>/dev/null; then
 fi
 
 # Lid handling lives in systemd-logind, not gsettings.
+# Laptop: suspend on battery lid-close; ignore on AC / when docked so a closed-lid
+# KVM desk setup stays awake. Desktop: always ignore.
 LOGIND_LID_DROPIN="/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf"
 if [ "$MACHINE_TYPE" = "laptop" ]; then
-    LID_ACTION="suspend"
+    LID_ON_BATTERY="suspend"
+    LID_ON_AC="ignore"
 else
-    LID_ACTION="ignore"
+    LID_ON_BATTERY="ignore"
+    LID_ON_AC="ignore"
 fi
 sudo mkdir -p /etc/systemd/logind.conf.d
 sudo tee "$LOGIND_LID_DROPIN" >/dev/null <<EOF
 # Managed by dotfiles-arch (setup-gnome.sh) — MACHINE_TYPE=$MACHINE_TYPE
 [Login]
-HandleLidSwitch=$LID_ACTION
-HandleLidSwitchExternalPower=$LID_ACTION
+HandleLidSwitch=$LID_ON_BATTERY
+HandleLidSwitchExternalPower=$LID_ON_AC
 HandleLidSwitchDocked=ignore
 EOF
-print_info_message "Lid switch: $LID_ACTION (takes effect after re-login or reboot)"
+print_info_message "Lid switch: battery=$LID_ON_BATTERY AC=$LID_ON_AC docked=ignore (re-login or reboot to apply)"
+
+# USB HID / hub wake — closed-lid KVM keyboards and mice can resume from suspend.
+# Always written (harmless on desktop); laptop is the primary use case.
+USB_WAKE_UDEV="/etc/udev/rules.d/90-dotfiles-arch-usb-wakeup.rules"
+sudo tee "$USB_WAKE_UDEV" >/dev/null <<'EOF'
+# Managed by dotfiles-arch (setup-gnome.sh)
+# Allow USB keyboards/mice (and hubs) to wake from suspend — closed-lid KVM use.
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{bInterfaceClass}=="03", ATTR{power/wakeup}="enabled"
+ACTION=="add|change", SUBSYSTEM=="usb", ATTR{bDeviceClass}=="09", ATTR{power/wakeup}="enabled"
+ACTION=="add|change", SUBSYSTEM=="usb", KERNEL=="usb[0-9]*", ATTR{power/wakeup}="enabled"
+EOF
+if sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=usb; then
+    print_info_message "USB wakeup udev rules installed ($USB_WAKE_UDEV)"
+else
+    print_warning_message "Wrote $USB_WAKE_UDEV but could not reload udev rules"
+fi
 
 print_info_message ""
 print_info_message "Sleep and screen blanking prevention configured!"

@@ -163,10 +163,14 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 |---|--------|---------|
 | `power-profiles-daemon` | `balanced` | `performance` |
 | Sleep on battery | 30 min | n/a |
-| Lid switch (`/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf`) | `suspend` | `ignore` |
+| Lid on battery (`HandleLidSwitch`) | `suspend` | `ignore` |
+| Lid on AC (`HandleLidSwitchExternalPower`) | `ignore` (closed-lid KVM/desk) | `ignore` |
+| Lid when docked | `ignore` | `ignore` |
+| USB HID/hub wake (`90-dotfiles-arch-usb-wakeup.rules`) | enabled | enabled |
 | Audio power saving | on (battery life) | off (prevents popping) |
 
-Lid changes take effect after a re-login or reboot.
+Lid drop-in: `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` (re-login or reboot to apply).
+On AC with the lid closed, the laptop stays awake; keyboard/mouse on a KVM can also wake from suspend.
 
 ### NVIDIA
 

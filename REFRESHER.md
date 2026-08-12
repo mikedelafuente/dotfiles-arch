@@ -162,8 +162,10 @@ bash scripts/sync.sh --cleanup           # drop old tmux/hypr/ghostty junk
 | **personal** | Steam, Discord, Firefox, Mullvad | Firefox |
 
 Saved in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`, along with
-`MACHINE_TYPE=laptop|desktop`, which drives the power profile, lid behavior, and
-audio power saving. Re-ask any saved answer with `bash scripts/sync.sh --prompt`.
+`MACHINE_TYPE=laptop|desktop`, which drives the power profile, lid behavior
+(laptop: suspend on battery lid-close, ignore on AC/docked; USB HID wake for
+KVM), and audio power saving. Re-ask any saved answer with
+`bash scripts/sync.sh --prompt`.
 
 ### …find a tool that should already be installed
 
