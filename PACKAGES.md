@@ -79,6 +79,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `gnome-characters` | Emoji / special character picker | Super+. |
 | `gpaste` | Clipboard history | Super+V, `gpaste-client` |
 | `gnome-shell-extension-appindicator` | Tray icons (Slack, Spotify, …) | — |
+| `gnome-shell-extension-dash-to-panel` | Always-visible full-width top app bar (small centered icons, every monitor) | — |
 | `gnome-shell-extension-pop-shell-git` (AUR) | Tiling window management | Super+Y, Super+G, Super+Escape |
 | `gnome-shell-extension-no-overview` (AUR) | Skip the overview at login | — |
 | `papirus-icon-theme` | Icon theme | — |

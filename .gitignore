@@ -1,5 +1,6 @@
 # Ignore local / generated noise
 .claude/
+.tmp/
 *.bak
 *.backup
 *~

@@ -7,6 +7,7 @@
 # - Dark theme preferences
 # - Catppuccin GTK theme (Mocha variant)
 # - Catppuccin icon theme (Papirus)
+# - Dash to Panel (always-visible top app bar)
 # - GNOME Tweaks and Extensions support
 # --------------------------
 
@@ -297,11 +298,15 @@ ensure_yay_pkgs gnome-shell-extension-no-overview
 
 # AppIndicators for tray icons (Slack, Discord, Spotify, etc.)
 print_info_message "Installing AppIndicator extension"
-sudo pacman -S --needed --noconfirm gnome-shell-extension-appindicator
+ensure_pacman_pkgs gnome-shell-extension-appindicator
+
+# Always-visible top taskbar on every monitor (replaces the stock top bar + dash)
+print_info_message "Installing Dash to Panel (always-on top app bar)"
+ensure_pacman_pkgs gnome-shell-extension-dash-to-panel
 
 # GPaste clipboard history (GNOME-native)
 print_info_message "Installing GPaste clipboard manager"
-sudo pacman -S --needed --noconfirm gpaste
+ensure_pacman_pkgs gpaste
 
 # Ensure extension UUIDs are present in org.gnome.shell enabled-extensions.
 # gnome-extensions enable alone often no-ops outside an interactive session.
@@ -327,15 +332,63 @@ else:
 PY
 }
 
-print_info_message "Enabling GNOME Shell extensions (Pop Shell, No Overview, AppIndicator, GPaste)"
+print_info_message "Enabling GNOME Shell extensions (Pop Shell, No Overview, AppIndicator, Dash to Panel, GPaste)"
 # Pop Shell AUR builds often lag GNOME major versions; allow loading anyway.
 gsettings set org.gnome.shell disable-extension-version-validation true 2>/dev/null || true
 ensure_gnome_extension_enabled "pop-shell@system76.com"
 ensure_gnome_extension_enabled "no-overview@fthx"
 ensure_gnome_extension_enabled "appindicatorsupport@rgcjonas.gmail.com"
+ensure_gnome_extension_enabled "dash-to-panel@jderose9.github.com"
 ensure_gnome_extension_enabled "GPaste@gnome-shell-extensions.gnome.org"
 print_info_message "enabled-extensions=$(gsettings get org.gnome.shell enabled-extensions)"
 print_warning_message "New system extensions need a log out/in before GNOME Shell discovers them."
+
+# --------------------------
+# Dash to Panel — full-width top bar, small centered icons, every monitor
+# --------------------------
+
+DTP_SCHEMA="org.gnome.shell.extensions.dash-to-panel"
+if gsettings list-schemas 2>/dev/null | grep -qx "$DTP_SCHEMA"; then
+    print_info_message "Configuring Dash to Panel (always-visible top bar)"
+
+    # Always show the panel; put it on every monitor.
+    gsettings set "$DTP_SCHEMA" intellihide false
+    gsettings set "$DTP_SCHEMA" multi-monitors true
+    gsettings set "$DTP_SCHEMA" show-favorites true
+    gsettings set "$DTP_SCHEMA" show-favorites-all-monitors true
+    gsettings set "$DTP_SCHEMA" show-running-apps true
+    gsettings set "$DTP_SCHEMA" stockgs-keep-dash false
+    gsettings set "$DTP_SCHEMA" stockgs-keep-top-panel false
+    gsettings set "$DTP_SCHEMA" panel-element-positions-monitors-sync true
+
+    # Full-width top panels; small height; centered along the edge.
+    # Per-monitor JSON uses index "0" (+ sync) so secondary displays inherit.
+    gsettings set "$DTP_SCHEMA" panel-position TOP
+    gsettings set "$DTP_SCHEMA" panel-size 32
+    gsettings set "$DTP_SCHEMA" panel-positions '{"0":"TOP"}'
+    gsettings set "$DTP_SCHEMA" panel-lengths '{"0":100}'
+    gsettings set "$DTP_SCHEMA" panel-anchors '{"0":"MIDDLE"}'
+    gsettings set "$DTP_SCHEMA" panel-sizes '{"0":32}'
+
+    # Taskbar icons centered; Activities hidden; clock/system tray on the right.
+    gsettings set "$DTP_SCHEMA" panel-element-positions \
+      '{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"centerMonitor"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
+
+    # Compact icons
+    gsettings set "$DTP_SCHEMA" appicon-margin 4
+    gsettings set "$DTP_SCHEMA" appicon-padding 2
+    gsettings set "$DTP_SCHEMA" tray-padding 2
+    gsettings set "$DTP_SCHEMA" status-icon-padding 2
+
+    # Do not steal Super+Q (close) or Super+1–9 (workspaces).
+    gsettings set "$DTP_SCHEMA" hot-keys false
+    gsettings set "$DTP_SCHEMA" shortcut "[]"
+    gsettings set "$DTP_SCHEMA" shortcut-text ''
+    gsettings set "$DTP_SCHEMA" intellihide-key-toggle "[]"
+    gsettings set "$DTP_SCHEMA" intellihide-key-toggle-text ''
+else
+    print_warning_message "Dash to Panel schema not found yet — log out/in after install, then re-run setup-gnome.sh"
+fi
 
 # Start GPaste daemon and tune history
 systemctl --user enable --now org.gnome.GPaste.service 2>/dev/null \
@@ -352,21 +405,23 @@ gsettings set org.gnome.GPaste show-history '' 2>/dev/null || true
 # Configure Pop Shell settings
 print_info_message "Configuring Pop Shell tiling behavior"
 
-# Enable tiling by default
-gsettings set org.gnome.shell.extensions.pop-shell tile-by-default true
+# Floating by default; Super+Y toggles auto-tiling for the workspace
+gsettings set org.gnome.shell.extensions.pop-shell tile-by-default false
 
 # Explicitly bind Super+Y (toggle auto-tiling for the workspace)
 gsettings set org.gnome.shell.extensions.pop-shell toggle-tiling "['<Super>y']"
 # Float / unfloat focused window
 gsettings set org.gnome.shell.extensions.pop-shell toggle-floating "['<Super>g']"
 
-# Configure gaps (optional - adjust to your preference)
-gsettings set org.gnome.shell.extensions.pop-shell gap-inner 4
-gsettings set org.gnome.shell.extensions.pop-shell gap-outer 4
+# No gaps / no rounded active-hint when tiling is enabled
+gsettings set org.gnome.shell.extensions.pop-shell gap-inner 0
+gsettings set org.gnome.shell.extensions.pop-shell gap-outer 0
+gsettings set org.gnome.shell.extensions.pop-shell smart-gaps false
 
-# Configure hints (turn off or on based on preference)
+# Active hint outline (no border radius)
 gsettings set org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
 gsettings set org.gnome.shell.extensions.pop-shell active-hint true
+gsettings set org.gnome.shell.extensions.pop-shell active-hint-border-radius 0
 
 # Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher).
 # Rebind tile adjustment mode to Super+Escape instead.
@@ -384,13 +439,17 @@ gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-down "[]"
 # Super+Ctrl+Up/Down: move window between monitors.
 # Monitors are usually arranged left/right, so Up/Down map to left/right hops
 # (geometric Up/Down only works when displays are stacked vertically).
+#
+# Bind ONLY Pop Shell here — also binding Mutter move-to-monitor-* to the same
+# chords double-fires (Pop Shell moves, then Mutter moves again) and the window
+# appears to snap back to the original monitor.
 print_info_message "Configuring Super+Ctrl+Up/Down to move windows between monitors"
 gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-left "['<Primary><Super>Up']"
 gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-right "['<Primary><Super>Down']"
 gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-up "[]"
 gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-down "[]"
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-left "['<Primary><Super>Up']"
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "['<Primary><Super>Down']"
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-left "[]"
+gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "[]"
 gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-up "[]"
 gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-down "[]"
 
@@ -567,12 +626,13 @@ print_info_message "  - Toggle maximize: Super+M"
 print_info_message "  - Minimize window: Super+Shift+N"
 print_info_message "  - Tile left/right (this monitor): Super+Ctrl+Left/Right"
 print_info_message "  - Move window to other monitor: Super+Ctrl+Up/Down"
-print_info_message "  - Pop Shell toggle auto-tiling: Super+Y"
+print_info_message "  - Pop Shell toggle auto-tiling (off by default): Super+Y"
 print_info_message "  - Pop Shell float focused window: Super+G"
 print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"
 print_info_message "  - Switch windows: Alt+Tab"
 print_info_message ""
 print_info_message "Application Launchers:"
+print_info_message "  - Top app bar (Dash to Panel): always visible, every monitor"
 print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
 print_info_message "  - Herdr session: Super+Shift+Return"
@@ -582,8 +642,8 @@ print_info_message "  - Clipboard history (GPaste): Super+V"
 print_info_message "  - Emoji picker: Super+."
 print_info_message "  - Screenshot UI: Super+Shift+S (or Print)"
 print_info_message ""
-print_warning_message "Log out and back in so GNOME reloads extensions (GPaste, AppIndicator, Pop Shell)."
-print_warning_message "Until then Super+V / Super+Y / tray icons may not work."
+print_warning_message "Log out and back in so GNOME reloads extensions (Dash to Panel, GPaste, AppIndicator, Pop Shell)."
+print_warning_message "Until then the top app bar / Super+V / Super+Y / tray icons may not work."
 
 # --------------------------
 # Installation Complete

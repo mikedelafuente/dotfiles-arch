@@ -23,7 +23,7 @@ refresh_font_cache
 if pacman -Q gnome-shell &>/dev/null; then
   print_warning_message "GNOME checklist (log out/in if anything below is missing):"
   print_info_message "  • Super+V  — clipboard history (GPaste)"
-  print_info_message "  • Super+Y  — Pop Shell auto-tiling toggle"
+  print_info_message "  • Super+Y  — Pop Shell auto-tiling toggle (off by default)"
   print_info_message "  • Super+Escape — Pop Shell adjustment mode"
   print_info_message "  • AppIndicator tray icons for Slack/Discord/Spotify"
   print_info_message "  • Adwaita Sans UI fonts (not Courier-like fallbacks)"

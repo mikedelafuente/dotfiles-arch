@@ -143,11 +143,12 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
 | **Apps** | TablePlus, Postman, Spotify, Obsidian, ZSA Keymapp (Moonlander) |
 | **Fonts** | Adwaita Sans/Mono (GNOME UI), Noto + Liberation fallbacks, Meslo / Ubuntu / Fira Code / JetBrains Mono / Hack Nerd Fonts |
-| **Desktop** | GNOME + Pop Shell, No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
+| **Desktop** | GNOME + Pop Shell (tiling off by default), Dash to Panel (top bar), No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
 
 ### GNOME extras (via `setup-gnome.sh`)
 
-- Pop Shell tiling (gaps, active hint)
+- Pop Shell available (no gaps / no hint radius; active hint on); auto-tiling **off** by default — toggle with Super+Y
+- Dash to Panel: always-visible full-width top bar on every monitor (small centered app icons)
 - Skip Activities overview at login
 - Clipboard history (GPaste)
 - Tray icons (AppIndicator)
@@ -193,7 +194,7 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | **Super+.** | Emoji picker (`gnome-characters`) |
 | **Super+Shift+S** | Screenshot UI (region / window / screen; Print also works) |
 | **Super+Shift+N** | Minimize window |
-| **Super+Y** | Toggle Pop Shell auto-tiling |
+| **Super+Y** | Toggle Pop Shell auto-tiling (off by default) |
 | **Super+G** | Float / unfloat focused window |
 | **Super+Escape** | Pop Shell tile adjustment mode |
 | **Super+1…9** | Switch to workspace N |
