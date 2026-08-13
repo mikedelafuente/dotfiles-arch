@@ -437,21 +437,26 @@ gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-up "[]"
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-down "[]"
 
 # Super+Ctrl+Up/Down: move window between monitors.
-# Monitors are usually arranged left/right, so Up/Down map to left/right hops
-# (geometric Up/Down only works when displays are stacked vertically).
+# Monitors are usually arranged left/right, so Up/Down map to left/right hops.
 #
-# Bind ONLY Pop Shell here — also binding Mutter move-to-monitor-* to the same
-# chords double-fires (Pop Shell moves, then Mutter moves again) and the window
-# appears to snap back to the original monitor.
-print_info_message "Configuring Super+Ctrl+Up/Down to move windows between monitors"
-gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-left "['<Primary><Super>Up']"
-gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-right "['<Primary><Super>Down']"
-gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-up "[]"
-gsettings set org.gnome.shell.extensions.pop-shell pop-monitor-down "[]"
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-left "[]"
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-right "[]"
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-up "[]"
-gsettings set org.gnome.desktop.wm.keybindings move-to-monitor-down "[]"
+# Tiled mode needs Pop Shell pop-monitor-*; floating/maximized needs Mutter
+# move-to-monitor-*. Binding both to the same chord double-fires (snap-back).
+# rebind-monitor-moves picks one based on tile-by-default and --watch keeps it
+# in sync when Super+Y toggles tiling.
+print_info_message "Configuring Super+Ctrl+Up/Down monitor moves (tiling-aware)"
+REBIND_MONITOR_MOVES="$DF_SCRIPT_DIR/../home/.local/bin/rebind-monitor-moves"
+if [[ ! -x "$REBIND_MONITOR_MOVES" ]]; then
+    REBIND_MONITOR_MOVES="$USER_HOME_DIR/.local/bin/rebind-monitor-moves"
+fi
+if [[ -x "$REBIND_MONITOR_MOVES" ]]; then
+    bash "$REBIND_MONITOR_MOVES"
+    # Keep bindings correct after Super+Y for this session (also via autostart).
+    if ! pgrep -u "$(id -u)" -f '/rebind-monitor-moves --watch' >/dev/null 2>&1; then
+        nohup bash "$REBIND_MONITOR_MOVES" --watch >/dev/null 2>&1 &
+    fi
+else
+    print_warning_message "rebind-monitor-moves not found — link dotfiles, then re-run setup-gnome.sh"
+fi
 
 # --------------------------
 # Clear Conflicting Default Keybindings
@@ -626,6 +631,7 @@ print_info_message "  - Toggle maximize: Super+M"
 print_info_message "  - Minimize window: Super+Shift+N"
 print_info_message "  - Tile left/right (this monitor): Super+Ctrl+Left/Right"
 print_info_message "  - Move window to other monitor: Super+Ctrl+Up/Down"
+print_info_message "    (Pop Shell when tiling on; Mutter when floating — auto-rebinds on Super+Y)"
 print_info_message "  - Pop Shell toggle auto-tiling (off by default): Super+Y"
 print_info_message "  - Pop Shell float focused window: Super+G"
 print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"

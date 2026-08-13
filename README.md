@@ -205,8 +205,8 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | **Super+F** | Fullscreen |
 | **Super+M** | Maximize |
 | **Super+Ctrl+←/→** | Tile left/right on this monitor |
-| **Super+Ctrl+↑/↓** | Move window to other monitor (side-by-side layouts) |
-| **Super+Y** | Toggle Pop Shell tiling |
+| **Super+Ctrl+↑/↓** | Move window to other monitor (Mutter when floating; Pop Shell when tiling) |
+| **Super+Y** | Toggle Pop Shell tiling (also rebinds the monitor-move shortcut) |
 | **Alt+Tab** | Switch windows |
 
 ### Herdr (prefix = **Ctrl+B**)
@@ -236,6 +236,7 @@ Agents: `herdr agent start <name> -- cursor` or `claude`.
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
 | `orphans` | Remove orphaned pacman packages |
+| `rebind-monitor-moves` | Keep Super+Ctrl+↑/↓ on the right mover for tiled vs floating |
 | `gs` `ga` `gc` `gp` `gpush` … | Git aliases (diffs paged through delta) |
 | `welcome` | Shell cheat sheet |
 | `aliases` | Aliases + key bindings |
