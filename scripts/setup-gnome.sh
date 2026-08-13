@@ -428,34 +428,39 @@ gsettings set org.gnome.shell.extensions.pop-shell active-hint-border-radius 0
 print_info_message "Clearing Pop Shell keybindings that conflict with our shortcuts"
 gsettings set org.gnome.shell.extensions.pop-shell tile-enter "['<Super>Escape']"
 
-# Super+Ctrl+Left/Right: snap/tile on the current monitor (Mutter defaults)
-gsettings set org.gnome.mutter.keybindings toggle-tiled-left "['<Primary><Super>Left']"
-gsettings set org.gnome.mutter.keybindings toggle-tiled-right "['<Primary><Super>Right']"
-
 # Super+Ctrl+Up/Down must NOT switch workspaces (GNOME default steals these chords)
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-up "[]"
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-down "[]"
 
-# Super+Ctrl+Up/Down: move window between monitors.
-# Monitors are usually arranged left/right, so Up/Down map to left/right hops.
-#
-# Tiled mode needs Pop Shell pop-monitor-*; floating/maximized needs Mutter
-# move-to-monitor-*. Binding both to the same chord double-fires (snap-back).
-# rebind-monitor-moves picks one based on tile-by-default and --watch keeps it
-# in sync when Super+Y toggles tiling.
-print_info_message "Configuring Super+Ctrl+Up/Down monitor moves (tiling-aware)"
-REBIND_MONITOR_MOVES="$DF_SCRIPT_DIR/../home/.local/bin/rebind-monitor-moves"
-if [[ ! -x "$REBIND_MONITOR_MOVES" ]]; then
-    REBIND_MONITOR_MOVES="$USER_HOME_DIR/.local/bin/rebind-monitor-moves"
+# Super+Ctrl+Arrows: unified "push window".
+# - Tiled: Pop Shell tile-move-*-global (move in layout; edge hops monitor)
+# - Floating: Mutter half-snap (Left/Right) + move-to-monitor (Up/Down)
+# Binding both owners to the same chords double-fires (snap-back).
+# rebind-window-push picks one based on tile-by-default; --watch tracks Super+Y.
+print_info_message "Configuring Super+Ctrl+Arrows window push (tiling-aware)"
+REBIND_WINDOW_PUSH="$DF_SCRIPT_DIR/../home/.local/bin/rebind-window-push"
+if [[ ! -f "$REBIND_WINDOW_PUSH" ]]; then
+    REBIND_WINDOW_PUSH="$USER_HOME_DIR/.local/bin/rebind-window-push"
 fi
-if [[ -x "$REBIND_MONITOR_MOVES" ]]; then
-    bash "$REBIND_MONITOR_MOVES"
-    # Keep bindings correct after Super+Y for this session (also via autostart).
-    if ! pgrep -u "$(id -u)" -f '/rebind-monitor-moves --watch' >/dev/null 2>&1; then
-        nohup bash "$REBIND_MONITOR_MOVES" --watch >/dev/null 2>&1 &
-    fi
+if [[ -f "$REBIND_WINDOW_PUSH" ]]; then
+    chmod +x "$REBIND_WINDOW_PUSH" 2>/dev/null || true
+    # Compat name from earlier revisions
+    mkdir -p "$USER_HOME_DIR/.local/bin"
+    ln -sfn "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-window-push" 2>/dev/null || true
+    ln -sfn "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves" 2>/dev/null || true
+    bash "$REBIND_WINDOW_PUSH"
+    # Restart watcher so sync always picks up script changes (avoid stale --watch).
+    while IFS= read -r pid; do
+        [[ -r "/proc/$pid/cmdline" ]] || continue
+        cmd="$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
+        if [[ "$cmd" == *"/rebind-window-push"* && "$cmd" == *"--watch"* && "$cmd" != *"-c"* ]]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done < <(pgrep -u "$(id -u)" -f 'rebind-window-push' 2>/dev/null || true)
+    sleep 0.2
+    nohup bash "$REBIND_WINDOW_PUSH" --watch >/dev/null 2>&1 &
 else
-    print_warning_message "rebind-monitor-moves not found — link dotfiles, then re-run setup-gnome.sh"
+    print_warning_message "rebind-window-push not found — link dotfiles, then re-run setup-gnome.sh"
 fi
 
 # --------------------------
@@ -629,9 +634,9 @@ print_info_message "  - Close window: Super+Q"
 print_info_message "  - Toggle fullscreen: Super+F"
 print_info_message "  - Toggle maximize: Super+M"
 print_info_message "  - Minimize window: Super+Shift+N"
-print_info_message "  - Tile left/right (this monitor): Super+Ctrl+Left/Right"
-print_info_message "  - Move window to other monitor: Super+Ctrl+Up/Down"
-print_info_message "    (Pop Shell when tiling on; Mutter when floating — auto-rebinds on Super+Y)"
+print_info_message "  - Push window (floating): Super+Ctrl+Left/Right half-snap; Up/Down other monitor"
+print_info_message "  - Push window (tiled): Super+Ctrl+Arrows rearrange; edge hops monitor"
+print_info_message "    (auto-rebinds on Super+Y via rebind-window-push)"
 print_info_message "  - Pop Shell toggle auto-tiling (off by default): Super+Y"
 print_info_message "  - Pop Shell float focused window: Super+G"
 print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"

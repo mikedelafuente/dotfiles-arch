@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Rebind Monitor Move Shortcuts
-Comment=Keep Super+Ctrl+Up/Down on Pop Shell when tiling, Mutter when floating
-Exec=/bin/sh -c 'exec "$HOME/.local/bin/rebind-monitor-moves" --watch'
-X-GNOME-Autostart-enabled=true
-NoDisplay=true

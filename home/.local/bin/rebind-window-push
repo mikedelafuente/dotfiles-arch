@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Rebind Super+Ctrl+Arrows for unified "push window" behavior.
+#
+# Pop Shell tiling and Mutter cannot share the same chords (double-fire snap-back).
+# - tile-by-default true  → Pop Shell tile-move-*-global (move in layout; edge hops monitor)
+# - tile-by-default false → Mutter half-snap (Left/Right) + move-to-monitor (Up/Down)
+#
+# Usage:
+#   rebind-window-push           # apply once
+#   rebind-window-push --watch   # apply, then re-apply when Super+Y toggles tiling
+
+set -euo pipefail
+
+POP_SCHEMA="org.gnome.shell.extensions.pop-shell"
+WM_SCHEMA="org.gnome.desktop.wm.keybindings"
+MUTTER_SCHEMA="org.gnome.mutter.keybindings"
+
+CHORD_LEFT="['<Primary><Super>Left']"
+CHORD_RIGHT="['<Primary><Super>Right']"
+CHORD_UP="['<Primary><Super>Up']"
+CHORD_DOWN="['<Primary><Super>Down']"
+
+rebind() {
+  local tiling
+  tiling="$(gsettings get "$POP_SCHEMA" tile-by-default 2>/dev/null || echo false)"
+
+  # Never leave pop-monitor-* on these chords (conflicts with push bindings).
+  gsettings set "$POP_SCHEMA" pop-monitor-left "[]"
+  gsettings set "$POP_SCHEMA" pop-monitor-right "[]"
+  gsettings set "$POP_SCHEMA" pop-monitor-up "[]"
+  gsettings set "$POP_SCHEMA" pop-monitor-down "[]"
+
+  # Side-by-side monitors: geometric up/down monitor moves unused.
+  gsettings set "$WM_SCHEMA" move-to-monitor-up "[]"
+  gsettings set "$WM_SCHEMA" move-to-monitor-down "[]"
+
+  if [[ "$tiling" == "true" ]]; then
+    gsettings set "$POP_SCHEMA" tile-move-left-global "$CHORD_LEFT"
+    gsettings set "$POP_SCHEMA" tile-move-right-global "$CHORD_RIGHT"
+    gsettings set "$POP_SCHEMA" tile-move-up-global "$CHORD_UP"
+    gsettings set "$POP_SCHEMA" tile-move-down-global "$CHORD_DOWN"
+
+    gsettings set "$MUTTER_SCHEMA" toggle-tiled-left "[]"
+    gsettings set "$MUTTER_SCHEMA" toggle-tiled-right "[]"
+    gsettings set "$WM_SCHEMA" move-to-monitor-left "[]"
+    gsettings set "$WM_SCHEMA" move-to-monitor-right "[]"
+  else
+    gsettings set "$POP_SCHEMA" tile-move-left-global "[]"
+    gsettings set "$POP_SCHEMA" tile-move-right-global "[]"
+    gsettings set "$POP_SCHEMA" tile-move-up-global "[]"
+    gsettings set "$POP_SCHEMA" tile-move-down-global "[]"
+
+    gsettings set "$MUTTER_SCHEMA" toggle-tiled-left "$CHORD_LEFT"
+    gsettings set "$MUTTER_SCHEMA" toggle-tiled-right "$CHORD_RIGHT"
+    gsettings set "$WM_SCHEMA" move-to-monitor-left "$CHORD_UP"
+    gsettings set "$WM_SCHEMA" move-to-monitor-right "$CHORD_DOWN"
+  fi
+}
+
+rebind
+
+if [[ "${1:-}" != "--watch" ]]; then
+  exit 0
+fi
+
+# gsettings monitor emits one line per change (more reliable than dconf watch's
+# two-line path+value output for driving a rebind loop).
+gsettings monitor "$POP_SCHEMA" tile-by-default | while read -r _; do
+  rebind || true
+done

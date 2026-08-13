@@ -102,9 +102,9 @@ Shell fuzzy keys: **Ctrl+R** history · **Ctrl+T** files · **Alt+C** cd into a 
 
 | Shortcut | Action |
 |----------|--------|
-| **Super+Ctrl+←/→** | Tile left/right on this screen |
-| **Super+Ctrl+↑/↓** | Send window to the other monitor (tiling-aware) |
-| **Super+Y** | Toggle Pop Shell auto-tiling (off by default; rebinds monitor-move) |
+| **Super+Ctrl+←/→** | Floating: half-snap · Tiled: push in layout (edge → monitor) |
+| **Super+Ctrl+↑/↓** | Floating: other monitor · Tiled: push in layout (edge → monitor) |
+| **Super+Y** | Toggle Pop Shell auto-tiling (off by default; rebinds Super+Ctrl+Arrows) |
 | **Super+G** | Float / unfloat focused window |
 | **Super+Escape** | Pop Shell tile adjustment mode |
 | **Super+1…9** | Jump to workspace |

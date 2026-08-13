@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Rebind Window Push Shortcuts
+Comment=Keep Super+Ctrl+Arrows on Pop Shell when tiling, Mutter when floating
+Exec=/bin/sh -c 'exec "$HOME/.local/bin/rebind-window-push" --watch'
+X-GNOME-Autostart-enabled=true
+NoDisplay=true
