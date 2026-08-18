@@ -51,6 +51,109 @@ else
 fi
 
 # --------------------------
+# Wayland/Ozone workaround for GPU-less (Intel-only / no dGPU) machines
+# --------------------------
+# Cursor is an Electron app; on Wayland with only an integrated GPU (no NVIDIA/AMD
+# dGPU) it's prone to sluggish rendering and a hang-on-quit caused by Electron's
+# native-Wayland (Ozone) backend, not GPU compositing itself (disable-hardware-acceleration
+# in argv.json alone does not fix this). Forcing the Chromium/Electron ozone platform to
+# x11 (XWayland) works around it. Gated on actual PCI hardware (has_nvidia_hardware), not
+# installed driver packages — a machine can have nvidia-* packages left over from a prior
+# INSTALL_NVIDIA=true run with no NVIDIA GPU physically present. Skip entirely when NVIDIA
+# hardware is present, where the default path is already exercised and known-good.
+CURSOR_SYSTEM_DESKTOP_FILE="/usr/share/applications/cursor.desktop"
+CURSOR_USER_APPLICATIONS_DIR="$USER_HOME_DIR/.local/share/applications"
+CURSOR_OVERRIDE_DESKTOP_FILE="$CURSOR_USER_APPLICATIONS_DIR/cursor.desktop"
+CURSOR_CONFIG_DIR="${CURSOR_CONFIG_DIR:-$USER_HOME_DIR/.cursor}"
+CURSOR_ARGV_JSON="$CURSOR_CONFIG_DIR/argv.json"
+
+# Idempotently force "disable-hardware-acceleration": true in argv.json (JSONC — comments
+# allowed, so this can't be round-tripped through jq). Handles: key absent, present-and-false,
+# present-and-true (no-op), and commented-out.
+ensure_cursor_disable_hardware_acceleration() {
+    local file="$CURSOR_ARGV_JSON"
+
+    if [ ! -f "$file" ]; then
+        mkdir -p "$(dirname "$file")"
+        cat > "$file" <<'EOF'
+// This configuration file allows you to pass permanent command line arguments to VS Code.
+// Only a subset of arguments is currently supported to reduce the likelihood of breaking
+// the installation.
+{
+	// Use software rendering instead of hardware accelerated rendering.
+	// This can help in cases where you see rendering issues in VS Code.
+	"disable-hardware-acceleration": true
+}
+EOF
+        print_success_message "Created $file with disable-hardware-acceleration: true"
+        return
+    fi
+
+    if grep -qE '^\s*"disable-hardware-acceleration"\s*:\s*true\b' "$file"; then
+        return
+    fi
+
+    if grep -qE '^\s*"disable-hardware-acceleration"\s*:\s*false\b' "$file"; then
+        sed -i -E 's/^(\s*)"disable-hardware-acceleration"(\s*:\s*)false\b/\1"disable-hardware-acceleration"\2true/' "$file"
+        print_success_message "Set disable-hardware-acceleration: true in $file"
+        return
+    fi
+
+    if grep -qE '^\s*//\s*"disable-hardware-acceleration"\s*:\s*(true|false)\b' "$file"; then
+        sed -i -E 's#^(\s*)//\s*("disable-hardware-acceleration"\s*:\s*)(true|false)\b#\1\2true#' "$file"
+        print_success_message "Uncommented disable-hardware-acceleration: true in $file"
+        return
+    fi
+
+    local close_line
+    close_line="$(grep -n '^}$' "$file" | tail -1 | cut -d: -f1)"
+    if [ -z "$close_line" ]; then
+        print_warning_message "Could not find top-level closing brace in $file — add \"disable-hardware-acceleration\": true manually"
+        return
+    fi
+
+    local prev_line_num=$((close_line - 1))
+    while [ "$prev_line_num" -ge 1 ]; do
+        local content
+        content="$(sed -n "${prev_line_num}p" "$file")"
+        [[ -n "${content// }" ]] && break
+        prev_line_num=$((prev_line_num - 1))
+    done
+
+    if [ "$prev_line_num" -ge 1 ]; then
+        local prev_content
+        prev_content="$(sed -n "${prev_line_num}p" "$file")"
+        if [[ ! "$prev_content" =~ ,[[:space:]]*$ ]]; then
+            sed -i "${prev_line_num}s/[[:space:]]*\$/,/" "$file"
+        fi
+    fi
+
+    sed -i "${close_line}i\\	\"disable-hardware-acceleration\": true" "$file"
+    print_success_message "Added disable-hardware-acceleration: true to $file"
+}
+
+if has_nvidia_hardware; then
+    if [ -f "$CURSOR_OVERRIDE_DESKTOP_FILE" ]; then
+        print_action_message "NVIDIA hardware detected — removing Cursor XWayland override"
+        rm -f "$CURSOR_OVERRIDE_DESKTOP_FILE"
+        command -v update-desktop-database &>/dev/null && update-desktop-database "$CURSOR_USER_APPLICATIONS_DIR" &>/dev/null || true
+    fi
+elif [ -f "$CURSOR_SYSTEM_DESKTOP_FILE" ]; then
+    if ! grep -q -- '--ozone-platform=x11' "$CURSOR_OVERRIDE_DESKTOP_FILE" 2>/dev/null; then
+        print_action_message "No dedicated GPU detected — forcing Cursor to XWayland via desktop override"
+        mkdir -p "$CURSOR_USER_APPLICATIONS_DIR"
+        sed -E 's#^Exec=/usr/share/cursor/cursor #Exec=/usr/share/cursor/cursor --ozone-platform=x11 #' \
+            "$CURSOR_SYSTEM_DESKTOP_FILE" > "$CURSOR_OVERRIDE_DESKTOP_FILE"
+        command -v update-desktop-database &>/dev/null && update-desktop-database "$CURSOR_USER_APPLICATIONS_DIR" &>/dev/null || true
+        print_success_message "Cursor launcher now forces --ozone-platform=x11 (log out/in or re-login not required; takes effect on next launch)"
+    fi
+    print_action_message "No dedicated GPU detected — ensuring disable-hardware-acceleration in argv.json"
+    ensure_cursor_disable_hardware_acceleration
+else
+    print_warning_message "Cursor desktop file not found at $CURSOR_SYSTEM_DESKTOP_FILE — skipping XWayland override"
+fi
+
+# --------------------------
 # Cursor Agent CLI (cursor-cli from the AUR)
 # --------------------------
 # Managed through yay so it flows via the same guarded `yay -Syu` + IoC scan as
@@ -118,7 +221,7 @@ if command -v cursor-agent &>/dev/null; then
     # Wire Herdr integration when Herdr is already present (bootstrap installs cursor before herdr;
     # re-runs / sync also cover the reverse order)
     if command -v herdr &>/dev/null; then
-        mkdir -p "${CURSOR_CONFIG_DIR:-$USER_HOME_DIR/.cursor}"
+        mkdir -p "$CURSOR_CONFIG_DIR"
         print_info_message "Installing Herdr Cursor Agent integration"
         herdr integration install cursor 2>/dev/null \
             || print_warning_message "Could not install Herdr Cursor integration (run: herdr integration install cursor)"
