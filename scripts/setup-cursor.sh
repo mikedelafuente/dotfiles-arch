@@ -136,7 +136,9 @@ if has_nvidia_hardware; then
     if [ -f "$CURSOR_OVERRIDE_DESKTOP_FILE" ]; then
         print_action_message "NVIDIA hardware detected — removing Cursor XWayland override"
         rm -f "$CURSOR_OVERRIDE_DESKTOP_FILE"
-        command -v update-desktop-database &>/dev/null && update-desktop-database "$CURSOR_USER_APPLICATIONS_DIR" &>/dev/null || true
+        if command -v update-desktop-database &>/dev/null; then
+            update-desktop-database "$CURSOR_USER_APPLICATIONS_DIR" &>/dev/null || true
+        fi
     fi
 elif [ -f "$CURSOR_SYSTEM_DESKTOP_FILE" ]; then
     if ! grep -q -- '--ozone-platform=x11' "$CURSOR_OVERRIDE_DESKTOP_FILE" 2>/dev/null; then
@@ -144,7 +146,9 @@ elif [ -f "$CURSOR_SYSTEM_DESKTOP_FILE" ]; then
         mkdir -p "$CURSOR_USER_APPLICATIONS_DIR"
         sed -E 's#^Exec=/usr/share/cursor/cursor #Exec=/usr/share/cursor/cursor --ozone-platform=x11 #' \
             "$CURSOR_SYSTEM_DESKTOP_FILE" > "$CURSOR_OVERRIDE_DESKTOP_FILE"
-        command -v update-desktop-database &>/dev/null && update-desktop-database "$CURSOR_USER_APPLICATIONS_DIR" &>/dev/null || true
+        if command -v update-desktop-database &>/dev/null; then
+            update-desktop-database "$CURSOR_USER_APPLICATIONS_DIR" &>/dev/null || true
+        fi
         print_success_message "Cursor launcher now forces --ozone-platform=x11 (log out/in or re-login not required; takes effect on next launch)"
     fi
     print_action_message "No dedicated GPU detected — ensuring disable-hardware-acceleration in argv.json"
