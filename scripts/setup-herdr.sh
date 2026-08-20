@@ -67,6 +67,7 @@ herdr integration status 2>/dev/null | grep -E 'current|outdated' || true
 
 print_info_message "Config: ~/.config/herdr/config.toml (Catppuccin theme via linked dotfiles)"
 print_info_message "Usage: herdr   (attach/create session); prefix+q detaches"
-print_info_message "Agents: herdr agent start <name> -- cursor   (or claude)"
+print_info_message "Agents: code <dir> --agent cursor   (or --agent claude)"
+print_info_message "  (raw CLI: herdr agent start <name> --kind cursor --pane <id>)"
 
 print_tool_setup_complete "Herdr"

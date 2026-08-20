@@ -220,7 +220,7 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous tab |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `herdr agent start <name> -- cursor` or `claude`.
+Agents: `code <dir> --agent cursor` or `--agent claude` (raw CLI: `herdr agent start <name> --kind cursor --pane <id>`).
 
 ### Shell (highlights)
 

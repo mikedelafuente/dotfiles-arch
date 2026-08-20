@@ -62,11 +62,18 @@ herdr                 # attach or create
 # Ctrl+B ?            # all keys
 ```
 
-Start an agent pane:
+Open Neovim + an agent pane together:
 
 ```bash
-herdr agent start my-job -- cursor
-herdr agent start my-job -- claude
+code <dir> --agent cursor
+code <dir> --agent claude
+```
+
+Or start an agent pane by hand (raw CLI):
+
+```bash
+herdr agent start my-job --kind cursor --pane <id>
+herdr agent start my-job --kind claude --pane <id>
 ```
 
 ### …ask Cursor from the terminal

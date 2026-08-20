@@ -1,16 +1,19 @@
 #!/bin/bash
 
 # code - Open a Herdr workspace with Neovim for a git repo
-# Usage: code [--force|-f] [directory]
+# Usage: code [--force|-f] [--agent cursor|claude] [directory]
 #   directory: Path to project directory (defaults to current directory)
 #   --force:   Open even when the directory is not a git repository
+#   --agent:   Also split the pane and start an agent (cursor or claude)
 #
 # - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
 # - Inside Herdr: create a new focused workspace and start nvim there
+# - With --agent: split the Neovim pane and start the agent CLI alongside it
 
 set -euo pipefail
 
 FORCE=0
+AGENT=""
 TARGET_DIR="."
 
 while [[ $# -gt 0 ]]; do
@@ -19,8 +22,16 @@ while [[ $# -gt 0 ]]; do
             FORCE=1
             shift
             ;;
+        --agent)
+            AGENT="${2:-}"
+            if [[ -z "$AGENT" ]]; then
+                echo "Error: --agent requires a value (cursor or claude)"
+                exit 1
+            fi
+            shift 2
+            ;;
         -h|--help)
-            echo "Usage: code [--force|-f] [directory]"
+            echo "Usage: code [--force|-f] [--agent cursor|claude] [directory]"
             exit 0
             ;;
         *)
@@ -29,6 +40,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -n "$AGENT" ]] && [[ "$AGENT" != "cursor" ]] && [[ "$AGENT" != "claude" ]]; then
+    echo "Error: --agent must be 'cursor' or 'claude' (got: $AGENT)"
+    exit 1
+fi
 
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 LABEL="$(basename "$TARGET_DIR")"
@@ -132,6 +148,41 @@ open_workspace_with_nvim() {
     fi
 
     echo "Opened Neovim in Herdr workspace '$LABEL' (pane $pane_id)"
+    NVIM_PANE_ID="$pane_id"
+}
+
+# Split the Neovim pane and start an agent (cursor or claude) in the new pane.
+start_agent_pane() {
+    local nvim_pane_id="$1" split_json agent_pane_id agent_name
+
+    split_json="$(herdr pane split "$nvim_pane_id" --direction right --ratio 0.75 --cwd "$TARGET_DIR")"
+    agent_pane_id="$(
+        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["pane"]["pane_id"])' <<<"$split_json"
+    )"
+
+    if [[ -z "$agent_pane_id" ]]; then
+        echo "Error: could not determine new agent pane id"
+        exit 1
+    fi
+
+    if ! wait_for_pane_shell "$agent_pane_id"; then
+        echo "Warning: pane $agent_pane_id may not be fully ready; starting agent anyway"
+    fi
+
+    # Agent names must be unique across the whole Herdr session, but $LABEL
+    # (the directory basename) repeats every time the same repo is reopened.
+    # Suffix with this pane's workspace id (the part before ':') to disambiguate.
+    agent_name="${LABEL}-${nvim_pane_id%%:*}"
+
+    # Brief settle after split so the shell prompt is ready before the agent
+    # command is typed in (mirrors the safeguard used for the Neovim pane).
+    sleep 0.3
+    if ! herdr agent start "$agent_name" --kind "$AGENT" --pane "$agent_pane_id" >/dev/null 2>&1; then
+        echo "Error: failed to start $AGENT agent in pane $agent_pane_id"
+        exit 1
+    fi
+
+    echo "Started $AGENT agent '$agent_name' in Herdr pane $agent_pane_id"
 }
 
 # Open a Herdr UI client before starting Neovim so the PTY has a real size.
@@ -187,6 +238,10 @@ if [[ "$INSIDE_HERDR" -eq 0 ]]; then
 fi
 
 open_workspace_with_nvim
+
+if [[ -n "$AGENT" ]]; then
+    start_agent_pane "$NVIM_PANE_ID"
+fi
 
 if [[ "$INSIDE_HERDR" -eq 1 ]]; then
     exit 0
