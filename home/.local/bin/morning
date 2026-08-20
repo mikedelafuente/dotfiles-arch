@@ -1,0 +1,77 @@
+#!/bin/bash
+# Morning routine — refresh git repos and system packages.
+#
+# Edit MORNING_STEPS below to add or reorder tasks. Each name must be on PATH
+# (~/.local/bin). Missing commands are skipped with a message.
+#
+# Default: update-repos, then update-system (day-to-day pacman + yay).
+# Use sync-dotfiles instead of (or after) update-system when the dotfiles repo
+# changed and you want setup scripts + re-link, not just package upgrades.
+#
+# Usage: morning [args…]
+#   Args are forwarded to every step (e.g. morning --yes).
+
+set -uo pipefail
+
+MORNING_STEPS=(
+  update-repos
+  update-system
+)
+
+usage() {
+  cat <<'EOF'
+Usage: morning [args…]
+
+Run the morning routine steps in order. Edit MORNING_STEPS in this script to
+customize. Steps not on PATH are skipped.
+
+Default steps:
+  update-repos    git pull under ~/repos
+  update-system   guarded pacman + yay update
+
+Example:
+  morning --yes   non-interactive system update (forwarded to update-system)
+EOF
+}
+
+main() {
+  local step
+  local -a failures=() skipped=()
+
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help)
+        usage
+        exit 0
+        ;;
+    esac
+  done
+
+  for step in "${MORNING_STEPS[@]}"; do
+    if ! command -v "$step" &>/dev/null; then
+      printf 'morning: skip %s (not on PATH)\n' "$step" >&2
+      skipped+=("$step")
+      continue
+    fi
+
+    printf '\n==> %s\n' "$step"
+    if "$step" "$@"; then
+      :
+    else
+      printf 'morning: %s failed (exit %s)\n' "$step" "$?" >&2
+      failures+=("$step")
+    fi
+  done
+
+  printf '\n'
+  if ((${#skipped[@]})); then
+    printf 'morning: skipped (not on PATH): %s\n' "${skipped[*]}"
+  fi
+  if ((${#failures[@]})); then
+    printf 'morning: finished with failures: %s\n' "${failures[*]}" >&2
+    exit 1
+  fi
+  printf 'morning: done\n'
+}
+
+main "$@"

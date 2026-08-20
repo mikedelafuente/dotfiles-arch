@@ -1,0 +1,116 @@
+#!/bin/bash
+# Git pull every repo under ~/repos (same search depth as repos).
+# Pulls run in parallel (MAX_PARALLEL, default 8), like dela-dotfiles' update-repos.
+# Usage: update-repos [--dry-run] [-h]
+
+set -uo pipefail
+
+ROOT_DIR="${REPOS_DIR:-$HOME/repos}"
+MAX_PARALLEL="${MAX_PARALLEL:-8}"
+
+usage() {
+  cat <<'EOF'
+Usage: update-repos [--dry-run] [-h]
+
+Pull the latest changes for each git repo under ~/repos (REPOS_DIR overrides).
+Skips repos with a dirty working tree. Uses git pull --ff-only.
+Pulls run in parallel (MAX_PARALLEL, default 8).
+EOF
+}
+
+list_repos() {
+  find "$ROOT_DIR" -mindepth 1 -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null \
+    | sort -u
+}
+
+# Write one status file for the parent to aggregate (skip|ok|fail).
+record_status() {
+  local status="$1" repo="$2"
+  local safe
+  safe="$(printf '%s' "$repo" | tr '/ ' '__')"
+  printf '%s\n' "$repo" >"$RESULT_DIR/${status}.${safe}"
+}
+
+update_repo() {
+  local repo="$1"
+
+  if [[ -n "$(git -C "$repo" status --porcelain 2>/dev/null)" ]]; then
+    printf 'skip %s (dirty working tree)\n' "$repo" >&2
+    record_status skip "$repo"
+    return 0
+  fi
+
+  if [[ "${DRY_RUN:-false}" == true ]]; then
+    printf 'would pull %s\n' "$repo"
+    record_status ok "$repo"
+    return 0
+  fi
+
+  printf '==> %s\n' "$repo"
+  if git -C "$repo" pull --ff-only; then
+    record_status ok "$repo"
+  else
+    printf 'failed: %s\n' "$repo" >&2
+    record_status fail "$repo"
+  fi
+}
+
+main() {
+  local repo
+  local updated=0 skipped=0 failed=0
+  local running=0
+  local RESULT_DIR
+  DRY_RUN=false
+
+  for arg in "$@"; do
+    case "$arg" in
+      --dry-run) DRY_RUN=true ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "update-repos: unknown option: $arg" >&2
+        usage >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  if [[ ! -d "$ROOT_DIR" ]]; then
+    echo "update-repos: no directory at $ROOT_DIR (set REPOS_DIR to override)" >&2
+    exit 1
+  fi
+
+  mapfile -t repos < <(list_repos)
+  if ((${#repos[@]} == 0)); then
+    echo "update-repos: no git repositories found under $ROOT_DIR" >&2
+    exit 0
+  fi
+
+  RESULT_DIR="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap 'rm -rf "$RESULT_DIR"' EXIT
+  export RESULT_DIR DRY_RUN
+
+  for repo in "${repos[@]}"; do
+    if ((running >= MAX_PARALLEL)); then
+      wait -n
+      ((running--)) || true
+    fi
+    update_repo "$repo" &
+    ((running++)) || true
+  done
+  wait
+
+  skipped="$(find "$RESULT_DIR" -maxdepth 1 -name 'skip.*' 2>/dev/null | wc -l | tr -d ' ')"
+  updated="$(find "$RESULT_DIR" -maxdepth 1 -name 'ok.*' 2>/dev/null | wc -l | tr -d ' ')"
+  failed="$(find "$RESULT_DIR" -maxdepth 1 -name 'fail.*' 2>/dev/null | wc -l | tr -d ' ')"
+
+  printf '\nupdate-repos: %d updated, %d skipped (dirty), %d failed (parallel=%s)\n' \
+    "$updated" "$skipped" "$failed" "$MAX_PARALLEL"
+  ((failed > 0)) && exit 1
+  exit 0
+}
+
+main "$@"

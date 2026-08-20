@@ -21,10 +21,12 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ### Day-to-day updates (preferred)
 
 ```bash
+morning                       # update-repos + update-system (edit ~/.local/bin/morning to customize)
 update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
 bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
 bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
+update-repos                  # parallel git pull --ff-only under ~/repos (MAX_PARALLEL=8)
 ```
 
 This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Sync always runs the same upgrade path; bootstrap uses it behind a 1-day cooldown. Both use the same scan before any `--noconfirm` AUR install.
@@ -289,7 +291,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # sync-dotfiles, update-system, check-dotfiles, remove-orphans, repos, code, …
+│   └── .local/bin/        # morning, update-repos, sync-dotfiles, update-system, check-dotfiles, remove-orphans, repos, code, …
 └── config/                # → ~/.config
 ```
 
