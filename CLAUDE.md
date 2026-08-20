@@ -145,7 +145,7 @@ Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker
 - **setup-cursor.sh**: IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`. On machines with no NVIDIA hardware (integrated-GPU-only; checked via `has_nvidia_hardware` PCI detection, not driver packages), it also drops a `~/.local/share/applications/cursor.desktop` override that adds `--ozone-platform=x11` and idempotently forces `disable-hardware-acceleration: true` in `~/.cursor/argv.json` (JSONC — comments preserved, not a jq rewrite), working around an Electron native-Wayland hang-on-quit/slowness bug; both are removed/left alone automatically if NVIDIA hardware is later detected
 - **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh`/Cursor already shared)
 - **setup-essentials.sh**: `ESSENTIAL_PACKAGES` is the canonical CLI list — update `PACKAGES.md` in the same change
-- **`code`**: Creates a Herdr workspace and starts `nvim .` (`--force` skips the git-repo requirement); `--agent cursor|claude` also splits the pane and starts that agent CLI via `herdr agent start ... --kind <agent> --pane <id>`
+- **`code`**: Creates a Herdr workspace and starts `nvim .` (`--force` skips the git-repo requirement); `--agent cursor|claude` also splits the pane and starts that agent CLI via `herdr agent start ... --kind <agent> --pane <id>`; `--workspace <name-or-path>` (Cursor only) is forwarded as `agent --workspace …`
 
 ## Key design decisions
 

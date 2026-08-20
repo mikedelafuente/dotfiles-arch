@@ -222,13 +222,13 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous tab |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `code <dir> --agent cursor` or `--agent claude` (raw CLI: `herdr agent start <name> --kind cursor --pane <id>`).
+Agents: `code <dir> --agent cursor` or `--agent claude` (raw CLI: `herdr agent start <name> --kind cursor --pane <id>`). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`.
 
 ### Shell (highlights)
 
 | Command | What it does |
 |---------|----------------|
-| `code [dir]` | Herdr workspace + `nvim .` (git repo; `--force` for non-git) |
+| `code [dir]` | Herdr workspace + `nvim .` (git repo; `--force` for non-git; `--agent cursor --workspace NAME` for Cursor CLI workspace) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |

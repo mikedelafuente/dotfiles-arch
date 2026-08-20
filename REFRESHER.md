@@ -66,6 +66,7 @@ Open Neovim + an agent pane together:
 
 ```bash
 code <dir> --agent cursor
+code <dir> --agent cursor --workspace day-to-day
 code <dir> --agent claude
 ```
 

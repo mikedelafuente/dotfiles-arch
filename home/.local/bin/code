@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # code - Open a Herdr workspace with Neovim for a git repo
-# Usage: code [--force|-f] [--agent cursor|claude] [directory]
-#   directory: Path to project directory (defaults to current directory)
-#   --force:   Open even when the directory is not a git repository
-#   --agent:   Start an agent (cursor or claude) in the split pane instead of a plain shell
+# Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
+#   directory:    Path to project directory (defaults to current directory)
+#   --force:      Open even when the directory is not a git repository
+#   --agent:      Start an agent (cursor or claude) in the split pane instead of a plain shell
+#   --workspace:  Cursor Agent saved workspace name or path (requires --agent cursor)
 #
 # - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
 # - Inside Herdr: create a new focused workspace and start nvim there
@@ -15,6 +16,7 @@ set -euo pipefail
 
 FORCE=0
 AGENT=""
+WORKSPACE=""
 TARGET_DIR="."
 
 while [[ $# -gt 0 ]]; do
@@ -31,8 +33,22 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+        --workspace)
+            WORKSPACE="${2:-}"
+            if [[ -z "$WORKSPACE" ]]; then
+                echo "Error: --workspace requires a value (saved name or path)"
+                exit 1
+            fi
+            shift 2
+            ;;
         -h|--help)
-            echo "Usage: code [--force|-f] [--agent cursor|claude] [directory]"
+            cat <<'EOF'
+Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
+
+  --agent cursor|claude   Start that agent CLI in the split pane
+  --workspace NAME|PATH   Cursor Agent workspace (requires --agent cursor)
+  --force                 Allow a non-git directory
+EOF
             exit 0
             ;;
         *)
@@ -45,6 +61,17 @@ done
 if [[ -n "$AGENT" ]] && [[ "$AGENT" != "cursor" ]] && [[ "$AGENT" != "claude" ]]; then
     echo "Error: --agent must be 'cursor' or 'claude' (got: $AGENT)"
     exit 1
+fi
+
+if [[ -n "$WORKSPACE" ]]; then
+    if [[ -z "$AGENT" ]]; then
+        echo "Error: --workspace requires --agent cursor"
+        exit 1
+    fi
+    if [[ "$AGENT" != "cursor" ]]; then
+        echo "Error: --workspace is only supported for Cursor Agent (Claude has no workspace flag)"
+        exit 1
+    fi
 fi
 
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
@@ -209,12 +236,21 @@ split_second_pane() {
     # Brief settle after split so the shell prompt is ready before the agent
     # command is typed in (mirrors the safeguard used for the Neovim pane).
     sleep 0.3
-    if ! herdr agent start "$agent_name" --kind "$AGENT" --pane "$agent_pane_id" >/dev/null 2>&1; then
+    local -a start_args=(agent start "$agent_name" --kind "$AGENT" --pane "$agent_pane_id")
+    if [[ -n "$WORKSPACE" ]]; then
+        # Extra args after -- are forwarded to the agent binary (cursor-agent).
+        start_args+=(-- --workspace "$WORKSPACE")
+    fi
+    if ! herdr "${start_args[@]}" >/dev/null 2>&1; then
         echo "Error: failed to start $AGENT agent in pane $agent_pane_id"
         exit 1
     fi
 
-    echo "Started $AGENT agent '$agent_name' in Herdr pane $agent_pane_id"
+    if [[ -n "$WORKSPACE" ]]; then
+        echo "Started $AGENT agent '$agent_name' with workspace '$WORKSPACE' in Herdr pane $agent_pane_id"
+    else
+        echo "Started $AGENT agent '$agent_name' in Herdr pane $agent_pane_id"
+    fi
 }
 
 # Create a "lazygit" tab in the workspace and start lazygit in it.
