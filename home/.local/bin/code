@@ -4,11 +4,12 @@
 # Usage: code [--force|-f] [--agent cursor|claude] [directory]
 #   directory: Path to project directory (defaults to current directory)
 #   --force:   Open even when the directory is not a git repository
-#   --agent:   Also split the pane and start an agent (cursor or claude)
+#   --agent:   Start an agent (cursor or claude) in the split pane instead of a plain shell
 #
 # - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
 # - Inside Herdr: create a new focused workspace and start nvim there
-# - With --agent: split the Neovim pane and start the agent CLI alongside it
+# - Always splits the Neovim pane: a plain shell by default, or an agent CLI with --agent
+# - Tabs: "neovim" (Neovim + the split pane above) and, for git repos, "lazygit"
 
 set -euo pipefail
 
@@ -123,11 +124,17 @@ wait_for_pane_shell() {
 
 # Create a workspace and launch Neovim after the pane size is stable.
 open_workspace_with_nvim() {
-    local create_json pane_id
+    local create_json pane_id workspace_id tab_id
 
     create_json="$(herdr workspace create --cwd "$TARGET_DIR" --label "$LABEL" --focus)"
     pane_id="$(
         python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])' <<<"$create_json"
+    )"
+    workspace_id="$(
+        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["workspace"]["workspace_id"])' <<<"$create_json"
+    )"
+    tab_id="$(
+        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["tab"]["tab_id"])' <<<"$create_json"
     )"
 
     if [[ -z "$pane_id" ]]; then
@@ -137,6 +144,11 @@ open_workspace_with_nvim() {
 
     if ! wait_for_pane_shell "$pane_id"; then
         echo "Warning: pane $pane_id may not be fully ready; starting Neovim anyway"
+    fi
+
+    if [[ -n "$tab_id" ]]; then
+        herdr tab rename "$tab_id" neovim >/dev/null 2>&1 \
+            || echo "Warning: could not rename tab to 'neovim'"
     fi
 
     # Brief settle after focus/resize so Neovim does not start mid-reflow.
@@ -149,10 +161,23 @@ open_workspace_with_nvim() {
 
     echo "Opened Neovim in Herdr workspace '$LABEL' (pane $pane_id)"
     NVIM_PANE_ID="$pane_id"
+    WORKSPACE_ID="$workspace_id"
 }
 
-# Split the Neovim pane and start an agent (cursor or claude) in the new pane.
-start_agent_pane() {
+# Lowercase, strip to [a-z0-9_-], and truncate to Herdr's 32-char agent
+# name limit, ensuring the result starts with a lowercase letter.
+sanitize_agent_name() {
+    local raw="$1" name
+    name="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '-')"
+    if [[ ! "$name" =~ ^[a-z] ]]; then
+        name="a-${name}"
+    fi
+    printf '%s' "${name:0:32}"
+}
+
+# Split the Neovim pane. With --agent, start that agent in the new pane;
+# otherwise it's left as a plain shell in TARGET_DIR.
+split_second_pane() {
     local nvim_pane_id="$1" split_json agent_pane_id agent_name
 
     split_json="$(herdr pane split "$nvim_pane_id" --direction right --ratio 0.75 --cwd "$TARGET_DIR")"
@@ -161,18 +186,25 @@ start_agent_pane() {
     )"
 
     if [[ -z "$agent_pane_id" ]]; then
-        echo "Error: could not determine new agent pane id"
+        echo "Error: could not determine new split pane id"
         exit 1
     fi
 
     if ! wait_for_pane_shell "$agent_pane_id"; then
-        echo "Warning: pane $agent_pane_id may not be fully ready; starting agent anyway"
+        echo "Warning: pane $agent_pane_id may not be fully ready"
+    fi
+
+    if [[ -z "$AGENT" ]]; then
+        return 0
     fi
 
     # Agent names must be unique across the whole Herdr session, but $LABEL
-    # (the directory basename) repeats every time the same repo is reopened.
-    # Suffix with this pane's workspace id (the part before ':') to disambiguate.
-    agent_name="${LABEL}-${nvim_pane_id%%:*}"
+    # (the directory basename) repeats every time the same repo is reopened,
+    # so suffix with this pane's workspace id (the part before ':') to
+    # disambiguate. Herdr also requires names to start with a lowercase
+    # letter and contain only lowercase letters/digits/'-'/'_' (<=32 chars) —
+    # workspace ids can contain uppercase (e.g. "wJ"), so sanitize both parts.
+    agent_name="$(sanitize_agent_name "${LABEL}-${nvim_pane_id%%:*}")"
 
     # Brief settle after split so the shell prompt is ready before the agent
     # command is typed in (mirrors the safeguard used for the Neovim pane).
@@ -183,6 +215,33 @@ start_agent_pane() {
     fi
 
     echo "Started $AGENT agent '$agent_name' in Herdr pane $agent_pane_id"
+}
+
+# Create a "lazygit" tab in the workspace and start lazygit in it.
+create_lazygit_tab() {
+    local workspace_id="$1" tab_json tab_pane_id
+
+    tab_json="$(herdr tab create --workspace "$workspace_id" --cwd "$TARGET_DIR" --label lazygit --no-focus)"
+    tab_pane_id="$(
+        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])' <<<"$tab_json"
+    )"
+
+    if [[ -z "$tab_pane_id" ]]; then
+        echo "Error: could not determine lazygit tab pane id"
+        exit 1
+    fi
+
+    if ! wait_for_pane_shell "$tab_pane_id"; then
+        echo "Warning: lazygit pane may not be fully ready; starting anyway"
+    fi
+
+    sleep 0.3
+    if ! herdr pane run "$tab_pane_id" "bash -lc 'sleep 0.3; exec lazygit'" >/dev/null 2>&1; then
+        echo "Error: failed to start lazygit in pane $tab_pane_id"
+        exit 1
+    fi
+
+    echo "Opened lazygit in tab 'lazygit' (pane $tab_pane_id)"
 }
 
 # Open a Herdr UI client before starting Neovim so the PTY has a real size.
@@ -238,9 +297,14 @@ if [[ "$INSIDE_HERDR" -eq 0 ]]; then
 fi
 
 open_workspace_with_nvim
+split_second_pane "$NVIM_PANE_ID"
 
-if [[ -n "$AGENT" ]]; then
-    start_agent_pane "$NVIM_PANE_ID"
+if [[ -d "$TARGET_DIR/.git" ]]; then
+    if command -v lazygit &>/dev/null; then
+        create_lazygit_tab "$WORKSPACE_ID"
+    else
+        echo "Note: lazygit is not installed; skipping the 'lazygit' tab"
+    fi
 fi
 
 if [[ "$INSIDE_HERDR" -eq 1 ]]; then
