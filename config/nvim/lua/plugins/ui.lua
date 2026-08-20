@@ -36,7 +36,10 @@ return {
           treesitter = true,
           telescope = true,
           which_key = true,
-          lualine = true,
+          -- Must be a table, not `true`: catppuccin's lualine integration
+          -- unconditionally indexes `overrides.all`/`overrides[flavour]`,
+          -- which errors on a boolean and lualine reports as "theme not found".
+          lualine = {},
         },
       })
       vim.cmd([[colorscheme catppuccin-mocha]])
