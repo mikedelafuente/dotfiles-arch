@@ -30,6 +30,7 @@ ESSENTIAL_PACKAGES=(
   ripgrep
   fd
   bat
+  glow
   htop
   ncdu
   tree

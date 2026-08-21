@@ -26,6 +26,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `ripgrep` | Fast recursive search | `rg`; also used by AUR IoC scans |
 | `fd` | Fast `find` replacement | `fd`; backs `FZF_DEFAULT_COMMAND` |
 | `bat` | Syntax-highlighted pager | `welcome`, `packages`, `vimcheat`, `MANPAGER` |
+| `glow` | Terminal Markdown renderer | `glow`, `md` |
 | `htop` | Interactive process viewer | `htop` |
 | `btop` | Richer resource monitor | `btop` |
 | `ncdu` | Disk usage explorer | `ncdu` |

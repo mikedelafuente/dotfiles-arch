@@ -151,6 +151,9 @@ alias pip='pip3'
 alias v='nvim'
 alias vim='nvim'
 alias vimcheat='bat ~/.nvim-cheatsheet.md --style=plain --paging=always'
+if command -v glow &> /dev/null; then
+    alias md='glow'
+fi
 alias serve='python3 -m http.server'
 alias jsonpp='python3 -m json.tool'
 alias myip='curl ifconfig.me'

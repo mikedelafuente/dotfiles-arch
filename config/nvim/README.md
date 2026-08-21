@@ -84,6 +84,7 @@ On first launch:
 |--------|---------|----------|
 | **nvim-treesitter** | Syntax highlighting | Better highlighting, text objects |
 | **treesitter-textobjects** | Smart text selection | `af`, `if`, `ac`, `ic` |
+| **render-markdown.nvim** | In-buffer Markdown preview | `<leader>mr` toggle; CLI: `glow` / `md` |
 
 ### UI Enhancements
 
@@ -129,17 +130,13 @@ On first launch:
 |-----|--------|-------------|
 | `<leader>e` | Toggle file explorer | Open/close nvim-tree |
 
-**Inside nvim-tree:**
-- `<CR>` - Open file
-- `o` - Open file/folder
-- `a` - Create file
-- `d` - Delete file
-- `r` - Rename file
-- `x` - Cut file
-- `c` - Copy file
-- `p` - Paste file
-- `R` - Refresh tree
-- `?` - Show help
+### Markdown
+
+| Key | Action | Description |
+|-----|--------|-------------|
+| `<leader>mr` | Toggle Markdown render | In-buffer preview on/off |
+
+Shell alternative: `md file.md` or `glow file.md`.
 
 ### LSP (Language Server)
 
@@ -240,6 +237,7 @@ Use:
 │       ├── treesitter.lua      # Syntax highlighting
 │       ├── telescope.lua       # Fuzzy finder
 │       ├── which-key.lua       # Keybinding discovery
+│       ├── markdown.lua        # In-buffer Markdown rendering
 │       └── ui.lua              # UI plugins (theme, statusline, etc.)
 ```
 

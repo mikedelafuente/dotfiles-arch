@@ -50,6 +50,7 @@ return {
       { "<leader>c", group = "Code" },
       { "<leader>g", group = "Git" },
       { "<leader>d", group = "Diagnostic" },
+      { "<leader>m", group = "Markdown" },
       { "<leader>r", group = "Rename" },
       { "<leader>?", group = "Help" },
     })
