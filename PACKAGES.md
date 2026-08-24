@@ -55,8 +55,6 @@ directly-installed packages are listed; transitive dependencies are not.
 | `tree-sitter-cli` | `setup-neovim.sh` | Treesitter grammars | `:TSUpdate` |
 | `lazygit` | `setup-git.sh` | Git TUI | `lzg` |
 | `lazydocker` (AUR) | `setup-docker.sh` / `setup-code.sh` | Docker TUI | `lzd` |
-| `cursor-bin` (AUR) | `setup-cursor.sh` | Cursor IDE | `cursor` |
-| `cursor-cli` (AUR) | `setup-cursor.sh` | Cursor Agent CLI | `cursor-agent`, `agent` |
 
 ## Fonts — `setup-fonts.sh`
 
@@ -123,13 +121,15 @@ directly-installed packages are listed; transitive dependencies are not.
 Profiles are **additive multi-select** — enable any combination on one machine
 (`SETUP_PROFILES`, e.g. `work devcontainer`). Shared stack always installs first.
 
-### work — `setup-zoom.sh`, `setup-slack.sh`, `setup-chrome.sh`
+### work — `setup-cursor.sh`, `setup-zoom.sh`, `setup-slack.sh`, `setup-chrome.sh`
 
-| Package | Purpose |
-|---------|---------|
-| `zoom` (AUR) | Meetings |
-| `slack-desktop` (AUR) | Team chat |
-| `google-chrome` (AUR) | Work browser (Super+B when work is selected) |
+| Package | Purpose | Related commands |
+|---------|---------|-------------------|
+| `cursor-bin` (AUR) | Cursor IDE | `cursor` |
+| `cursor-cli` (AUR) | Cursor Agent CLI | `cursor-agent`, `agent` |
+| `zoom` (AUR) | Meetings | — |
+| `slack-desktop` (AUR) | Team chat | — |
+| `google-chrome` (AUR) | Work browser (Super+B when work is selected) | — |
 
 ### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`
 
@@ -143,8 +143,10 @@ Profiles are **additive multi-select** — enable any combination on one machine
 ### devcontainer — `setup-devcontainer.sh`
 
 Host prerequisites for the platform / work devcontainer sandbox.
-Docker, GitHub CLI, and Cursor are already on the shared stack; this profile adds
-the rest of the host checklist (tools, DNS, watches, CA trust).
+Docker and GitHub CLI are already on the shared stack; this profile adds
+the rest of the host checklist (tools, DNS, watches, CA trust). The Cursor
+Dev Containers extension step below requires Cursor (work profile) — it's
+skipped with a warning if Cursor isn't installed.
 
 | Package / config | Purpose | Related commands |
 |------------------|---------|------------------|

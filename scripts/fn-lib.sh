@@ -130,7 +130,8 @@ bootstrap_config_file() {
 KNOWN_SETUP_PROFILES=(work personal devcontainer)
 
 # Source saved bootstrap config if present
-# (FULL_NAME, EMAIL, SETUP_PROFILES, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE).
+# (FULL_NAME, EMAIL, SETUP_PROFILES, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE,
+# DEFAULT_AGENT).
 load_bootstrap_config() {
   local f
   f="$(bootstrap_config_file)"
@@ -240,6 +241,7 @@ write_bootstrap_config() {
     printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE}"
     printf 'INSTALL_NVIDIA=%q\n' "${INSTALL_NVIDIA:-false}"
     printf 'MACHINE_TYPE=%q\n' "${MACHINE_TYPE:-}"
+    printf 'DEFAULT_AGENT=%q\n' "${DEFAULT_AGENT:-}"
   } >"$f"
   chmod 600 "$f" 2>/dev/null || true
 }
@@ -419,6 +421,62 @@ resolve_nvidia_preference() {
   case "${nvidia_input,,}" in
     y|yes|true) INSTALL_NVIDIA="true" ;;
     *) INSTALL_NVIDIA="false" ;;
+  esac
+}
+
+# Resolve DEFAULT_AGENT (cursor|claude) — the agent `code` starts when run
+# without --agent. Detects which agent CLIs are actually on PATH: auto-picks
+# the only one installed, asks when both are present (Enter keeps the saved
+# choice), and leaves DEFAULT_AGENT empty when neither is installed.
+# Uses ASSUME_YES=true|false (default false).
+resolve_default_agent() {
+  local assume_yes="${ASSUME_YES:-false}"
+  local have_claude=false have_cursor=false
+  local current_default agent_input
+
+  command -v claude &>/dev/null && have_claude=true
+  { command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; } && have_cursor=true
+
+  if [[ "$have_claude" != "true" && "$have_cursor" != "true" ]]; then
+    DEFAULT_AGENT=""
+    return 0
+  fi
+
+  if [[ "$have_claude" == "true" && "$have_cursor" != "true" ]]; then
+    DEFAULT_AGENT="claude"
+    print_info_message "DEFAULT_AGENT auto-set to claude (Cursor Agent CLI not installed)"
+    return 0
+  fi
+
+  if [[ "$have_cursor" == "true" && "$have_claude" != "true" ]]; then
+    DEFAULT_AGENT="cursor"
+    print_info_message "DEFAULT_AGENT auto-set to cursor (Claude CLI not installed)"
+    return 0
+  fi
+
+  # Both installed — ask which `code` should default to.
+  current_default="${DEFAULT_AGENT:-cursor}"
+  if [[ "$current_default" != "cursor" && "$current_default" != "claude" ]]; then
+    current_default="cursor"
+  fi
+
+  if [[ "$assume_yes" == "true" ]]; then
+    DEFAULT_AGENT="$current_default"
+    print_info_message "Both agent CLIs installed — DEFAULT_AGENT=$DEFAULT_AGENT (non-interactive)"
+    return 0
+  fi
+
+  echo ""
+  print_info_message "Both Cursor Agent and Claude Code CLIs are installed."
+  read -rp "Which should 'code' use by default? [cursor/claude] (Enter = $(fmt_choice "$current_default")): " agent_input
+  agent_input="${agent_input:-$current_default}"
+  case "${agent_input,,}" in
+    cursor) DEFAULT_AGENT="cursor" ;;
+    claude) DEFAULT_AGENT="claude" ;;
+    *)
+      print_warning_message "Unrecognized input '$agent_input'; using $current_default"
+      DEFAULT_AGENT="$current_default"
+      ;;
   esac
 }
 

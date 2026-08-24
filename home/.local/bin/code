@@ -4,12 +4,13 @@
 # Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
 #   directory:    Path to project directory (defaults to current directory)
 #   --force:      Open even when the directory is not a git repository
-#   --agent:      Start an agent (cursor or claude) in the split pane instead of a plain shell
+#   --agent:      Start an agent (cursor or claude) in the split pane; defaults to
+#                 DEFAULT_AGENT from setup-herdr.sh (a plain shell if neither is installed)
 #   --workspace:  Cursor Agent saved workspace name or path (requires --agent cursor)
 #
 # - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
 # - Inside Herdr: create a new focused workspace and start nvim there
-# - Always splits the Neovim pane: a plain shell by default, or an agent CLI with --agent
+# - Always splits the Neovim pane: the default (or --agent) agent CLI, or a plain shell if none
 # - Tabs: "neovim" (Neovim + the split pane above) and, for git repos, "lazygit"
 
 set -euo pipefail
@@ -46,6 +47,7 @@ while [[ $# -gt 0 ]]; do
 Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
 
   --agent cursor|claude   Start that agent CLI in the split pane
+                          (default: DEFAULT_AGENT from setup-herdr.sh)
   --workspace NAME|PATH   Cursor Agent workspace (requires --agent cursor)
   --force                 Allow a non-git directory
 EOF
@@ -61,6 +63,22 @@ done
 if [[ -n "$AGENT" ]] && [[ "$AGENT" != "cursor" ]] && [[ "$AGENT" != "claude" ]]; then
     echo "Error: --agent must be 'cursor' or 'claude' (got: $AGENT)"
     exit 1
+fi
+
+# No --agent given: fall back to the DEFAULT_AGENT chosen during setup-herdr.sh
+# (whichever agent CLI is actually installed still wins if the saved choice is stale).
+if [[ -z "$AGENT" ]]; then
+    BOOTSTRAP_CONFIG="$HOME/.config/dotfiles-arch/.dotfiles_bootstrap_config"
+    DEFAULT_AGENT=""
+    if [[ -r "$BOOTSTRAP_CONFIG" ]]; then
+        # shellcheck source=/dev/null
+        DEFAULT_AGENT="$(source "$BOOTSTRAP_CONFIG" && printf '%s' "${DEFAULT_AGENT:-}")" 2>/dev/null || DEFAULT_AGENT=""
+    fi
+    if [[ "$DEFAULT_AGENT" == "cursor" ]] && { command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; }; then
+        AGENT="cursor"
+    elif [[ "$DEFAULT_AGENT" == "claude" ]] && command -v claude &>/dev/null; then
+        AGENT="claude"
+    fi
 fi
 
 if [[ -n "$WORKSPACE" ]]; then

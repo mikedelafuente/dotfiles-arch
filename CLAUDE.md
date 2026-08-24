@@ -98,7 +98,7 @@ Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DI
 - Packages: `ensure_pacman_pkgs`, `ensure_yay_installed` (scanned before makepkg), `ensure_yay_pkgs`, `ensure_multilib_enabled`, `safe_system_upgrade`, `remove_orphaned_packages`
 - AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`
+- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`, `resolve_default_agent`
 - Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 
@@ -118,7 +118,8 @@ Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config
 Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
 
 - `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
-  `SETUP_PROFILE` (primary for older readers), `INSTALL_NVIDIA`, `MACHINE_TYPE`
+  `SETUP_PROFILE` (primary for older readers), `INSTALL_NVIDIA`, `MACHINE_TYPE`,
+  `DEFAULT_AGENT` (`cursor`|`claude`, resolved by `setup-herdr.sh` — see below)
 
 `bootstrap.sh` / `sync.sh` export `MACHINE_TYPE` for the setup scripts; `setup-gnome.sh` also falls back to `load_bootstrap_config` + `has_battery`.
 
@@ -128,24 +129,24 @@ Profiles are **additive** — select any combination (e.g. `work,devcontainer`).
 
 | Profile | Extra setup |
 |---------|-----------------------------------------------|
-| work | Zoom, Slack, Chrome |
+| work | Cursor IDE + Agent CLI, Zoom, Slack, Chrome |
 | personal | Steam, Discord, Firefox, Mullvad |
 | devcontainer | just, mkcert, bind/`dig`, OpenVPN 3 (`openvpn3` AUR), Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
 
-Shared: Kitty, Herdr, Cursor + Agent CLI, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc.
+Shared: Kitty, Herdr, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc. Cursor is work-profile-only (see table above) — `run-profile-setup.sh` runs `setup-herdr.sh` last so it can detect Cursor when the work profile just installed it.
 
 ### Special cases
 
 - **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes `~/.config/git/identity` (not the shared `.gitconfig`)
 - **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` (checksummed install.sh, never `curl|bash`); Claude uses user-level `npm` (never `sudo npm`)
-- **setup-herdr.sh**: AUR `herdr-bin` only (no curl|bash fallback); calls `ensure_yay_installed` if needed
+- **setup-herdr.sh**: AUR `herdr-bin` only (no curl|bash fallback); calls `ensure_yay_installed` if needed; runs last in `run-profile-setup.sh` (after profile extras) so Cursor/Claude are already on PATH; installs whichever of the Claude/Cursor Herdr integrations it finds, then resolves `DEFAULT_AGENT` via `resolve_default_agent` — auto-picks the one CLI installed, prompts (Enter keeps the saved choice) when both are, leaves it empty when neither is — and persists it with `write_bootstrap_config`
 - **setup-gnome.sh**: Only when `gnome-shell` is installed; power policy from `MACHINE_TYPE` (`power-profiles-daemon` profile, `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` — laptop suspends on battery lid-close but ignores lid on AC/docked, `90-dotfiles-arch-usb-wakeup.rules` for KVM HID wake, audio powersave), falling back to `has_battery`; installs/configures Dash to Panel (always-visible full-width top bar, small centered icons, every monitor); Pop Shell auto-tiling off by default
 - **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
-- **setup-cursor.sh**: IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`. On machines with no NVIDIA hardware (integrated-GPU-only; checked via `has_nvidia_hardware` PCI detection, not driver packages), it also drops a `~/.local/share/applications/cursor.desktop` override that adds `--ozone-platform=x11` and idempotently forces `disable-hardware-acceleration: true` in `~/.cursor/argv.json` (JSONC — comments preserved, not a jq rewrite), working around an Electron native-Wayland hang-on-quit/slowness bug; both are removed/left alone automatically if NVIDIA hardware is later detected
-- **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh`/Cursor already shared)
+- **setup-cursor.sh**: work-profile-only (see Profiles table); IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`. On machines with no NVIDIA hardware (integrated-GPU-only; checked via `has_nvidia_hardware` PCI detection, not driver packages), it also drops a `~/.local/share/applications/cursor.desktop` override that adds `--ozone-platform=x11` and idempotently forces `disable-hardware-acceleration: true` in `~/.cursor/argv.json` (JSONC — comments preserved, not a jq rewrite), working around an Electron native-Wayland hang-on-quit/slowness bug; both are removed/left alone automatically if NVIDIA hardware is later detected
+- **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh` already shared); the Cursor Dev Containers extension step warns and skips if Cursor isn't installed (i.e. devcontainer profile without work)
 - **setup-essentials.sh**: `ESSENTIAL_PACKAGES` is the canonical CLI list — update `PACKAGES.md` in the same change
-- **`code`**: Creates a Herdr workspace and starts `nvim .` (`--force` skips the git-repo requirement); `--agent cursor|claude` also splits the pane and starts that agent CLI via `herdr agent start ... --kind <agent> --pane <id>`; `--workspace <name-or-path>` (Cursor only) is forwarded as `agent --workspace …`
+- **`code`**: Creates a Herdr workspace and starts `nvim .` (`--force` skips the git-repo requirement); `--agent cursor|claude` (default: `DEFAULT_AGENT` from the bootstrap config, falling back to a plain shell if that agent's CLI isn't actually installed) splits the pane and starts that agent CLI via `herdr agent start ... --kind <agent> --pane <id>`; `--workspace <name-or-path>` (Cursor only) is forwarded as `agent --workspace …`
 
 ## Key design decisions
 

@@ -122,11 +122,11 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
-| **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
+| **work** | Cursor IDE + Agent CLI, Zoom, Slack, Chrome | Chrome (when work is selected) |
 | **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
 | **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches, Dev Containers extension | — (no browser change) |
 
-Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup).
+Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup). Cursor is work-only — the devcontainer profile's Dev Containers extension step just warns and skips it if Cursor isn't installed.
 
 ---
 
@@ -138,8 +138,8 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 |------|--------|
 | **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
-| **Multiplexer** | Herdr (+ Claude & Cursor agent integrations) |
-| **Editors / AI** | Neovim (LazyVim-style), Cursor IDE + Agent CLI (`agent`), Claude Code (`claude`) |
+| **Multiplexer** | Herdr (+ Claude & Cursor agent integrations, whichever are installed) |
+| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Cursor IDE + Agent CLI (`agent`, work profile only) |
 | **Git** | git, lazygit (`lzg`), GitHub CLI (`gh`) |
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
@@ -222,7 +222,7 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous tab |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `code <dir> --agent cursor` or `--agent claude` (raw CLI: `herdr agent start <name> --kind cursor --pane <id>`). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`.
+Agents: `code <dir> --agent cursor` or `--agent claude` (raw CLI: `herdr agent start <name> --kind cursor --pane <id>`). Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-herdr.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`.
 
 ### Shell (highlights)
 

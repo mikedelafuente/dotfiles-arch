@@ -59,8 +59,19 @@ if command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; then
     herdr integration install cursor 2>/dev/null \
         || print_warning_message "Could not install Cursor integration (run later: herdr integration install cursor)"
 else
-    print_info_message "cursor-agent not on PATH yet — skip Herdr Cursor integration (re-run setup-herdr.sh after Cursor Agent CLI is installed)"
+    print_info_message "cursor-agent not on PATH yet — skip Herdr Cursor integration (install Cursor via the work profile, then re-run setup-herdr.sh)"
 fi
+
+# DEFAULT_AGENT drives which agent `code` (no --agent flag) starts by default.
+load_bootstrap_config || true
+export ASSUME_YES="${DOTFILES_AUR_ASSUME_YES:-false}"
+resolve_default_agent
+if [[ -n "$DEFAULT_AGENT" ]]; then
+    print_info_message "code's default agent: $DEFAULT_AGENT (override per-run with --agent cursor|claude)"
+else
+    print_info_message "No agent CLI installed yet — 'code' will open a plain shell pane until one is"
+fi
+write_bootstrap_config
 
 print_info_message "Installed integrations:"
 herdr integration status 2>/dev/null | grep -E 'current|outdated' || true
