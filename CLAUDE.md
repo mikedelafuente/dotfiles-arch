@@ -130,7 +130,7 @@ Profiles are **additive** — select any combination (e.g. `work,devcontainer`).
 | Profile | Extra setup |
 |---------|-----------------------------------------------|
 | work | Cursor IDE + Agent CLI, Zoom, Slack, Chrome |
-| personal | Steam, Discord, Firefox, Mullvad |
+| personal | Steam, Discord, Firefox, Mullvad, opencode |
 | devcontainer | just, mkcert, bind/`dig`, OpenVPN 3 (`openvpn3` AUR), Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
 
 Shared: Kitty, Herdr, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc. Cursor is work-profile-only (see table above) — `run-profile-setup.sh` runs `setup-herdr.sh` last so it can detect Cursor when the work profile just installed it.

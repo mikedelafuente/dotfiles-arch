@@ -123,7 +123,7 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
 | **work** | Cursor IDE + Agent CLI, Zoom, Slack, Chrome | Chrome (when work is selected) |
-| **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
+| **personal** | Steam, Discord, Firefox, Mullvad VPN, opencode | Firefox (when personal is selected and work is not) |
 | **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches, Dev Containers extension | — (no browser change) |
 
 Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup). Cursor is work-only — the devcontainer profile's Dev Containers extension step just warns and skips it if Cursor isn't installed.

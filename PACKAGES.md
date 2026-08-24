@@ -131,7 +131,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `slack-desktop` (AUR) | Team chat | — |
 | `google-chrome` (AUR) | Work browser (Super+B when work is selected) | — |
 
-### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`
+### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`, `setup-opencode.sh`
 
 | Package | Purpose | Related commands |
 |---------|---------|------------------|
@@ -139,6 +139,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `discord` (AUR) | Chat | — |
 | `firefox` | Personal browser (Super+B when personal is selected and work is not) | — |
 | `mullvad-vpn-bin` (AUR) | VPN | `mvup`, `mvdown`, `mvst` |
+| `opencode` | AI coding agent CLI | `opencode` |
 
 ### devcontainer — `setup-devcontainer.sh`
 

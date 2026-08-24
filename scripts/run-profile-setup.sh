@@ -100,11 +100,12 @@ if has_setup_profile work; then
 fi
 
 if has_setup_profile personal; then
-  print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad"
+  print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad + opencode"
   run_setup setup-steam.sh
   run_setup setup-discord.sh
   run_setup setup-firefox.sh
   run_setup setup-mullvad.sh
+  run_setup setup-opencode.sh
 fi
 
 if has_setup_profile devcontainer; then
