@@ -221,7 +221,7 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous window |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-code.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`. Either agent's file edits automatically reveal themselves in the Neovim pane (new tab, or an in-place reload if already open and unmodified) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-cursor.sh`.
+Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-code.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`. Either agent's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-cursor.sh`.
 
 ### Shell (highlights)
 

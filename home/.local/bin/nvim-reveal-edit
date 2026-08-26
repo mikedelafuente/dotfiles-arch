@@ -4,8 +4,11 @@
 #
 # Reads a hook JSON payload on stdin and, if a `code`-launched Neovim
 # (home/.local/bin/code, --listen socket) is running for the edited file's
-# project, reveals it there: reload the buffer in place if it's already open
-# and has no unsaved local changes, otherwise open it in a new tab. No-ops
+# project, reveals it there: if the file is already open in a window in the
+# current tab, just focuses that window (reloading it if unmodified);
+# otherwise loads the file into the first non-nvim-tree window of the
+# current tab, so it lands like clicking the file in nvim-tree rather than
+# spawning a new tab (and nvim-tree itself is never disturbed). No-ops
 # silently whenever nothing matches, so it's safe to register globally.
 #
 # Payload shapes handled:
@@ -41,7 +44,51 @@ done
 [[ -n "$SOCKET" ]] || exit 0
 
 VIM_ESCAPED_PATH="${FILE_PATH//\'/\'\'}"
-REMOTE_EXPR="luaeval('(function() local f=_A; local b=vim.fn.bufnr(f); if b~=-1 and vim.fn.bufloaded(b)==1 then if not vim.bo[b].modified then vim.cmd(\"checktime \"..b) end else vim.cmd(\"tabnew \"..vim.fn.fnameescape(f)) end; return 1 end)()', '${VIM_ESCAPED_PATH}')"
+
+# Lua chunk run inside the target Neovim via --remote-expr's luaeval(). Kept
+# free of single quotes so it can be dropped straight into the Vimscript
+# string literal below without escaping.
+LUA_BODY=$(cat <<'LUA'
+(function()
+  local f = _A
+  local tab = vim.api.nvim_get_current_tabpage()
+  local function is_tree(buf)
+    return vim.bo[buf].filetype == "NvimTree"
+  end
+  local existing = vim.fn.bufnr(f)
+  if existing ~= -1 then
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+      if vim.api.nvim_win_get_buf(w) == existing then
+        vim.api.nvim_set_current_win(w)
+        if not vim.bo[existing].modified then
+          vim.cmd("checktime " .. existing)
+        end
+        return 1
+      end
+    end
+  end
+  local buf = vim.fn.bufnr(f, true)
+  vim.fn.bufload(buf)
+  vim.cmd("checktime " .. buf)
+  local target = nil
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    if not is_tree(vim.api.nvim_win_get_buf(w)) then
+      target = w
+      break
+    end
+  end
+  if not target then
+    vim.cmd("vsplit")
+    target = vim.api.nvim_get_current_win()
+  end
+  vim.api.nvim_win_set_buf(target, buf)
+  vim.api.nvim_set_current_win(target)
+  return 1
+end)()
+LUA
+)
+
+REMOTE_EXPR="luaeval('${LUA_BODY}', '${VIM_ESCAPED_PATH}')"
 
 nvim --server "$SOCKET" --remote-expr "$REMOTE_EXPR" >/dev/null 2>&1 || true
 
