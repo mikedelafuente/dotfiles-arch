@@ -34,6 +34,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `tree` | Directory tree | `tree` |
 | `jq` | JSON processor | `jq` |
 | `net-tools` | Legacy net utilities | `ports` (`netstat`), `ifconfig` |
+| `iw` | Wireless device config/query (nl80211) | `iw list`, `iw dev` |
 | `stow` | Symlink farm manager | manual dotfile experiments |
 | `shellcheck` | Shell static analysis | `check` / `check-dotfiles`, CI |
 | `github-cli` | GitHub from the terminal | `gh`; also the git credential helper |

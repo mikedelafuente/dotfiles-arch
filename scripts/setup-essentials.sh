@@ -36,6 +36,7 @@ ESSENTIAL_PACKAGES=(
   tree
   jq
   net-tools
+  iw
   btop
   duf
   stow
