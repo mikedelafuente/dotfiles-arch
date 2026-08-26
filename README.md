@@ -1,6 +1,6 @@
 # dotfiles-arch
 
-Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitty, Herdr, Neovim, Cursor, Claude Code, and a modular bootstrap/sync system.
+Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitty, tmux, Neovim, Cursor, Claude Code, and a modular bootstrap/sync system.
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
@@ -96,7 +96,7 @@ That will:
 3. Run a guarded system upgrade (`pacman` + AUR IoC scan + `yay`) every time
 4. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
 5. Relink dotfiles + `post-link-hooks.sh` (font cache, GNOME checklist)
-6. Optionally remove obsolete packages (tmux, Hyprland stack, etc.)
+6. Optionally remove obsolete packages (Herdr, Hyprland stack, etc.)
 
 ### Useful flags
 
@@ -138,7 +138,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 |------|--------|
 | **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
-| **Multiplexer** | Herdr (+ Claude & Cursor agent integrations, whichever are installed) |
+| **Multiplexer** | tmux |
 | **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Cursor IDE + Agent CLI (`agent`, work profile only) |
 | **Git** | git, lazygit (`lzg`), GitHub CLI (`gh`) |
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
@@ -188,7 +188,6 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | Shortcut | Action |
 |----------|--------|
 | **Super+Return** | Kitty terminal |
-| **Super+Shift+Return** | Kitty running Herdr |
 | **Super+E** | Files (Home) |
 | **Super+B** | Browser (Chrome or Firefox by profile) |
 | **Super+Space** | Application launcher |
@@ -211,24 +210,24 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | **Super+Y** | Toggle Pop Shell tiling (rebinds Super+Ctrl+Arrows) |
 | **Alt+Tab** | Switch windows |
 
-### Herdr (prefix = **Ctrl+B**)
+### tmux (prefix = **Ctrl+B**)
 
 | Keys | Action |
 |------|--------|
-| `herdr` | Attach / create session |
-| `Ctrl+B` then `q` | Detach (agents keep running) |
-| `Ctrl+B` `v` / `-` | Split right / down |
-| `Ctrl+B` `c` | New tab |
-| `Ctrl+B` `n` / `p` | Next / previous tab |
+| `tmux attach` | Attach to a session |
+| `Ctrl+B` `d` | Detach (session keeps running) |
+| `Ctrl+B` `%` / `"` | Split right / down |
+| `Ctrl+B` `c` | New window |
+| `Ctrl+B` `n` / `p` | Next / previous window |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `code <dir> --agent cursor` or `--agent claude` (raw CLI: `herdr agent start <name> --kind cursor --pane <id>`). Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-herdr.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`.
+Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-code.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`.
 
 ### Shell (highlights)
 
 | Command | What it does |
 |---------|----------------|
-| `code [dir]` | Herdr workspace + `nvim .` (git repo; `--force` for non-git; `--agent cursor --workspace NAME` for Cursor CLI workspace) |
+| `code [dir]` | tmux session + `nvim .` (git repo; `--force` for non-git; `--agent cursor --workspace NAME` for Cursor CLI workspace) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
@@ -259,7 +258,7 @@ Neovim: leader is **Space** — full map in `~/.nvim-cheatsheet.md` (`vimcheat`)
 ## Day-to-day workflow
 
 1. **Terminal** — Super+Return (Kitty).
-2. **Project** — `cd` / `z` into a repo, then `code` for Herdr + Neovim, or open Cursor / Claude as needed.
+2. **Project** — `cd` / `z` into a repo, then `code` for tmux + Neovim, or open Cursor / Claude as needed.
 3. **Git** — `gs` / `lzg`; GitHub with `gh`.
 4. **Docker** — `dps` / `lzd`.
 5. **Clipboard history** — Super+V.
@@ -306,5 +305,5 @@ dotfiles-arch/
 | [NOTES.md](NOTES.md) | Installing Arch or debugging GPU/sync |
 | [CLAUDE.md](CLAUDE.md) | Changing scripts / understanding design |
 | [AGENTS.md](AGENTS.md) | An AI agent needs the short version of the conventions |
-| `welcome` (in shell) | Alias and Herdr quick reference |
+| `welcome` (in shell) | Alias and tmux quick reference |
 | `vimcheat` | Neovim keybindings |

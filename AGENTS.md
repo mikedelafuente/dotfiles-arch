@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Arch Linux workstation dotfiles: GNOME (Wayland), Kitty, Herdr, Neovim, Cursor, Claude Code.
+Arch Linux workstation dotfiles: GNOME (Wayland), Kitty, tmux, Neovim, Cursor, Claude Code.
 Bash scripts plus symlinked configs — no build system, no test suite.
 
 ## Before you change anything

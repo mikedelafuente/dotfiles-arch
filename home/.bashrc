@@ -249,7 +249,7 @@ aliases() {
         echo ""
         
         # Display key bindings in readable format - only show our custom bindings
-        # These are configured in ~/.inputrc (herdr/readline-compatible)
+        # These are configured in ~/.inputrc (readline-compatible)
         printf "  %-22s → %s\n" "Tab" "Cycle through completions (menu-style)"
         printf "  %-22s → %s\n" "Shift+Tab" "Cycle backward through completions"
         printf "  %-22s → %s\n" "Up Arrow" "Search history backward (with prefix)"
@@ -297,25 +297,25 @@ aliases() {
             echo "     used directories by typing partial names. Just use it for a while!"
         fi
         
-        if command -v herdr &> /dev/null; then
-            
+        if command -v tmux &> /dev/null; then
+
             echo ""
             echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-            echo "║                         🪟  Herdr (Agent Multiplexer)                        ║"
+            echo "║                         🪟  tmux (Multiplexer)                               ║"
             echo "╚══════════════════════════════════════════════════════════════════════════════╝"
             echo ""
             echo "  Prefix: Ctrl+B (press first, then the command key)"
             echo ""
-            printf "  %-22s → %s\n" "herdr" "Attach / create session"
-            printf "  %-22s → %s\n" "code [dir]" "Herdr workspace + Neovim for a git repo"
-            printf "  %-22s → %s\n" "Ctrl+B  q" "Detach (agents keep running)"
-            printf "  %-22s → %s\n" "Ctrl+B  v" "Split pane right"
-            printf "  %-22s → %s\n" "Ctrl+B  -" "Split pane down"
-            printf "  %-22s → %s\n" "Ctrl+B  c" "New tab"
-            printf "  %-22s → %s\n" "Ctrl+B  n/p" "Next / previous tab"
+            printf "  %-22s → %s\n" "tmux attach" "Attach to a session (tmux ls to list)"
+            printf "  %-22s → %s\n" "code [dir]" "tmux session + Neovim for a git repo"
+            printf "  %-22s → %s\n" "Ctrl+B  d" "Detach (session keeps running)"
+            printf "  %-22s → %s\n" "Ctrl+B  %" "Split pane right"
+            printf "  %-22s → %s\n" "Ctrl+B  \"" "Split pane down"
+            printf "  %-22s → %s\n" "Ctrl+B  c" "New window"
+            printf "  %-22s → %s\n" "Ctrl+B  n/p" "Next / previous window"
             printf "  %-22s → %s\n" "Ctrl+B  ?" "Show all key bindings"
             echo ""
-            echo "  💡 Run agents (claude, etc.) inside panes — sidebar shows working/blocked/done"
+            echo "  💡 Run agents (claude, etc.) inside panes"
         fi
         
         if command -v cursor &> /dev/null; then

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # dotfiles-arch
 
-Arch Linux workstation automation: GNOME (Wayland), Kitty, Herdr, Neovim, Cursor,
+Arch Linux workstation automation: GNOME (Wayland), Kitty, tmux, Neovim, Cursor,
 Claude Code. Profiles are **additive multi-select** (`work`, `personal`, `devcontainer`).
 
 ## Orchestration

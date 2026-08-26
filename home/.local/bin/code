@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# code - Open a Herdr workspace with Neovim for a git repo
+# code - Open a tmux development session with Neovim (+ agent pane) for a git repo
 # Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
 #   directory:    Path to project directory (defaults to current directory)
 #   --force:      Open even when the directory is not a git repository
 #   --agent:      Start an agent (cursor or claude) in the split pane; defaults to
-#                 DEFAULT_AGENT from setup-herdr.sh (a plain shell if neither is installed)
+#                 DEFAULT_AGENT from setup-code.sh (a plain shell if neither is installed)
 #   --workspace:  Cursor Agent saved workspace name or path (requires --agent cursor)
 #
-# - Outside Herdr: attach a Herdr UI first (real TTY size), then create workspace + nvim
-# - Inside Herdr: create a new focused workspace and start nvim there
-# - Always splits the Neovim pane: the default (or --agent) agent CLI, or a plain shell if none
-# - Tabs: "neovim" (Neovim + the split pane above) and, for git repos, "lazygit"
+# - Always kills and recreates a session named after the target directory (fresh state).
+# - Window "code": Neovim (left, ~75%) + the default (or --agent) agent CLI / plain shell (right, ~25%)
+# - Window "lazygit" (git repos only, when lazygit is installed)
+# - Outside tmux: attaches in Kitty (or the current terminal); inside tmux: switches client
 
 set -euo pipefail
 
@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
 Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
 
   --agent cursor|claude   Start that agent CLI in the split pane
-                          (default: DEFAULT_AGENT from setup-herdr.sh)
+                          (default: DEFAULT_AGENT from setup-code.sh)
   --workspace NAME|PATH   Cursor Agent workspace (requires --agent cursor)
   --force                 Allow a non-git directory
 EOF
@@ -65,7 +65,7 @@ if [[ -n "$AGENT" ]] && [[ "$AGENT" != "cursor" ]] && [[ "$AGENT" != "claude" ]]
     exit 1
 fi
 
-# No --agent given: fall back to the DEFAULT_AGENT chosen during setup-herdr.sh
+# No --agent given: fall back to the DEFAULT_AGENT chosen during setup-code.sh
 # (whichever agent CLI is actually installed still wins if the saved choice is stale).
 if [[ -z "$AGENT" ]]; then
     BOOTSTRAP_CONFIG="$HOME/.config/dotfiles-arch/.dotfiles_bootstrap_config"
@@ -93,7 +93,6 @@ if [[ -n "$WORKSPACE" ]]; then
 fi
 
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
-LABEL="$(basename "$TARGET_DIR")"
 
 if [[ ! -d "$TARGET_DIR/.git" ]] && [[ "$FORCE" -eq 0 ]]; then
     echo "Error: $TARGET_DIR is not a git repository"
@@ -101,8 +100,8 @@ if [[ ! -d "$TARGET_DIR/.git" ]] && [[ "$FORCE" -eq 0 ]]; then
     exit 1
 fi
 
-if ! command -v herdr &>/dev/null; then
-    echo "Error: herdr is not installed. Run scripts/setup-herdr.sh first."
+if ! command -v tmux &>/dev/null; then
+    echo "Error: tmux is not installed. Run scripts/setup-code.sh first."
     exit 1
 fi
 
@@ -111,270 +110,75 @@ if ! command -v nvim &>/dev/null; then
     exit 1
 fi
 
-if ! command -v python3 &>/dev/null; then
-    echo "Error: python3 is required to parse Herdr CLI JSON."
-    exit 1
+# Generate a tmux-safe session name from the directory basename (no dots,
+# spaces, or colons); fall back to a hash if that leaves nothing usable.
+SESSION_NAME=$(basename "$TARGET_DIR" | tr '.' '_' | tr ' ' '_' | tr ':' '_')
+if [[ -z "$SESSION_NAME" || "$SESSION_NAME" =~ ^_+$ ]]; then
+    SESSION_NAME="dev_$(echo "$TARGET_DIR" | md5sum | cut -c1-8)"
 fi
 
-herdr_server_running() {
-    herdr status 2>/dev/null | grep -q "status: running"
+# Resolve the command to start in the agent pane, if any.
+agent_command() {
+    case "$AGENT" in
+        cursor)
+            local bin="cursor-agent"
+            command -v cursor-agent &>/dev/null || bin="agent"
+            if [[ -n "$WORKSPACE" ]]; then
+                printf '%s --workspace %q' "$bin" "$WORKSPACE"
+            else
+                printf '%s' "$bin"
+            fi
+            ;;
+        claude)
+            printf 'claude'
+            ;;
+    esac
 }
 
-ensure_herdr_server() {
-    if herdr_server_running; then
-        return 0
-    fi
-
-    echo "Starting Herdr server..."
-    herdr server >/dev/null 2>&1 &
-    disown $! 2>/dev/null || true
-
-    for _ in $(seq 1 50); do
-        if herdr_server_running; then
-            return 0
-        fi
-        sleep 0.1
-    done
-
-    echo "Error: could not start Herdr server"
-    exit 1
-}
-
-# Herdr panes report viewport_rows; wait until the PTY looks real before starting nvim.
-# Starting Neovim in a zero/unstable grid (common before a client attaches) trips
-# Arch neovim's RelWithDebInfo ui_line assert.
-pane_viewport_rows() {
-    local pane_id="$1"
-    herdr pane get "$pane_id" 2>/dev/null | python3 -c '
-import json, sys
-try:
-    print(json.load(sys.stdin)["result"]["pane"]["scroll"]["viewport_rows"])
-except Exception:
-    print(0)
-'
-}
-
-wait_for_pane_shell() {
-    local pane_id="$1"
-    local rows
-    for _ in $(seq 1 50); do
-        rows="$(pane_viewport_rows "$pane_id")"
-        if [[ "${rows:-0}" -ge 10 ]]; then
-            return 0
-        fi
-        sleep 0.1
-    done
-    return 1
-}
-
-# Create a workspace and launch Neovim after the pane size is stable.
-open_workspace_with_nvim() {
-    local create_json pane_id workspace_id tab_id
-
-    create_json="$(herdr workspace create --cwd "$TARGET_DIR" --label "$LABEL" --focus)"
-    pane_id="$(
-        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])' <<<"$create_json"
-    )"
-    workspace_id="$(
-        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["workspace"]["workspace_id"])' <<<"$create_json"
-    )"
-    tab_id="$(
-        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["tab"]["tab_id"])' <<<"$create_json"
-    )"
-
-    if [[ -z "$pane_id" ]]; then
-        echo "Error: could not determine new workspace pane id"
-        exit 1
-    fi
-
-    if ! wait_for_pane_shell "$pane_id"; then
-        echo "Warning: pane $pane_id may not be fully ready; starting Neovim anyway"
-    fi
-
-    if [[ -n "$tab_id" ]]; then
-        herdr tab rename "$tab_id" neovim >/dev/null 2>&1 \
-            || echo "Warning: could not rename tab to 'neovim'"
-    fi
-
-    # Brief settle after focus/resize so Neovim does not start mid-reflow.
-    # Launch via a short delayed shell command as a second safeguard.
-    sleep 0.25
-    if ! herdr pane run "$pane_id" "bash -lc 'sleep 0.35; exec nvim .'" >/dev/null 2>&1; then
-        echo "Error: failed to start Neovim in pane $pane_id"
-        exit 1
-    fi
-
-    echo "Opened Neovim in Herdr workspace '$LABEL' (pane $pane_id)"
-    NVIM_PANE_ID="$pane_id"
-    WORKSPACE_ID="$workspace_id"
-}
-
-# Lowercase, strip to [a-z0-9_-], and truncate to Herdr's 32-char agent
-# name limit, ensuring the result starts with a lowercase letter.
-sanitize_agent_name() {
-    local raw="$1" name
-    name="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '-')"
-    if [[ ! "$name" =~ ^[a-z] ]]; then
-        name="a-${name}"
-    fi
-    printf '%s' "${name:0:32}"
-}
-
-# Split the Neovim pane. With --agent, start that agent in the new pane;
-# otherwise it's left as a plain shell in TARGET_DIR.
-split_second_pane() {
-    local nvim_pane_id="$1" split_json agent_pane_id agent_name
-
-    split_json="$(herdr pane split "$nvim_pane_id" --direction right --ratio 0.75 --cwd "$TARGET_DIR")"
-    agent_pane_id="$(
-        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["pane"]["pane_id"])' <<<"$split_json"
-    )"
-
-    if [[ -z "$agent_pane_id" ]]; then
-        echo "Error: could not determine new split pane id"
-        exit 1
-    fi
-
-    if ! wait_for_pane_shell "$agent_pane_id"; then
-        echo "Warning: pane $agent_pane_id may not be fully ready"
-    fi
-
-    if [[ -z "$AGENT" ]]; then
-        return 0
-    fi
-
-    # Agent names must be unique across the whole Herdr session, but $LABEL
-    # (the directory basename) repeats every time the same repo is reopened,
-    # so suffix with this pane's workspace id (the part before ':') to
-    # disambiguate. Herdr also requires names to start with a lowercase
-    # letter and contain only lowercase letters/digits/'-'/'_' (<=32 chars) —
-    # workspace ids can contain uppercase (e.g. "wJ"), so sanitize both parts.
-    agent_name="$(sanitize_agent_name "${LABEL}-${nvim_pane_id%%:*}")"
-
-    # Brief settle after split so the shell prompt is ready before the agent
-    # command is typed in (mirrors the safeguard used for the Neovim pane).
-    sleep 0.3
-    local -a start_args=(agent start "$agent_name" --kind "$AGENT" --pane "$agent_pane_id")
-    if [[ -n "$WORKSPACE" ]]; then
-        # Extra args after -- are forwarded to the agent binary (cursor-agent).
-        start_args+=(-- --workspace "$WORKSPACE")
-    fi
-    if ! herdr "${start_args[@]}" >/dev/null 2>&1; then
-        echo "Error: failed to start $AGENT agent in pane $agent_pane_id"
-        exit 1
-    fi
-
-    if [[ -n "$WORKSPACE" ]]; then
-        echo "Started $AGENT agent '$agent_name' with workspace '$WORKSPACE' in Herdr pane $agent_pane_id"
-    else
-        echo "Started $AGENT agent '$agent_name' in Herdr pane $agent_pane_id"
-    fi
-}
-
-# Create a "lazygit" tab in the workspace and start lazygit in it.
-create_lazygit_tab() {
-    local workspace_id="$1" tab_json tab_pane_id
-
-    tab_json="$(herdr tab create --workspace "$workspace_id" --cwd "$TARGET_DIR" --label lazygit --no-focus)"
-    tab_pane_id="$(
-        python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])' <<<"$tab_json"
-    )"
-
-    if [[ -z "$tab_pane_id" ]]; then
-        echo "Error: could not determine lazygit tab pane id"
-        exit 1
-    fi
-
-    if ! wait_for_pane_shell "$tab_pane_id"; then
-        echo "Warning: lazygit pane may not be fully ready; starting anyway"
-    fi
-
-    sleep 0.3
-    if ! herdr pane run "$tab_pane_id" "bash -lc 'sleep 0.3; exec lazygit'" >/dev/null 2>&1; then
-        echo "Error: failed to start lazygit in pane $tab_pane_id"
-        exit 1
-    fi
-
-    echo "Opened lazygit in tab 'lazygit' (pane $tab_pane_id)"
-}
-
-# Open a Herdr UI client before starting Neovim so the PTY has a real size.
-ensure_herdr_ui() {
-    # Already inside a Herdr client
-    if [[ -n "${HERDR_SOCKET_PATH:-}" ]]; then
-        return 0
-    fi
-
-    if ! command -v kitty &>/dev/null; then
-        echo "Warning: kitty not found; attaching Herdr in this terminal after Neovim starts"
-        return 1
-    fi
-
-    echo "Opening Herdr UI in Kitty..."
-    kitty --detach --directory "$TARGET_DIR" herdr
-
-    for _ in $(seq 1 50); do
-        # Any pane with a usable viewport means a client has sized the session
-        if herdr pane list 2>/dev/null | python3 -c '
-import json, sys
-try:
-    panes = json.load(sys.stdin)["result"]["panes"]
-except Exception:
-    sys.exit(1)
-sys.exit(0 if any(p.get("scroll", {}).get("viewport_rows", 0) >= 10 for p in panes) else 1)
-'; then
-            sleep 0.2
-            return 0
-        fi
-        sleep 0.1
-    done
-
-    echo "Warning: Herdr UI did not report a ready viewport; continuing anyway"
-    return 0
-}
-
-echo "Opening Herdr workspace for $TARGET_DIR"
-cd "$TARGET_DIR"
-
-ensure_herdr_server
-
-INSIDE_HERDR=0
-if [[ -n "${HERDR_SOCKET_PATH:-}" ]]; then
-    INSIDE_HERDR=1
+# Kill any existing session with the same name (always start fresh).
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "Killing existing session '$SESSION_NAME'"
+    tmux kill-session -t "$SESSION_NAME"
 fi
 
-STARTED_UI=0
-if [[ "$INSIDE_HERDR" -eq 0 ]]; then
-    if ensure_herdr_ui; then
-        STARTED_UI=1
-    fi
+echo "Creating tmux session '$SESSION_NAME' for $TARGET_DIR"
+
+NVIM_PANE="$(tmux new-session -d -s "$SESSION_NAME" -c "$TARGET_DIR" -n code -P -F '#{pane_id}')"
+tmux send-keys -t "$NVIM_PANE" "nvim ." C-m
+
+AGENT_PANE="$(tmux split-window -t "$NVIM_PANE" -h -p 25 -c "$TARGET_DIR" -P -F '#{pane_id}')"
+if [[ -n "$AGENT" ]]; then
+    tmux send-keys -t "$AGENT_PANE" "$(agent_command)" C-m
+    echo "Started $AGENT in pane $AGENT_PANE"
 fi
 
-open_workspace_with_nvim
-split_second_pane "$NVIM_PANE_ID"
+tmux select-pane -t "$NVIM_PANE"
 
 if [[ -d "$TARGET_DIR/.git" ]]; then
     if command -v lazygit &>/dev/null; then
-        create_lazygit_tab "$WORKSPACE_ID"
+        tmux new-window -t "$SESSION_NAME" -n lazygit -c "$TARGET_DIR"
+        tmux send-keys -t "$SESSION_NAME:lazygit" "lazygit" C-m
     else
-        echo "Note: lazygit is not installed; skipping the 'lazygit' tab"
+        echo "Note: lazygit is not installed; skipping the 'lazygit' window"
     fi
 fi
 
-if [[ "$INSIDE_HERDR" -eq 1 ]]; then
+tmux select-window -t "$SESSION_NAME:code"
+
+# Already in tmux: just switch the client over.
+if [[ -n "${TMUX:-}" ]]; then
+    tmux switch-client -t "$SESSION_NAME"
     exit 0
 fi
 
-# Detached Kitty already shows the session
-if [[ "$STARTED_UI" -eq 1 ]]; then
-    exit 0
-fi
-
-# Fallback: attach in the current terminal (nvim delayed launch should survive resize)
+# Already inside a Kitty window (but not in tmux): attach in place.
 if [[ -n "${KITTY_WINDOW_ID:-}" ]] || [[ "${TERM}" == *kitty* ]]; then
-    exec herdr
-elif command -v kitty &>/dev/null; then
-    exec kitty --directory "$TARGET_DIR" herdr
-else
-    exec herdr
+    exec tmux attach-session -t "$SESSION_NAME"
 fi
+
+# Plain terminal: launch Kitty attached to the session, killing it on exit.
+if command -v kitty &>/dev/null; then
+    exec kitty -e bash -c "tmux attach-session -t '$SESSION_NAME'; tmux kill-session -t '$SESSION_NAME' 2>/dev/null || true"
+fi
+
+exec tmux attach-session -t "$SESSION_NAME"

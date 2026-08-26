@@ -31,7 +31,6 @@ If packages need installing, sync will ask for sudo.
 | Want | Do this |
 |------|---------|
 | Terminal | **Super+Return** |
-| Herdr session | **Super+Shift+Return** |
 | Files | **Super+E** |
 | Browser | **Super+B** |
 | App search | **Super+Space** |
@@ -45,7 +44,7 @@ If packages need installing, sync will ask for sudo.
 
 ```bash
 cd /path/to/git-repo
-code            # Herdr + nvim .  (must be a git repo)
+code            # tmux + nvim .  (must be a git repo)
 code --force    # same, for a directory without .git
 # or
 v .             # plain Neovim in current Kitty window
@@ -53,13 +52,14 @@ v .             # plain Neovim in current Kitty window
 
 Neovim cheat sheet: `vimcheat` (leader key is **Space**).
 
-### …use Herdr again
+### …use tmux again
 
 ```bash
-herdr                 # attach or create
+tmux attach           # attach to a session
+tmux ls               # list sessions
 # Inside: prefix is Ctrl+B
-# Ctrl+B q            # detach (leave agents running)
-# Ctrl+B ?            # all keys
+# Ctrl+B d            # detach (session keeps running)
+# Ctrl+B ?             # all keys
 ```
 
 Open Neovim + an agent pane together:
@@ -68,13 +68,6 @@ Open Neovim + an agent pane together:
 code <dir> --agent cursor
 code <dir> --agent cursor --workspace day-to-day
 code <dir> --agent claude
-```
-
-Or start an agent pane by hand (raw CLI):
-
-```bash
-herdr agent start my-job --kind cursor --pane <id>
-herdr agent start my-job --kind claude --pane <id>
 ```
 
 ### …ask Cursor from the terminal
@@ -155,7 +148,7 @@ Or let sync pull for you:
 
 ```bash
 bash scripts/sync.sh --profile work,devcontainer   # or personal / work only
-bash scripts/sync.sh --cleanup           # drop old tmux/hypr/ghostty junk
+bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
 ```
 
 ### …set up a brand-new Arch box
@@ -182,10 +175,10 @@ KVM), and audio power saving. Re-ask any saved answer with
 ```bash
 packages         # what every installed package is for (PACKAGES.md)
 aliases          # aliases + key bindings
-command -v herdr kitty nvim agent claude
+command -v tmux kitty nvim agent claude
 ```
 
-Shared highlights: Kitty, Herdr, Neovim, Cursor + `agent`, Claude, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
+Shared highlights: Kitty, tmux, Neovim, Cursor + `agent`, Claude, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
 
 ### …reload shell config after editing bashrc
 
@@ -202,9 +195,9 @@ Dotfiles are **symlinks** into this repo — edit in the repo, changes apply imm
 ## Cheat pocket card
 
 ```
-Super+Return     terminal          Ctrl+B …     Herdr prefix
-Super+Shift+Ret  herdr session     Ctrl+B q     detach Herdr
-Super+E          files             code         herdr + nvim
+Super+Return     terminal          Ctrl+B …     tmux prefix
+Super+E          files             Ctrl+B d     detach tmux
+                                   code         tmux + nvim
 Super+B          browser           lzg / lzd    git / docker TUI
 Super+V          clipboard hist    z / zi / r   smart cd / repo pick
 Super+.          emoji             Ctrl+R       fuzzy history

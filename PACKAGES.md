@@ -49,7 +49,7 @@ directly-installed packages are listed; transitive dependencies are not.
 |---------|--------|---------|------------------|
 | `bash` | `setup-bash.sh` | Login shell | `~/.bashrc`, `~/.inputrc` |
 | `kitty` | `setup-kitty.sh` | GPU terminal (Catppuccin Mocha) | Super+Return, Ctrl+Shift+F scrollback, Ctrl+Shift+E URL hints |
-| `herdr-bin` (AUR) | `setup-herdr.sh` | Agent-friendly multiplexer | `herdr`, `code`, Super+Shift+Return |
+| `tmux` | `setup-code.sh` | Terminal multiplexer | `tmux`, `code` |
 | `neovim` | `setup-neovim.sh` | Editor | `v`, `vim`, `nvim`, `code` |
 | `gcc`, `make` | `setup-neovim.sh` | Build Treesitter parsers / native plugins | — |
 | `python-pynvim` | `setup-neovim.sh` | Neovim Python provider | — |

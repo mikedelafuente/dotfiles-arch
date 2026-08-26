@@ -82,7 +82,6 @@ run_setup setup-neovim.sh
 run_setup setup-tableplus.sh
 run_setup setup-docker.sh
 run_setup setup-minikube.sh
-run_setup setup-code.sh
 run_setup setup-php.sh
 run_setup setup-ruby.sh
 run_setup setup-postman.sh
@@ -114,7 +113,7 @@ if has_setup_profile devcontainer; then
 fi
 
 # Runs after profile extras so it can detect Cursor when the work profile just installed it.
-run_setup setup-herdr.sh
+run_setup setup-code.sh
 
 if pacman -Q gnome-shell &>/dev/null; then
   print_info_message "GNOME is installed — running GNOME setup"
