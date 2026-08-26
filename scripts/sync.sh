@@ -14,7 +14,7 @@
 # Flags:
 #   --profile LIST            One or more profiles: work, personal, devcontainer
 #   --prompt                  Re-ask profiles / NVIDIA / machine type even when saved
-#   --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
+#   --cleanup                 Remove obsolete packages (herdr, ghostty, etc.)
 #   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
 #   --yes                     Non-interactive; requires --profile if none saved
 # -----------------------------------------------------------------------------
@@ -49,7 +49,7 @@ Options:
   --profile LIST            One or more profiles (comma/space): work, personal, devcontainer
                             Required with --yes if none is saved. Example: work,devcontainer
   --prompt                  Re-ask profiles / NVIDIA / machine type even when saved
-  --cleanup                 Remove obsolete packages (tmux, ghostty, etc.)
+  --cleanup                 Remove obsolete packages (herdr, ghostty, etc.)
   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
   --yes, -y                 Non-interactive where safe (also AUR --noconfirm after scan)
   -h, --help                Show this help
@@ -272,7 +272,7 @@ bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 # --------------------------
 
 OBSOLETE_PKG_CANDIDATES=(
-  tmux
+  herdr-bin
   tmuxinator
   ghostty
   alacritty
@@ -335,6 +335,7 @@ cleanup_obsolete() {
     "$USER_HOME_DIR/.config/hypr"
     "$USER_HOME_DIR/.config/waybar"
     "$USER_HOME_DIR/.config/tmuxinator"
+    "$USER_HOME_DIR/.config/herdr"
   )
 
   for dir in "${stale_dirs[@]}"; do
@@ -350,14 +351,6 @@ cleanup_obsolete() {
       mv "$dir" "${dir}.obsolete.bak"
     fi
   done
-
-  if [ -e "$USER_HOME_DIR/.tmux.conf" ] && [ ! -L "$USER_HOME_DIR/.tmux.conf" ]; then
-    print_action_message "Backing up ~/.tmux.conf → ~/.tmux.conf.obsolete.bak"
-    mv "$USER_HOME_DIR/.tmux.conf" "$USER_HOME_DIR/.tmux.conf.obsolete.bak"
-  elif [ -L "$USER_HOME_DIR/.tmux.conf" ]; then
-    print_action_message "Removing leftover ~/.tmux.conf symlink"
-    rm -f "$USER_HOME_DIR/.tmux.conf"
-  fi
 
   local orphans
   orphans="$(pacman -Qtdq 2>/dev/null || true)"

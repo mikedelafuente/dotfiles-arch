@@ -588,19 +588,9 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI command 'gnome-characters'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI binding '<Super>period'
 
-# Super+Shift+Return for a Herdr session (Super+Return stays a plain terminal)
-CUSTOM_KB_HERDR="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR name 'Launch Herdr'
-if command -v kitty &> /dev/null; then
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR command 'kitty herdr'
-else
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR command 'gnome-terminal -- herdr'
-fi
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_HERDR binding '<Super><Shift>Return'
-
 # Update the custom keybindings list (no empty custom0; Super+E uses built-in Home)
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \
-  "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_EMOJI', '$CUSTOM_KB_BROWSER', '$CUSTOM_KB_CLIPBOARD', '$CUSTOM_KB_HERDR']"
+  "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_EMOJI', '$CUSTOM_KB_BROWSER', '$CUSTOM_KB_CLIPBOARD']"
 
 # Screenshot UI (region/window/screen picker, includes copy to clipboard)
 gsettings set org.gnome.shell.keybindings show-screenshot-ui "['<Super><Shift>s', 'Print']"
@@ -646,7 +636,6 @@ print_info_message "Application Launchers:"
 print_info_message "  - Top app bar (Dash to Panel): always visible, every monitor"
 print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
-print_info_message "  - Herdr session: Super+Shift+Return"
 print_info_message "  - File Explorer: Super+E"
 print_info_message "  - Browser: Super+B"
 print_info_message "  - Clipboard history (GPaste): Super+V"

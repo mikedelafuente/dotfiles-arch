@@ -211,7 +211,7 @@ fi
 
 ensure_yay_pkgs cursor-cli
 
-# cursor-cli only ships /usr/bin/cursor-agent; keep `agent` available for Herdr and muscle memory.
+# cursor-cli only ships /usr/bin/cursor-agent; keep `agent` available for muscle memory.
 if command -v cursor-agent &>/dev/null && [ ! -e "$USER_HOME_DIR/.local/bin/agent" ]; then
     AGENT_BIN="$(command -v cursor-agent)"
     print_action_message "Linking 'agent' → $AGENT_BIN"
@@ -222,14 +222,6 @@ fi
 
 if command -v cursor-agent &>/dev/null; then
     print_success_message "Cursor Agent CLI available: $(command -v cursor-agent) ($(cursor-agent --version 2>/dev/null | head -1))"
-    # Wire Herdr integration when Herdr is already present (bootstrap installs cursor before herdr;
-    # re-runs / sync also cover the reverse order)
-    if command -v herdr &>/dev/null; then
-        mkdir -p "$CURSOR_CONFIG_DIR"
-        print_info_message "Installing Herdr Cursor Agent integration"
-        herdr integration install cursor 2>/dev/null \
-            || print_warning_message "Could not install Herdr Cursor integration (run: herdr integration install cursor)"
-    fi
 else
     print_warning_message "cursor-agent not on PATH — check that cursor-cli installed (yay -S cursor-cli)"
 fi
