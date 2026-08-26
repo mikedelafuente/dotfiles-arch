@@ -45,6 +45,7 @@ return {
 
     -- Register leader key groups (new spec format)
     wk.add({
+      { "<leader>a", group = "Claude Code" },
       { "<leader>f", group = "Find (Telescope)" },
       { "<leader>b", group = "Buffer" },
       { "<leader>c", group = "Code" },

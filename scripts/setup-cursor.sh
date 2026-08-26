@@ -226,5 +226,42 @@ else
     print_warning_message "cursor-agent not on PATH — check that cursor-cli installed (yay -S cursor-cli)"
 fi
 
+# --------------------------
+# afterFileEdit hook: reveal edited files in the paired Neovim pane
+# --------------------------
+# Idempotently ensures nvim-reveal-edit runs after the Agent CLI edits a
+# file. Only touches .hooks.afterFileEdit so any other configured hooks are
+# left alone. hooks.json is plain JSON (unlike argv.json above, which is
+# JSONC), so jq is safe to use directly here.
+CURSOR_HOOKS_FILE="$USER_HOME_DIR/.cursor/hooks.json"
+
+ensure_cursor_nvim_reveal_hook() {
+  if ! command -v jq &>/dev/null; then
+    print_warning_message "jq not found — skipping Neovim reveal-on-edit hook for Cursor Agent CLI"
+    return
+  fi
+
+  mkdir -p "$(dirname "$CURSOR_HOOKS_FILE")"
+  [ -f "$CURSOR_HOOKS_FILE" ] || echo '{"version": 1, "hooks": {}}' > "$CURSOR_HOOKS_FILE"
+
+  if jq -e '(.hooks.afterFileEdit // []) | any(.command == "nvim-reveal-edit")' \
+    "$CURSOR_HOOKS_FILE" &>/dev/null; then
+    return
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  if jq '.version = (.version // 1) | .hooks.afterFileEdit = ((.hooks.afterFileEdit // []) + [{"command": "nvim-reveal-edit"}])' \
+    "$CURSOR_HOOKS_FILE" > "$tmp"; then
+    mv "$tmp" "$CURSOR_HOOKS_FILE"
+    print_success_message "Added Neovim reveal-on-edit hook to $CURSOR_HOOKS_FILE"
+  else
+    rm -f "$tmp"
+    print_warning_message "Could not update $CURSOR_HOOKS_FILE — add the afterFileEdit hook manually"
+  fi
+}
+
+ensure_cursor_nvim_reveal_hook
+
 print_info_message "Settings are linked to ~/.config/Cursor/User/ via link-dotfiles.sh"
 print_tool_setup_complete "Cursor IDE"

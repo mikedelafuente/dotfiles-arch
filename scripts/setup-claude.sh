@@ -37,4 +37,40 @@ else
   exit 1
 fi
 
+# --------------------------
+# PostToolUse hook: reveal edited files in the paired Neovim pane
+# --------------------------
+# Idempotently ensures nvim-reveal-edit runs after Edit/Write/NotebookEdit.
+# Only touches .hooks.PostToolUse so any existing hooks (e.g. SessionStart)
+# are left alone.
+CLAUDE_SETTINGS_FILE="$USER_HOME_DIR/.claude/settings.json"
+
+ensure_claude_nvim_reveal_hook() {
+  if ! command -v jq &>/dev/null; then
+    print_warning_message "jq not found — skipping Neovim reveal-on-edit hook for Claude Code"
+    return
+  fi
+
+  mkdir -p "$(dirname "$CLAUDE_SETTINGS_FILE")"
+  [ -f "$CLAUDE_SETTINGS_FILE" ] || echo '{}' > "$CLAUDE_SETTINGS_FILE"
+
+  if jq -e '(.hooks.PostToolUse // []) | any(.hooks[]?.command == "nvim-reveal-edit")' \
+    "$CLAUDE_SETTINGS_FILE" &>/dev/null; then
+    return
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  if jq '.hooks.PostToolUse = ((.hooks.PostToolUse // []) + [{"matcher": "Edit|Write|NotebookEdit", "hooks": [{"type": "command", "command": "nvim-reveal-edit", "timeout": 5}]}])' \
+    "$CLAUDE_SETTINGS_FILE" > "$tmp"; then
+    mv "$tmp" "$CLAUDE_SETTINGS_FILE"
+    print_success_message "Added Neovim reveal-on-edit hook to $CLAUDE_SETTINGS_FILE"
+  else
+    rm -f "$tmp"
+    print_warning_message "Could not update $CLAUDE_SETTINGS_FILE — add the PostToolUse hook manually"
+  fi
+}
+
+ensure_claude_nvim_reveal_hook
+
 print_tool_setup_complete "Claude Code"
