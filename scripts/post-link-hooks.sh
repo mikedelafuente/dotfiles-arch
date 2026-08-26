@@ -25,6 +25,11 @@ refresh_font_cache
 # --------------------------
 bash "$DF_SCRIPT_DIR/sync-skills.sh"
 
+# --------------------------
+# Sync personal rules (Cursor)
+# --------------------------
+bash "$DF_SCRIPT_DIR/sync-rules.sh"
+
 if pacman -Q gnome-shell &>/dev/null; then
   print_warning_message "GNOME checklist (log out/in if anything below is missing):"
   print_info_message "  • Super+V  — clipboard history (GPaste)"

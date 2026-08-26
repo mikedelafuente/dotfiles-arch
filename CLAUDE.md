@@ -39,7 +39,8 @@ dotfiles-arch/
 │   ├── starship.toml
 │   └── ...
 ├── skills/                       # Personal Claude/Cursor skills (SKILL.md folders)
-├── .cursor/rules/                # Repo conventions for AI agents
+├── rules/                        # Personal Cursor rules (flat .mdc files)
+├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
 ├── AGENTS.md                     # Short pointer file for agents
 ├── PACKAGES.md                   # Why each installed package exists
 ├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty)
@@ -93,7 +94,7 @@ Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DI
 
 ### `home/.local/bin/` helpers
 
-These scripts (`code`, `sync-dotfiles`, `sync-skills`, `update-system`, `repos`, `morning`, …) run from a symlinked `~/.local/bin`, not from inside the repo, so they can't source `dotheader.sh` directly by relative path. Instead they source `dotfiles-arch-lib.sh` and call `resolve_dotfiles_arch` to find the repo root (symlink walk-up, then `$DOTFILES_ARCH`, then a list of common clone paths checking for `scripts/sync.sh`) before sourcing anything from `scripts/`.
+These scripts (`code`, `sync-dotfiles`, `sync-skills`, `sync-rules`, `update-system`, `repos`, `morning`, …) run from a symlinked `~/.local/bin`, not from inside the repo, so they can't source `dotheader.sh` directly by relative path. Instead they source `dotfiles-arch-lib.sh` and call `resolve_dotfiles_arch` to find the repo root (symlink walk-up, then `$DOTFILES_ARCH`, then a list of common clone paths checking for `scripts/sync.sh`) before sourcing anything from `scripts/`.
 
 **fn-lib.sh** includes:
 
@@ -113,7 +114,7 @@ These scripts (`code`, `sync-dotfiles`, `sync-skills`, `update-system`, `repos`,
 1. Guarded system upgrade (`safe_system_upgrade`) — sync always; bootstrap when cooldown expired / multilib just enabled
 2. `run-profile-setup.sh` — single shared setup-* list; continues on error and prints a failure summary
 3. `link-dotfiles.sh`
-4. `post-link-hooks.sh` — `fc-cache` after `fonts.conf` is linked; `sync-skills.sh`; GNOME logout checklist
+4. `post-link-hooks.sh` — `fc-cache` after `fonts.conf` is linked; `sync-skills.sh`; `sync-rules.sh`; GNOME logout checklist
 
 Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config` (including `setup-nvidia.sh`).
 
@@ -150,6 +151,7 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 - **setup-cursor.sh**: work-profile-only (see Profiles table); IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`. On machines with no NVIDIA hardware (integrated-GPU-only; checked via `has_nvidia_hardware` PCI detection, not driver packages), it also drops a `~/.local/share/applications/cursor.desktop` override that adds `--ozone-platform=x11` and idempotently forces `disable-hardware-acceleration: true` in `~/.cursor/argv.json` (JSONC — comments preserved, not a jq rewrite), working around an Electron native-Wayland hang-on-quit/slowness bug; both are removed/left alone automatically if NVIDIA hardware is later detected. It also idempotently merges the `nvim-reveal-edit` `afterFileEdit` hook into `~/.cursor/hooks.json` (jq, touching only `.hooks.afterFileEdit` — this file is plain JSON, unlike JSONC `argv.json`)
 - **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh` already shared); the Cursor Dev Containers extension step warns and skips if Cursor isn't installed (i.e. devcontainer profile without work)
 - **sync-skills.sh**: Symlinks each folder under `skills/` into `~/.claude/skills/<name>` and `~/.cursor/skills/<name>` (both tools consume the same `SKILL.md` format — Claude Code's own skills scan is not recursive, so each skill is linked individually rather than as one nested folder); also prunes any such symlink whose source was deleted from `skills/`. Only ever touches symlinks it created that resolve back into this repo — real entries already in those directories (e.g. company-provided skills copied in on a work machine) are never touched. Runs via `post-link-hooks.sh` (so every `bootstrap.sh`/`sync-dotfiles`) and as a step in `morning`; also runnable directly as `sync-skills`
+- **sync-rules.sh**: Symlinks each `*.mdc` file under `rules/` into `~/.cursor/rules/<name>.mdc` (Cursor only — Claude Code has no equivalent auto-loaded rules directory); also prunes any such symlink whose source was deleted from `rules/`. Only ever touches symlinks it created that resolve back into this repo — real entries already in `~/.cursor/rules/` are never touched. Runs via `post-link-hooks.sh` (so every `bootstrap.sh`/`sync-dotfiles`) and as a step in `morning`; also runnable directly as `sync-rules`
 - **setup-essentials.sh**: `ESSENTIAL_PACKAGES` is the canonical CLI list — update `PACKAGES.md` in the same change
 - **`code`**: Creates a tmux session (killing/recreating any existing session for the same directory) with a `code` window (`nvim .` left, ~75%) and starts `nvim --listen <socket> .` (`--force` skips the git-repo requirement); `--agent cursor|claude` (default: `DEFAULT_AGENT` from the bootstrap config, falling back to a plain shell if that agent's CLI isn't actually installed) starts that agent CLI in the split pane; `--workspace <name-or-path>` (Cursor only) is forwarded as `cursor-agent --workspace …`; a `lazygit` window is added for git repos when lazygit is installed. With `--agent claude`, `config/nvim/lua/plugins/claudecode.lua` (`coder/claudecode.nvim`, `provider = "none"`, eager-loaded so its WebSocket/MCP server is up before the agent pane starts) auto-bridges the two: `claude` discovers Neovim via `~/.claude/ide/*.lock` matching cwd, `<leader>as`/`<leader>ab` send a selection/file as context, and Claude can open files/push diffs/read diagnostics through the protocol — `/ide` inside the Claude pane is the manual fallback if it starts before Neovim finishes loading. Separately, for both agents: `nvim-reveal-edit` (`home/.local/bin/`) is registered as a Claude Code `PostToolUse` hook and a Cursor `afterFileEdit` hook (see `setup-claude.sh`/`setup-cursor.sh` below) — it reads the edited file's path from the hook payload, finds the `--listen` socket named after the enclosing `code` session (walking up the file's directory tree), and reveals the file in that Neovim: `:checktime`-reloads it in place if already open and unmodified, otherwise opens it in a new tab. Silently no-ops outside a `code` session
 
@@ -171,6 +173,7 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
 - `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
 - `scripts/sync-skills.sh` — symlinks `skills/*` into `~/.claude/skills` + `~/.cursor/skills`, prunes stale links
+- `scripts/sync-rules.sh` — symlinks `rules/*.mdc` into `~/.cursor/rules`, prunes stale links
 - `scripts/update-system.sh` — guarded day-to-day `pacman` + `yay` updater (AUR IoC scan)
 - `scripts/fn-lib.sh` — package/nvm/hardware/config/AUR-scan helpers
 - `scripts/setup-gnome.sh` — theme, Pop Shell, Dash to Panel, keybindings, GPaste, AppIndicator, No Overview
