@@ -143,8 +143,13 @@ fi
 
 echo "Creating tmux session '$SESSION_NAME' for $TARGET_DIR"
 
+# Neovim listens on a socket named after SESSION_NAME so nvim-reveal-edit
+# (the Claude/Cursor PostToolUse/afterFileEdit hook) can find this pane.
+NVIM_SOCKET="${XDG_RUNTIME_DIR:-/tmp}/dotfiles-arch-nvim-${SESSION_NAME}.sock"
+rm -f "$NVIM_SOCKET"
+
 NVIM_PANE="$(tmux new-session -d -s "$SESSION_NAME" -c "$TARGET_DIR" -n code -P -F '#{pane_id}')"
-tmux send-keys -t "$NVIM_PANE" "nvim ." C-m
+tmux send-keys -t "$NVIM_PANE" "nvim --listen '$NVIM_SOCKET' ." C-m
 
 AGENT_PANE="$(tmux split-window -t "$NVIM_PANE" -h -p 25 -c "$TARGET_DIR" -P -F '#{pane_id}')"
 if [[ -n "$AGENT" ]]; then

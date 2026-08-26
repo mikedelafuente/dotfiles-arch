@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# nvim-reveal-edit - PostToolUse (Claude Code) / afterFileEdit (Cursor Agent CLI) hook.
+#
+# Reads a hook JSON payload on stdin and, if a `code`-launched Neovim
+# (home/.local/bin/code, --listen socket) is running for the edited file's
+# project, reveals it there: reload the buffer in place if it's already open
+# and has no unsaved local changes, otherwise open it in a new tab. No-ops
+# silently whenever nothing matches, so it's safe to register globally.
+#
+# Payload shapes handled:
+#   Claude Code PostToolUse: .tool_input.file_path (Edit/Write) or
+#                             .tool_input.notebook_path (NotebookEdit)
+#   Cursor afterFileEdit:    .file_path at top level
+
+set -euo pipefail
+
+command -v jq &>/dev/null || exit 0
+command -v nvim &>/dev/null || exit 0
+
+PAYLOAD="$(cat)"
+FILE_PATH="$(jq -r '.file_path // .tool_input.file_path // .tool_input.notebook_path // empty' <<<"$PAYLOAD" 2>/dev/null || true)"
+[[ -n "$FILE_PATH" ]] || exit 0
+[[ -f "$FILE_PATH" ]] || exit 0
+
+FILE_PATH="$(realpath -m "$FILE_PATH")"
+
+# Walk up from the file looking for a live socket, matching the SESSION_NAME
+# derivation in home/.local/bin/code exactly (basename with '.', ' ', ':' -> '_').
+SOCKET=""
+dir="$(dirname "$FILE_PATH")"
+while [[ -n "$dir" && "$dir" != "/" ]]; do
+  name="$(basename "$dir" | tr '.' '_' | tr ' ' '_' | tr ':' '_')"
+  candidate="${XDG_RUNTIME_DIR:-/tmp}/dotfiles-arch-nvim-${name}.sock"
+  if [[ -S "$candidate" ]]; then
+    SOCKET="$candidate"
+    break
+  fi
+  dir="$(dirname "$dir")"
+done
+[[ -n "$SOCKET" ]] || exit 0
+
+VIM_ESCAPED_PATH="${FILE_PATH//\'/\'\'}"
+REMOTE_EXPR="luaeval('(function() local f=_A; local b=vim.fn.bufnr(f); if b~=-1 and vim.fn.bufloaded(b)==1 then if not vim.bo[b].modified then vim.cmd(\"checktime \"..b) end else vim.cmd(\"tabnew \"..vim.fn.fnameescape(f)) end; return 1 end)()', '${VIM_ESCAPED_PATH}')"
+
+nvim --server "$SOCKET" --remote-expr "$REMOTE_EXPR" >/dev/null 2>&1 || true
+
+exit 0
