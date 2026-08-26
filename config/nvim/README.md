@@ -86,6 +86,12 @@ On first launch:
 | **treesitter-textobjects** | Smart text selection | `af`, `if`, `ac`, `ic` |
 | **render-markdown.nvim** | In-buffer Markdown preview | `<leader>mr` toggle; CLI: `glow` / `md` |
 
+### AI Integration
+
+| Plugin | Purpose | Keybindings |
+|--------|---------|-------------|
+| **claudecode.nvim** | Bidirectional bridge to the Claude Code CLI (`provider = "none"`: Claude runs in its own tmux pane via the `code` command, not inside Neovim) | `<leader>as`, `<leader>ab` |
+
 ### UI Enhancements
 
 | Plugin | Purpose | Visual Impact |
@@ -129,6 +135,16 @@ On first launch:
 | Key | Action | Description |
 |-----|--------|-------------|
 | `<leader>e` | Toggle file explorer | Open/close nvim-tree |
+
+### Claude Code
+
+| Key | Action | Description |
+|-----|--------|--------------|
+| `<leader>as` | Send selection to Claude | Visual mode; sends the highlighted text as context |
+| `<leader>as` | Add file to Claude | File-explorer buffers (NvimTree, oil, ...); adds the file under cursor |
+| `<leader>ab` | Add current buffer to Claude | Sends the whole file as context |
+
+Requires a `claude` CLI running in the same working directory — the `code` command's agent pane does this automatically (`code --agent claude`). Neovim starts the bridge's WebSocket server on startup and writes a lock file that `claude` auto-discovers by matching cwd; no manual connection step needed. If a session ever starts before Neovim finishes loading, run `/ide` inside the Claude pane to connect manually. Sending anything jumps tmux focus to the pane to the right (the fixed layout the `code` command creates).
 
 ### Markdown
 
@@ -237,6 +253,7 @@ Use:
 │       ├── treesitter.lua      # Syntax highlighting
 │       ├── telescope.lua       # Fuzzy finder
 │       ├── which-key.lua       # Keybinding discovery
+│       ├── claudecode.lua      # Bidirectional bridge to the Claude Code CLI
 │       ├── markdown.lua        # In-buffer Markdown rendering
 │       └── ui.lua              # UI plugins (theme, statusline, etc.)
 ```
