@@ -20,6 +20,11 @@ print_line_break "Post-link hooks"
 # Fontconfig + packages are useful only after fonts.conf is linked
 refresh_font_cache
 
+# --------------------------
+# Sync personal skills (Claude Code / Cursor)
+# --------------------------
+bash "$DF_SCRIPT_DIR/sync-skills.sh"
+
 if pacman -Q gnome-shell &>/dev/null; then
   print_warning_message "GNOME checklist (log out/in if anything below is missing):"
   print_info_message "  • Super+V  — clipboard history (GPaste)"

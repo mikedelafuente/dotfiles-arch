@@ -4,7 +4,8 @@
 # Edit MORNING_STEPS below to add or reorder tasks. Each name must be on PATH
 # (~/.local/bin). Missing commands are skipped with a message.
 #
-# Default: update-repos, then update-system (day-to-day pacman + yay).
+# Default: update-repos, then update-system (day-to-day pacman + yay), then
+# sync-skills (relink personal skills from dotfiles-arch).
 # Use sync-dotfiles instead of (or after) update-system when the dotfiles repo
 # changed and you want setup scripts + re-link, not just package upgrades.
 #
@@ -16,6 +17,7 @@ set -uo pipefail
 MORNING_STEPS=(
   update-repos
   update-system
+  sync-skills
 )
 
 usage() {
@@ -28,6 +30,7 @@ customize. Steps not on PATH are skipped.
 Default steps:
   update-repos    git pull under ~/repos
   update-system   guarded pacman + yay update
+  sync-skills     relink personal skills from dotfiles-arch
 
 Example:
   morning --yes   non-interactive system update (forwarded to update-system)
