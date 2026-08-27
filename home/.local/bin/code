@@ -11,6 +11,8 @@
 # - Always kills and recreates a session named after the target directory (fresh state).
 # - Window "code": Neovim (left, ~75%) + the default (or --agent) agent CLI / plain shell (right, ~25%)
 # - Window "lazygit" (git repos only, when lazygit is installed)
+# - Window "console": plain shell in the project directory (run commands without leaving the session)
+# - Focus lands on the agent pane in the "code" window
 # - Outside tmux: attaches in Kitty (or the current terminal); inside tmux: switches client
 
 set -euo pipefail
@@ -157,8 +159,6 @@ if [[ -n "$AGENT" ]]; then
     echo "Started $AGENT in pane $AGENT_PANE"
 fi
 
-tmux select-pane -t "$NVIM_PANE"
-
 if [[ -d "$TARGET_DIR/.git" ]]; then
     if command -v lazygit &>/dev/null; then
         tmux new-window -t "$SESSION_NAME" -n lazygit -c "$TARGET_DIR"
@@ -168,7 +168,10 @@ if [[ -d "$TARGET_DIR/.git" ]]; then
     fi
 fi
 
+tmux new-window -t "$SESSION_NAME" -n console -c "$TARGET_DIR"
+
 tmux select-window -t "$SESSION_NAME:code"
+tmux select-pane -t "$AGENT_PANE"
 
 # Already in tmux: just switch the client over.
 if [[ -n "${TMUX:-}" ]]; then

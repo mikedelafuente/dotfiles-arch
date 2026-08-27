@@ -307,7 +307,7 @@ aliases() {
             echo "  Prefix: Ctrl+B (press first, then the command key)"
             echo ""
             printf "  %-22s → %s\n" "tmux attach" "Attach to a session (tmux ls to list)"
-            printf "  %-22s → %s\n" "code [dir]" "tmux session + Neovim for a git repo"
+            printf "  %-22s → %s\n" "code [dir]" "tmux: Neovim + agent (focus), console, lazygit"
             printf "  %-22s → %s\n" "Ctrl+B  d" "Detach (session keeps running)"
             printf "  %-22s → %s\n" "Ctrl+B  %" "Split pane right"
             printf "  %-22s → %s\n" "Ctrl+B  \"" "Split pane down"

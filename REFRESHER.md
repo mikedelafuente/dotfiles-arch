@@ -44,7 +44,7 @@ If packages need installing, sync will ask for sudo.
 
 ```bash
 cd /path/to/git-repo
-code            # tmux + nvim .  (must be a git repo)
+code            # tmux: nvim + agent (focus), console shell, lazygit if git repo
 code --force    # same, for a directory without .git
 # or
 v .             # plain Neovim in current Kitty window

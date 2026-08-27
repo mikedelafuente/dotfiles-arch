@@ -228,7 +228,7 @@ Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the s
 
 | Command | What it does |
 |---------|----------------|
-| `code [dir]` | tmux session + `nvim .` (git repo; `--force` for non-git; `--agent cursor --workspace NAME` for Cursor CLI workspace) |
+| `code [dir]` | tmux session: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent cursor --workspace NAME` for Cursor CLI workspace) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
