@@ -51,9 +51,25 @@ VIM_ESCAPED_PATH="${FILE_PATH//\'/\'\'}"
 LUA_BODY=$(cat <<'LUA'
 (function()
   local f = _A
+  -- Keep in sync with config/nvim/lua/plugins/ui.lua view.width
+  local TREE_WIDTH = 30
   local tab = vim.api.nvim_get_current_tabpage()
   local function is_tree(buf)
     return vim.bo[buf].filetype == "NvimTree"
+  end
+  local function tree_win()
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+      if is_tree(vim.api.nvim_win_get_buf(w)) then
+        return w
+      end
+    end
+    return nil
+  end
+  local function fix_tree_width()
+    local tw = tree_win()
+    if tw then
+      vim.api.nvim_win_set_width(tw, TREE_WIDTH)
+    end
   end
   local existing = vim.fn.bufnr(f)
   if existing ~= -1 then
@@ -63,6 +79,7 @@ LUA_BODY=$(cat <<'LUA'
         if not vim.bo[existing].modified then
           vim.cmd("checktime " .. existing)
         end
+        fix_tree_width()
         return 1
       end
     end
@@ -78,11 +95,22 @@ LUA_BODY=$(cat <<'LUA'
     end
   end
   if not target then
-    vim.cmd("vsplit")
-    target = vim.api.nvim_get_current_win()
+    local tw = tree_win()
+    if tw then
+      -- Split from the tree window like nvim-tree open_file does; a bare
+      -- vsplit here divides the full-width tree pane ~50/50 and looks broken.
+      vim.api.nvim_set_current_win(tw)
+      vim.cmd("vertical rightbelow split")
+      target = vim.api.nvim_get_current_win()
+      vim.api.nvim_win_set_width(tw, TREE_WIDTH)
+    else
+      vim.cmd("vsplit")
+      target = vim.api.nvim_get_current_win()
+    end
   end
   vim.api.nvim_win_set_buf(target, buf)
   vim.api.nvim_set_current_win(target)
+  fix_tree_width()
   return 1
 end)()
 LUA
