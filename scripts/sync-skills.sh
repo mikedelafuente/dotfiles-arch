@@ -2,12 +2,11 @@
 # --------------------------
 # Sync personal Claude/Cursor skills
 # --------------------------
-# Symlinks each folder under skills/ into ~/.claude/skills/<name> and
-# ~/.cursor/skills/<name>, and prunes any symlink we previously created
-# there once its source folder is removed from the repo. Only ever touches
-# symlinks that resolve back into this repo's skills/ dir — real
-# directories/files (e.g. company-provided skills copied in separately)
-# are always left alone. Safe to re-run.
+# Symlinks each folder under skills/ from dotfiles-arch and any extra repos
+# registered via sync-sources into ~/.claude/skills/<name> and
+# ~/.cursor/skills/<name>, and prunes managed symlinks when the source is removed
+# or the repo is unlisted. Only ever touches symlinks under {source}/skills/ for
+# configured sources — real directories elsewhere are left alone. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -19,45 +18,39 @@ else
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/sync-sources-lib.sh"
+
 REPO_ROOT="$(cd "$DF_SCRIPT_DIR/.." && pwd)"
-REPO_SKILLS_DIR="$REPO_ROOT/skills"
 TARGET_DIRS=("$USER_HOME_DIR/.claude/skills" "$USER_HOME_DIR/.cursor/skills")
 
 print_line_break "Syncing skills"
 
-if [ ! -d "$REPO_SKILLS_DIR" ]; then
-  print_warning_message "No $REPO_SKILLS_DIR — nothing to sync"
+collect_sync_source_repos "$REPO_ROOT"
+if [[ ${#SYNC_SOURCE_REPOS_ALL[@]} -eq 0 ]]; then
+  print_warning_message "No skill sources configured — nothing to sync"
   exit 0
 fi
 
-LINKED_COUNT=0
-PRUNED_COUNT=0
+SYNC_SKILLS_LINKED_COUNT=0
+SYNC_SKILLS_PRUNED_COUNT=0
+
+for repo_root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
+  if [[ ! -d "$repo_root/skills" ]]; then
+    print_info_message "No skills/ in $repo_root — skipping"
+  fi
+done
 
 for target_dir in "${TARGET_DIRS[@]}"; do
   mkdir -p "$target_dir"
+  declare -A _sync_skills_linked_names=()
 
-  # Link: every direct subdirectory of skills/ becomes a symlink here.
-  while IFS= read -r -d '' skill_dir; do
-    skill_name="$(basename "$skill_dir")"
-    if [ ! -f "$skill_dir/SKILL.md" ]; then
-      print_warning_message "skills/$skill_name has no SKILL.md — linking anyway"
-    fi
-    ln -sfn "$skill_dir" "$target_dir/$skill_name"
-    print_info_message "Linked: $target_dir/$skill_name"
-    LINKED_COUNT=$((LINKED_COUNT + 1))
-  done < <(find "$REPO_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d -print0)
+  for repo_root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
+    [[ -d "$repo_root/skills" ]] || continue
+    sync_skills_from_repo "$repo_root" "$target_dir"
+  done
 
-  # Prune: symlinks in target_dir that point into our skills/ dir but whose
-  # source no longer exists there.
-  while IFS= read -r -d '' entry; do
-    [ -L "$entry" ] || continue
-    resolved="$(readlink -f "$entry" 2>/dev/null || true)"
-    [[ "$resolved" == "$REPO_SKILLS_DIR"/* ]] || continue
-    [ -e "$resolved" ] && continue
-    print_action_message "Removing stale skill symlink: $entry"
-    rm -f "$entry"
-    PRUNED_COUNT=$((PRUNED_COUNT + 1))
-  done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -print0)
+  prune_managed_symlinks "$target_dir" skills
 done
 
-print_success_message "Skills synced: $LINKED_COUNT linked, $PRUNED_COUNT pruned"
+print_success_message "Skills synced: $SYNC_SKILLS_LINKED_COUNT linked, $SYNC_SKILLS_PRUNED_COUNT pruned"

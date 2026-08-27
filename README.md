@@ -21,7 +21,8 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ### Day-to-day updates (preferred)
 
 ```bash
-morning                       # update-repos + update-system (edit ~/.local/bin/morning to customize)
+morning                       # update-repos + update-system + sync-skills + sync-rules (edit ~/.local/bin/morning)
+sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then sync-skills && sync-rules
 update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
 bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
@@ -290,7 +291,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # morning, update-repos, sync-dotfiles, update-system, check-dotfiles, remove-orphans, repos, code, nvim-reveal-edit, …
+│   └── .local/bin/        # morning, update-repos, sync-dotfiles, sync-skills, sync-rules, sync-sources, update-system, …
 └── config/                # → ~/.config
 ```
 

@@ -2,12 +2,12 @@
 # --------------------------
 # Sync personal Cursor rules
 # --------------------------
-# Symlinks each *.mdc file under rules/ into ~/.cursor/rules/<name>.mdc, and
-# prunes any symlink we previously created there once its source file is
-# removed from the repo. Only ever touches symlinks that resolve back into
-# this repo's rules/ dir — real files (e.g. rules placed there some other
-# way) are always left alone. Cursor only — Claude Code has no equivalent
-# auto-loaded rules directory. Safe to re-run.
+# Symlinks each *.mdc file under rules/ from dotfiles-arch and any extra repos
+# registered via sync-sources into ~/.cursor/rules/<name>.mdc, and prunes managed
+# symlinks when the source is removed or the repo is unlisted. Only ever touches
+# symlinks under {source}/rules/ for configured sources — real files elsewhere
+# are left alone. Cursor only — Claude Code has no equivalent auto-loaded rules
+# directory. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -19,43 +19,34 @@ else
   exit 1
 fi
 
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/sync-sources-lib.sh"
+
 REPO_ROOT="$(cd "$DF_SCRIPT_DIR/.." && pwd)"
-REPO_RULES_DIR="$REPO_ROOT/rules"
 TARGET_DIR="$USER_HOME_DIR/.cursor/rules"
 
 print_line_break "Syncing rules"
 
-if [ ! -d "$REPO_RULES_DIR" ]; then
-  print_warning_message "No $REPO_RULES_DIR — nothing to sync"
+collect_sync_source_repos "$REPO_ROOT"
+if [[ ${#SYNC_SOURCE_REPOS_ALL[@]} -eq 0 ]]; then
+  print_warning_message "No rule sources configured — nothing to sync"
   exit 0
 fi
 
 mkdir -p "$TARGET_DIR"
 
-LINKED_COUNT=0
-PRUNED_COUNT=0
+SYNC_RULES_LINKED_COUNT=0
+SYNC_RULES_PRUNED_COUNT=0
+declare -A _sync_rules_linked_names=()
 
-# Link: every *.mdc file directly under rules/ becomes a symlink here.
-while IFS= read -r -d '' rule_file; do
-  rule_name="$(basename "$rule_file")"
-  if ! head -n1 "$rule_file" | grep -q '^---$'; then
-    print_warning_message "rules/$rule_name has no YAML frontmatter — linking anyway"
+for repo_root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
+  if [[ ! -d "$repo_root/rules" ]]; then
+    print_info_message "No rules/ in $repo_root — skipping"
+    continue
   fi
-  ln -sfn "$rule_file" "$TARGET_DIR/$rule_name"
-  print_info_message "Linked: $TARGET_DIR/$rule_name"
-  LINKED_COUNT=$((LINKED_COUNT + 1))
-done < <(find "$REPO_RULES_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.mdc' -print0)
+  sync_rules_from_repo "$repo_root" "$TARGET_DIR"
+done
 
-# Prune: symlinks in TARGET_DIR that point into our rules/ dir but whose
-# source no longer exists there.
-while IFS= read -r -d '' entry; do
-  [ -L "$entry" ] || continue
-  resolved="$(readlink -f "$entry" 2>/dev/null || true)"
-  [[ "$resolved" == "$REPO_RULES_DIR"/* ]] || continue
-  [ -e "$resolved" ] && continue
-  print_action_message "Removing stale rule symlink: $entry"
-  rm -f "$entry"
-  PRUNED_COUNT=$((PRUNED_COUNT + 1))
-done < <(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -print0)
+prune_managed_symlinks "$TARGET_DIR" rules
 
-print_success_message "Rules synced: $LINKED_COUNT linked, $PRUNED_COUNT pruned"
+print_success_message "Rules synced: $SYNC_RULES_LINKED_COUNT linked, $SYNC_RULES_PRUNED_COUNT pruned"

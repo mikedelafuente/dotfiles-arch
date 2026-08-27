@@ -18,8 +18,10 @@ Frontmatter fields: `description`, optional `globs` (comma-separated glob string
 
 `scripts/sync-rules.sh` (run automatically by `sync-dotfiles`/`bootstrap.sh`, and daily
 via `morning`) symlinks each file here into `~/.cursor/rules/<name>.mdc`, and removes the
-symlink again once the file is deleted from this repo. It never touches anything else
-already in `~/.cursor/rules/` — only symlinks it created that point back into this repo.
-Cursor only; Claude Code has no equivalent auto-loaded rules directory.
+symlink again once the file is deleted from its source repo. dotfiles-arch is always
+synced first; register extra repos with `sync-sources add /path/to/repo` (later sources
+override on name collision). It never touches anything else already in `~/.cursor/rules/`
+— only managed symlinks under `{source}/rules/`. Cursor only; Claude Code has no
+equivalent auto-loaded rules directory.
 
 Run it manually with `sync-rules`.

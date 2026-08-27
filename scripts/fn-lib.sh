@@ -246,6 +246,153 @@ write_bootstrap_config() {
   chmod 600 "$f" 2>/dev/null || true
 }
 
+# --------------------------
+# Sync sources config (extra rules/skills repos)
+# --------------------------
+
+sync_sources_config_file() {
+  echo "$(bootstrap_config_dir)/sync-sources"
+}
+
+# Normalize a repo path for comparison (stdout). Returns 1 if empty.
+normalize_sync_source_repo_path() {
+  local path="${1:-}"
+  [[ -n "$path" ]] || return 1
+  realpath -m "$path"
+}
+
+# Read every non-comment path from sync-sources into SYNC_SOURCE_REPO_LINES
+# (normalized, deduped, file order). Does not check that paths exist.
+_read_sync_source_repo_lines() {
+  SYNC_SOURCE_REPO_LINES=()
+  local f line normalized
+  local -A seen=()
+  f="$(sync_sources_config_file)"
+  [[ -r "$f" ]] || return 0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" ]] && continue
+    if ! normalized="$(normalize_sync_source_repo_path "$line")"; then
+      continue
+    fi
+    if [[ -n "${seen[$normalized]:-}" ]]; then
+      continue
+    fi
+    seen["$normalized"]=1
+    SYNC_SOURCE_REPO_LINES+=("$normalized")
+  done <"$f"
+}
+
+# Load extra sync source repos into SYNC_SOURCE_REPOS (existing dirs only).
+load_sync_source_repos() {
+  SYNC_SOURCE_REPOS=()
+  local path
+  _read_sync_source_repo_lines
+  for path in "${SYNC_SOURCE_REPO_LINES[@]}"; do
+    if [[ ! -d "$path" ]]; then
+      print_warning_message "Sync source not found (skipping): $path"
+      continue
+    fi
+    SYNC_SOURCE_REPOS+=("$path")
+  done
+}
+
+# Write SYNC_SOURCE_REPOS array to sync-sources config.
+write_sync_source_repos() {
+  local dir f path
+  dir="$(bootstrap_config_dir)"
+  f="$(sync_sources_config_file)"
+  mkdir -p "$dir"
+  {
+    echo "# Extra rules/skills source repos (one absolute path per line)"
+    echo "# Managed by sync-sources add/remove — dotfiles-arch is always primary"
+    for path in "${SYNC_SOURCE_REPOS[@]}"; do
+      printf '%s\n' "$path"
+    done
+  } >"$f"
+  chmod 600 "$f" 2>/dev/null || true
+}
+
+# Append a repo to sync-sources if not already listed. Returns 1 on error.
+add_sync_source_repo() {
+  local raw="${1:-}" normalized path
+  [[ -n "$raw" ]] || return 1
+  if ! normalized="$(normalize_sync_source_repo_path "$raw")"; then
+    return 1
+  fi
+  if [[ ! -d "$normalized" ]]; then
+    print_error_message "Not a directory: $normalized"
+    return 1
+  fi
+  SYNC_SOURCE_REPOS=()
+  _read_sync_source_repo_lines
+  SYNC_SOURCE_REPOS=("${SYNC_SOURCE_REPO_LINES[@]}")
+  for path in "${SYNC_SOURCE_REPOS[@]}"; do
+    if [[ "$path" == "$normalized" ]]; then
+      print_info_message "Already listed: $normalized"
+      return 0
+    fi
+  done
+  SYNC_SOURCE_REPOS+=("$normalized")
+  write_sync_source_repos
+  if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" ]]; then
+    print_warning_message "No rules/ or skills/ under $normalized — nothing to sync until you add them"
+  fi
+  print_success_message "Added sync source: $normalized"
+  return 0
+}
+
+# Remove a repo from sync-sources. Returns 1 if it was not listed.
+remove_sync_source_repo() {
+  local raw="${1:-}" normalized path kept=() found=false
+  [[ -n "$raw" ]] || return 1
+  if ! normalized="$(normalize_sync_source_repo_path "$raw")"; then
+    return 1
+  fi
+  SYNC_SOURCE_REPOS=()
+  _read_sync_source_repo_lines
+  for path in "${SYNC_SOURCE_REPO_LINES[@]}"; do
+    if [[ "$path" == "$normalized" ]]; then
+      found=true
+      continue
+    fi
+    kept+=("$path")
+  done
+  if [[ "$found" != true ]]; then
+    print_warning_message "Not listed: $normalized"
+    return 1
+  fi
+  SYNC_SOURCE_REPOS=("${kept[@]}")
+  write_sync_source_repos
+  print_success_message "Removed sync source: $normalized"
+  return 0
+}
+
+# Populate SYNC_SOURCE_REPOS_ALL: primary dotfiles-arch root + configured extras.
+collect_sync_source_repos() {
+  local primary="${1:-}"
+  SYNC_SOURCE_REPOS_ALL=()
+  [[ -n "$primary" ]] && SYNC_SOURCE_REPOS_ALL+=("$primary")
+  load_sync_source_repos
+  SYNC_SOURCE_REPOS_ALL+=("${SYNC_SOURCE_REPOS[@]}")
+}
+
+# Given a resolved symlink target, print repo root if under …/rules/… or …/skills/….
+sync_source_repo_root_from_resolved() {
+  local resolved="${1:-}"
+  [[ -n "$resolved" ]] || return 1
+  case "$resolved" in
+    */rules/*|*/skills/*)
+      dirname "$(dirname "$resolved")"
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 # Normalize a single profile token to work|personal|devcontainer (stdout).
 # Maps productivity → work. Returns 1 if invalid.
 # Prefer normalize_setup_profiles for multi-select CLI args.

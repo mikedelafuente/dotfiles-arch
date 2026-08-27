@@ -32,8 +32,8 @@ customize. Steps not on PATH are skipped.
 Default steps:
   update-repos    git pull under ~/repos
   update-system   guarded pacman + yay update
-  sync-skills     relink personal skills from dotfiles-arch
-  sync-rules      relink personal Cursor rules from dotfiles-arch
+  sync-skills     relink skills from dotfiles-arch + sync-sources extras
+  sync-rules      relink Cursor rules from dotfiles-arch + sync-sources extras
 
 Example:
   morning --yes   non-interactive system update (forwarded to update-system)
