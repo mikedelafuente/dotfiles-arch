@@ -7,6 +7,14 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "agent_servers": {
+    "cursor": {
+      "type": "registry"
+    },
+    "claude-acp": {
+      "type": "registry"
+    }
+  },
   "project_panel": {
     "dock": "left"
   },
@@ -20,6 +28,7 @@
     "dock": "left"
   },
   "agent": {
+    "thinking_display": "always_expanded",
     "dock": "right",
     "default_profile": "ask",
     "play_sound_when_agent_done": "always",
