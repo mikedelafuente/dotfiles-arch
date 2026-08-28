@@ -1,0 +1,15 @@
+// Zed keymap
+//
+// No settings.json key controls which Agent Panel tab (native chat vs.
+// Terminal Thread) opens by default, so this adds a dedicated shortcut that
+// jumps straight to a Terminal Thread (agent.terminal_init_command starts
+// the DEFAULT_AGENT CLI there — see config/zed/settings.json). It's an
+// addition, not an override: whatever key/click already opens the Agent
+// Panel still opens Zed's native chat as before.
+[
+  {
+    "bindings": {
+      "ctrl-alt-t": "agent::NewTerminalThread"
+    }
+  }
+]
