@@ -9,6 +9,12 @@
 #   bash scripts/update-system.sh           # interactive pacman/yay prompts
 #   bash scripts/update-system.sh --yes     # non-interactive after clean scan
 #   bash scripts/update-system.sh --scan-only
+#   bash scripts/update-system.sh --force   # bypass the cooldown check
+#
+# Skips the actual upgrade (no prompts, no sudo) when the last guarded
+# upgrade ran within the last 24h, using the same cooldown stamps bootstrap
+# writes/reads (record_system_upgrade_stamps / system_upgrade_cooldown_expired
+# in fn-lib.sh). Pass --force to upgrade anyway.
 #
 # Prefer this over raw `yay -Syu` for daily use.
 
@@ -24,6 +30,7 @@ fi
 
 ASSUME_YES=false
 SCAN_ONLY=false
+FORCE=false
 
 usage() {
   cat <<'EOF'
@@ -35,10 +42,14 @@ Usage:
 Options:
   --yes, -y       Non-interactive (--noconfirm) after IoC scan passes
   --scan-only     Only scan pending AUR upgrades; do not install
+  --force         Upgrade even if the 1-day cooldown hasn't expired
   -h, --help      Show this help
 
 Scans AUR PKGBUILDs for known supply-chain IoCs (e.g. Atomic Arch) before
 upgrading. Official repos (core/extra/multilib) are updated via pacman.
+
+Skips the actual upgrade (no prompts, no sudo) when the last guarded upgrade
+ran within the last 24h; pass --force to upgrade anyway.
 EOF
 }
 
@@ -46,6 +57,7 @@ for arg in "$@"; do
   case "$arg" in
     --yes|-y) ASSUME_YES=true ;;
     --scan-only) SCAN_ONLY=true ;;
+    --force) FORCE=true ;;
     -h|--help)
       usage
       exit 0
@@ -62,6 +74,11 @@ if [ "$SCAN_ONLY" = true ]; then
   print_line_break "AUR upgrade scan only"
   aur_scan_pending_upgrades
   exit $?
+fi
+
+if [ "$FORCE" != true ] && ! system_upgrade_cooldown_expired; then
+  print_info_message "Checked recently (within the last 24h) — skipping guarded upgrade. Use --force to override."
+  exit 0
 fi
 
 # Keep sudo warm for pacman

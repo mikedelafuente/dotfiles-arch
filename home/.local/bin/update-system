@@ -1,6 +1,6 @@
 #!/bin/bash
 # Day-to-day guarded pacman + yay updater (AUR IoC scan).
-# Usage: update-system [--yes|-y] [--scan-only] [-h]
+# Usage: update-system [--yes|-y] [--scan-only] [--force] [-h]
 
 set -euo pipefail
 

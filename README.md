@@ -27,6 +27,7 @@ update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
 bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
 bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
+bash scripts/update-system.sh --force      # bypass the 1-day cooldown
 update-repos                  # parallel git pull --ff-only under ~/repos (MAX_PARALLEL=8)
 ```
 

@@ -1,0 +1,7 @@
+# Keep post_install.sh and bootstrap.sh separate, auto-chained
+
+Fresh installs require running `post_install.sh` then separately remembering to run `bootstrap.sh` — real toil, and merging the two into one script was considered as the fix. We kept them separate, but have `post_install.sh` `exec` straight into `bootstrap.sh` at the end instead of just printing a reminder: the two scripts carry different idempotency contracts. `bootstrap.sh` (shared with `sync.sh`) is designed to be safely re-run any time, while `post_install.sh` is a true one-shot for day-zero bare-metal concerns — enabling multilib, picking the sticky/never-swapped NVIDIA driver flavor, installing the base build tooling (`git`, `base-devel`) that the ~30 `setup-*.sh` scripts `bootstrap.sh` runs assume already exist. Merging would collapse those two contracts together and pull bare-metal fallback logic (e.g. the raw `sed` on `pacman.conf` when `dotheader.sh` isn't sourceable yet) into a script otherwise written for an already-provisioned machine, for a purely ergonomic win that auto-chaining already delivers without that cost.
+
+## Considered Options
+
+- **Merge into one script** — rejected: no reboot or other technical barrier separates the two phases, so the ergonomic problem is real, but the idempotency contracts (one-shot vs. safe-to-rerun-forever) are worth keeping distinct rather than folding day-zero bare-metal logic into a provisioning script.
