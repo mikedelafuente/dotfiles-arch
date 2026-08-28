@@ -249,6 +249,29 @@ write_bootstrap_config() {
 # --------------------------
 # Sync sources config (extra rules/skills repos)
 # --------------------------
+#
+# Each configured source has a type:
+#   standard    — repo root has rules/ (*.mdc files) and/or skills/ (skill dirs)
+#                 under it, same layout as dotfiles-arch itself.
+#   skills-root — the path itself IS a flat folder of skill dirs (no skills/
+#                 subdir). Useful for a subfolder of someone else's skills repo,
+#                 e.g. mattpocock/skills/skills/engineering.
+#   rules-root  — the path itself IS a flat folder of *.mdc files (no rules/
+#                 subdir).
+#
+# Config file lines: bare "path" means standard (for backwards compatibility);
+# "type:path" is explicit. Comments (#) and blank lines are ignored.
+
+SYNC_SOURCE_KNOWN_TYPES=(standard skills-root rules-root)
+
+# True when type is one of SYNC_SOURCE_KNOWN_TYPES.
+is_valid_sync_source_type() {
+  local type="${1:-}" t
+  for t in "${SYNC_SOURCE_KNOWN_TYPES[@]}"; do
+    [[ "$type" == "$t" ]] && return 0
+  done
+  return 1
+}
 
 sync_sources_config_file() {
   echo "$(bootstrap_config_dir)/sync-sources"
@@ -261,10 +284,27 @@ normalize_sync_source_repo_path() {
   realpath -m "$path"
 }
 
-# Read every non-comment path from sync-sources into SYNC_SOURCE_REPO_LINES
-# (normalized, deduped, file order). Does not check that paths exist.
+# Parse one config line into _SYNC_SOURCE_LINE_TYPE / _SYNC_SOURCE_LINE_PATH.
+# Bare paths default to type "standard". Returns 1 if the path half is empty.
+_parse_sync_source_line() {
+  local line="${1:-}" type path
+  case "$line" in
+    skills-root:*) type="skills-root" path="${line#skills-root:}" ;;
+    rules-root:*)  type="rules-root"  path="${line#rules-root:}" ;;
+    standard:*)    type="standard"    path="${line#standard:}" ;;
+    *)             type="standard"    path="$line" ;;
+  esac
+  [[ -n "$path" ]] || return 1
+  _SYNC_SOURCE_LINE_TYPE="$type"
+  _SYNC_SOURCE_LINE_PATH="$path"
+}
+
+# Read every non-comment line from sync-sources into parallel arrays
+# SYNC_SOURCE_REPO_LINES (normalized paths) / SYNC_SOURCE_REPO_LINE_TYPES,
+# deduped by type+path, file order. Does not check that paths exist.
 _read_sync_source_repo_lines() {
   SYNC_SOURCE_REPO_LINES=()
+  SYNC_SOURCE_REPO_LINE_TYPES=()
   local f line normalized
   local -A seen=()
   f="$(sync_sources_config_file)"
@@ -275,51 +315,75 @@ _read_sync_source_repo_lines() {
     line="${line#"${line%%[![:space:]]*}"}"
     line="${line%"${line##*[![:space:]]}"}"
     [[ -z "$line" ]] && continue
-    if ! normalized="$(normalize_sync_source_repo_path "$line")"; then
+    if ! _parse_sync_source_line "$line"; then
       continue
     fi
-    if [[ -n "${seen[$normalized]:-}" ]]; then
+    if ! normalized="$(normalize_sync_source_repo_path "$_SYNC_SOURCE_LINE_PATH")"; then
       continue
     fi
-    seen["$normalized"]=1
+    if [[ -n "${seen[${_SYNC_SOURCE_LINE_TYPE}:${normalized}]:-}" ]]; then
+      continue
+    fi
+    seen["${_SYNC_SOURCE_LINE_TYPE}:${normalized}"]=1
     SYNC_SOURCE_REPO_LINES+=("$normalized")
+    SYNC_SOURCE_REPO_LINE_TYPES+=("$_SYNC_SOURCE_LINE_TYPE")
   done <"$f"
 }
 
-# Load extra sync source repos into SYNC_SOURCE_REPOS (existing dirs only).
+# Load extra sync source repos into parallel arrays SYNC_SOURCE_REPOS /
+# SYNC_SOURCE_REPO_TYPES (existing dirs only).
 load_sync_source_repos() {
   SYNC_SOURCE_REPOS=()
-  local path
+  SYNC_SOURCE_REPO_TYPES=()
+  local i path
   _read_sync_source_repo_lines
-  for path in "${SYNC_SOURCE_REPO_LINES[@]}"; do
+  for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
+    path="${SYNC_SOURCE_REPO_LINES[$i]}"
     if [[ ! -d "$path" ]]; then
       print_warning_message "Sync source not found (skipping): $path"
       continue
     fi
     SYNC_SOURCE_REPOS+=("$path")
+    SYNC_SOURCE_REPO_TYPES+=("${SYNC_SOURCE_REPO_LINE_TYPES[$i]}")
   done
 }
 
-# Write SYNC_SOURCE_REPOS array to sync-sources config.
+# Write parallel SYNC_SOURCE_REPOS / SYNC_SOURCE_REPO_TYPES arrays to
+# sync-sources config. Standard-type entries are written as bare paths
+# (backwards compatible); other types get an explicit "type:" prefix.
 write_sync_source_repos() {
-  local dir f path
+  local dir f i path type
   dir="$(bootstrap_config_dir)"
   f="$(sync_sources_config_file)"
   mkdir -p "$dir"
   {
-    echo "# Extra rules/skills source repos (one absolute path per line)"
+    echo "# Extra rules/skills source repos, one per line: path | type:path"
+    echo "# Types: standard (default, has rules/ + skills/ subdirs), skills-root"
+    echo "# (path is itself a flat folder of skill dirs), rules-root (path is"
+    echo "# itself a flat folder of *.mdc files)."
     echo "# Managed by sync-sources add/remove — dotfiles-arch is always primary"
-    for path in "${SYNC_SOURCE_REPOS[@]}"; do
-      printf '%s\n' "$path"
+    for i in "${!SYNC_SOURCE_REPOS[@]}"; do
+      path="${SYNC_SOURCE_REPOS[$i]}"
+      type="${SYNC_SOURCE_REPO_TYPES[$i]}"
+      if [[ "$type" == "standard" ]]; then
+        printf '%s\n' "$path"
+      else
+        printf '%s:%s\n' "$type" "$path"
+      fi
     done
   } >"$f"
   chmod 600 "$f" 2>/dev/null || true
 }
 
-# Append a repo to sync-sources if not already listed. Returns 1 on error.
+# Append a repo to sync-sources if not already listed under that type.
+# Returns 1 on error.
 add_sync_source_repo() {
-  local raw="${1:-}" normalized path
+  local raw="${1:-}" type="${2:-standard}" normalized i
   [[ -n "$raw" ]] || return 1
+  if ! is_valid_sync_source_type "$type"; then
+    print_error_message "Unknown source type: $type (expected: ${SYNC_SOURCE_KNOWN_TYPES[*]})"
+    return 1
+  fi
   if ! normalized="$(normalize_sync_source_repo_path "$raw")"; then
     return 1
   fi
@@ -328,69 +392,100 @@ add_sync_source_repo() {
     return 1
   fi
   SYNC_SOURCE_REPOS=()
+  SYNC_SOURCE_REPO_TYPES=()
   _read_sync_source_repo_lines
   SYNC_SOURCE_REPOS=("${SYNC_SOURCE_REPO_LINES[@]}")
-  for path in "${SYNC_SOURCE_REPOS[@]}"; do
-    if [[ "$path" == "$normalized" ]]; then
-      print_info_message "Already listed: $normalized"
+  SYNC_SOURCE_REPO_TYPES=("${SYNC_SOURCE_REPO_LINE_TYPES[@]}")
+  for i in "${!SYNC_SOURCE_REPOS[@]}"; do
+    if [[ "${SYNC_SOURCE_REPOS[$i]}" == "$normalized" && "${SYNC_SOURCE_REPO_TYPES[$i]}" == "$type" ]]; then
+      print_info_message "Already listed ($type): $normalized"
       return 0
     fi
   done
   SYNC_SOURCE_REPOS+=("$normalized")
+  SYNC_SOURCE_REPO_TYPES+=("$type")
   write_sync_source_repos
-  if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" ]]; then
-    print_warning_message "No rules/ or skills/ under $normalized — nothing to sync until you add them"
-  fi
-  print_success_message "Added sync source: $normalized"
+  case "$type" in
+    standard)
+      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" ]]; then
+        print_warning_message "No rules/ or skills/ under $normalized — nothing to sync until you add them"
+      fi
+      ;;
+    skills-root)
+      if [[ -z "$(find "$normalized" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)" ]]; then
+        print_warning_message "No subfolders under $normalized — nothing to sync until skill dirs appear"
+      fi
+      ;;
+    rules-root)
+      if [[ -z "$(find "$normalized" -mindepth 1 -maxdepth 1 -type f -name '*.mdc' -print -quit 2>/dev/null)" ]]; then
+        print_warning_message "No *.mdc files under $normalized — nothing to sync until rule files appear"
+      fi
+      ;;
+  esac
+  print_success_message "Added sync source ($type): $normalized"
   return 0
 }
 
-# Remove a repo from sync-sources. Returns 1 if it was not listed.
+# Remove repo(s) from sync-sources. With no type, removes every type-entry
+# matching the path. With a type, removes only that type-entry. Returns 1 if
+# nothing matched.
 remove_sync_source_repo() {
-  local raw="${1:-}" normalized path kept=() found=false
+  local raw="${1:-}" type="${2:-}" normalized i kept_paths=() kept_types=() found=false
   [[ -n "$raw" ]] || return 1
   if ! normalized="$(normalize_sync_source_repo_path "$raw")"; then
     return 1
   fi
   SYNC_SOURCE_REPOS=()
+  SYNC_SOURCE_REPO_TYPES=()
   _read_sync_source_repo_lines
-  for path in "${SYNC_SOURCE_REPO_LINES[@]}"; do
-    if [[ "$path" == "$normalized" ]]; then
+  for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
+    if [[ "${SYNC_SOURCE_REPO_LINES[$i]}" == "$normalized" ]] \
+      && { [[ -z "$type" ]] || [[ "${SYNC_SOURCE_REPO_LINE_TYPES[$i]}" == "$type" ]]; }; then
       found=true
       continue
     fi
-    kept+=("$path")
+    kept_paths+=("${SYNC_SOURCE_REPO_LINES[$i]}")
+    kept_types+=("${SYNC_SOURCE_REPO_LINE_TYPES[$i]}")
   done
   if [[ "$found" != true ]]; then
-    print_warning_message "Not listed: $normalized"
+    print_warning_message "Not listed: $normalized${type:+ ($type)}"
     return 1
   fi
-  SYNC_SOURCE_REPOS=("${kept[@]}")
+  SYNC_SOURCE_REPOS=("${kept_paths[@]}")
+  SYNC_SOURCE_REPO_TYPES=("${kept_types[@]}")
   write_sync_source_repos
-  print_success_message "Removed sync source: $normalized"
+  print_success_message "Removed sync source: $normalized${type:+ ($type)}"
   return 0
 }
 
-# Populate SYNC_SOURCE_REPOS_ALL: primary dotfiles-arch root + configured extras.
+# Populate parallel SYNC_SOURCE_REPOS_ALL / SYNC_SOURCE_REPOS_ALL_TYPES:
+# primary dotfiles-arch root (type standard) + configured extras.
 collect_sync_source_repos() {
   local primary="${1:-}"
   SYNC_SOURCE_REPOS_ALL=()
-  [[ -n "$primary" ]] && SYNC_SOURCE_REPOS_ALL+=("$primary")
+  SYNC_SOURCE_REPOS_ALL_TYPES=()
+  if [[ -n "$primary" ]]; then
+    SYNC_SOURCE_REPOS_ALL+=("$primary")
+    SYNC_SOURCE_REPOS_ALL_TYPES+=("standard")
+  fi
   load_sync_source_repos
   SYNC_SOURCE_REPOS_ALL+=("${SYNC_SOURCE_REPOS[@]}")
+  SYNC_SOURCE_REPOS_ALL_TYPES+=("${SYNC_SOURCE_REPO_TYPES[@]}")
 }
 
-# Given a resolved symlink target, print repo root if under …/rules/… or …/skills/….
-sync_source_repo_root_from_resolved() {
-  local resolved="${1:-}"
-  [[ -n "$resolved" ]] || return 1
-  case "$resolved" in
-    */rules/*|*/skills/*)
-      dirname "$(dirname "$resolved")"
-      return 0
-      ;;
+# Effective directory to scan for a given source (repo_root, type, kind),
+# where kind is "rules" or "skills" (stdout). Returns 1 when this
+# source/kind combination doesn't apply (e.g. a skills-root source has no
+# rules to contribute).
+sync_source_effective_dir() {
+  local repo_root="${1:-}" type="${2:-}" kind="${3:-}"
+  case "$kind:$type" in
+    rules:standard) echo "$repo_root/rules" ;;
+    rules:rules-root) echo "$repo_root" ;;
+    skills:standard) echo "$repo_root/skills" ;;
+    skills:skills-root) echo "$repo_root" ;;
+    *) return 1 ;;
   esac
-  return 1
 }
 
 # Normalize a single profile token to work|personal|devcontainer (stdout).

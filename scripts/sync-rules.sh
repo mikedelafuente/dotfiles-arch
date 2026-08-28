@@ -2,12 +2,14 @@
 # --------------------------
 # Sync personal Cursor rules
 # --------------------------
-# Symlinks each *.mdc file under rules/ from dotfiles-arch and any extra repos
+# Symlinks each *.mdc rule file from dotfiles-arch and any extra repos
 # registered via sync-sources into ~/.cursor/rules/<name>.mdc, and prunes managed
-# symlinks when the source is removed or the repo is unlisted. Only ever touches
-# symlinks under {source}/rules/ for configured sources — real files elsewhere
-# are left alone. Cursor only — Claude Code has no equivalent auto-loaded rules
-# directory. Safe to re-run.
+# symlinks when the source is removed or the repo is unlisted. Standard-type
+# sources contribute their rules/ subfolder; rules-root sources contribute their
+# own folder directly (see sync-sources --type). Only ever touches symlinks
+# whose target is a configured source's effective rules dir — real files
+# elsewhere are left alone. Cursor only — Claude Code has no equivalent
+# auto-loaded rules directory. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -39,12 +41,14 @@ SYNC_RULES_LINKED_COUNT=0
 SYNC_RULES_PRUNED_COUNT=0
 declare -A _sync_rules_linked_names=()
 
-for repo_root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
-  if [[ ! -d "$repo_root/rules" ]]; then
-    print_info_message "No rules/ in $repo_root — skipping"
+for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+  repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
+  source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+  if ! { rules_dir="$(sync_source_effective_dir "$repo_root" "$source_type" rules)" && [[ -d "$rules_dir" ]]; }; then
+    print_info_message "No rules under $repo_root ($source_type) — skipping"
     continue
   fi
-  sync_rules_from_repo "$repo_root" "$TARGET_DIR"
+  sync_rules_from_repo "$repo_root" "$source_type" "$TARGET_DIR"
 done
 
 prune_managed_symlinks "$TARGET_DIR" rules

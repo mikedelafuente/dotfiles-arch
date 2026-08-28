@@ -2,11 +2,13 @@
 # --------------------------
 # Sync personal Claude/Cursor skills
 # --------------------------
-# Symlinks each folder under skills/ from dotfiles-arch and any extra repos
-# registered via sync-sources into ~/.claude/skills/<name> and
-# ~/.cursor/skills/<name>, and prunes managed symlinks when the source is removed
-# or the repo is unlisted. Only ever touches symlinks under {source}/skills/ for
-# configured sources — real directories elsewhere are left alone. Safe to re-run.
+# Symlinks each skill folder from dotfiles-arch and any extra repos registered
+# via sync-sources into ~/.claude/skills/<name> and ~/.cursor/skills/<name>, and
+# prunes managed symlinks when the source is removed or the repo is unlisted.
+# Standard-type sources contribute their skills/ subfolder; skills-root sources
+# contribute their own folder directly (see sync-sources --type). Only ever
+# touches symlinks whose target is a configured source's effective skills dir —
+# real directories elsewhere are left alone. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -35,9 +37,11 @@ fi
 SYNC_SKILLS_LINKED_COUNT=0
 SYNC_SKILLS_PRUNED_COUNT=0
 
-for repo_root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
-  if [[ ! -d "$repo_root/skills" ]]; then
-    print_info_message "No skills/ in $repo_root — skipping"
+for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+  repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
+  source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+  if ! { skills_dir="$(sync_source_effective_dir "$repo_root" "$source_type" skills)" && [[ -d "$skills_dir" ]]; }; then
+    print_info_message "No skills under $repo_root ($source_type) — skipping"
   fi
 done
 
@@ -45,9 +49,10 @@ for target_dir in "${TARGET_DIRS[@]}"; do
   mkdir -p "$target_dir"
   declare -A _sync_skills_linked_names=()
 
-  for repo_root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
-    [[ -d "$repo_root/skills" ]] || continue
-    sync_skills_from_repo "$repo_root" "$target_dir"
+  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+    repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
+    source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+    sync_skills_from_repo "$repo_root" "$source_type" "$target_dir"
   done
 
   prune_managed_symlinks "$target_dir" skills

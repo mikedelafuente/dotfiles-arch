@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared link/prune helpers for sync-rules.sh and sync-skills.sh.
-# Expects fn-lib.sh (print_*, collect_sync_source_repos, …) to be loaded.
+# Expects fn-lib.sh (print_*, collect_sync_source_repos, sync_source_effective_dir, …) to be loaded.
 
 # Resolve a symlink to an absolute path (works for broken links).
 _sync_sources_abs_symlink_target() {
@@ -15,21 +15,13 @@ _sync_sources_abs_symlink_target() {
   realpath -m "$target"
 }
 
-# True when repo_root is in SYNC_SOURCE_REPOS_ALL.
-_sync_sources_repo_is_configured() {
-  local repo_root="${1:-}" root
-  for root in "${SYNC_SOURCE_REPOS_ALL[@]}"; do
-    [[ "$root" == "$repo_root" ]] && return 0
-  done
-  return 1
-}
-
-# Link rules/*.mdc from repo_root into target_dir. Later repos override earlier ones.
-# Uses global associative array _sync_rules_linked_names for collision tracking.
+# Link rules/*.mdc from a source into target_dir. Later sources override earlier
+# ones. Uses global associative array _sync_rules_linked_names for collision
+# tracking. type is standard|rules-root (see sync_source_effective_dir).
 sync_rules_from_repo() {
-  local repo_root="${1:-}" target_dir="${2:-}" rules_dir rule_file rule_name
+  local repo_root="${1:-}" type="${2:-}" target_dir="${3:-}" rules_dir rule_file rule_name
 
-  rules_dir="$repo_root/rules"
+  rules_dir="$(sync_source_effective_dir "$repo_root" "$type" rules)" || return 0
   [[ -d "$rules_dir" ]] || return 0
 
   while IFS= read -r -d '' rule_file; do
@@ -47,12 +39,13 @@ sync_rules_from_repo() {
   done < <(find "$rules_dir" -mindepth 1 -maxdepth 1 -type f -name '*.mdc' -print0)
 }
 
-# Link skills/*/ from repo_root into target_dir. Later repos override earlier ones.
-# Uses global associative array _sync_skills_linked_names for collision tracking.
+# Link skills/*/ from a source into target_dir. Later sources override earlier
+# ones. Uses global associative array _sync_skills_linked_names for collision
+# tracking. type is standard|skills-root (see sync_source_effective_dir).
 sync_skills_from_repo() {
-  local repo_root="${1:-}" target_dir="${2:-}" skills_dir skill_dir skill_name
+  local repo_root="${1:-}" type="${2:-}" target_dir="${3:-}" skills_dir skill_dir skill_name
 
-  skills_dir="$repo_root/skills"
+  skills_dir="$(sync_source_effective_dir "$repo_root" "$type" skills)" || return 0
   [[ -d "$skills_dir" ]] || return 0
 
   while IFS= read -r -d '' skill_dir; do
@@ -71,24 +64,34 @@ sync_skills_from_repo() {
 }
 
 # Prune managed symlinks in target_dir for rules or skills (kind = rules|skills).
+# A symlink is pruned when it's dangling, or when its resolved parent directory
+# is not the effective rules/skills dir of any currently configured source
+# (covers both a removed/unlisted source and a source whose type changed).
+# Expects SYNC_SOURCE_REPOS_ALL / SYNC_SOURCE_REPOS_ALL_TYPES to already be
+# populated (via collect_sync_source_repos).
 prune_managed_symlinks() {
-  local target_dir="${1:-}" kind="${2:-}" entry resolved repo_root subdir
+  local target_dir="${1:-}" kind="${2:-}" entry resolved parent i eff_dir
+  local -A expected_dirs=()
 
   case "$kind" in
-    rules) subdir="rules" ;;
-    skills) subdir="skills" ;;
+    rules | skills) ;;
     *) return 1 ;;
   esac
+
+  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+    if eff_dir="$(sync_source_effective_dir "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}" "$kind")"; then
+      expected_dirs["$eff_dir"]=1
+    fi
+  done
 
   while IFS= read -r -d '' entry; do
     [[ -L "$entry" ]] || continue
     resolved="$(_sync_sources_abs_symlink_target "$entry")"
     [[ -n "$resolved" ]] || continue
-    [[ "$resolved" == */"$subdir"/* ]] || continue
-    repo_root="$(sync_source_repo_root_from_resolved "$resolved")" || continue
+    parent="$(dirname "$resolved")"
 
-    if ! _sync_sources_repo_is_configured "$repo_root"; then
-      print_action_message "Removing symlink from unlisted source ($repo_root): $entry"
+    if [[ -z "${expected_dirs[$parent]:-}" ]]; then
+      print_action_message "Removing symlink from unlisted/removed source ($parent): $entry"
       rm -f "$entry"
       if [[ "$kind" == "rules" ]]; then
         SYNC_RULES_PRUNED_COUNT=$((SYNC_RULES_PRUNED_COUNT + 1))
@@ -109,23 +112,24 @@ prune_managed_symlinks() {
   done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -print0)
 }
 
-# Remove all managed rules/skills symlinks pointing into repo_root (after sync-sources remove).
+# Remove all managed rules/skills symlinks pointing at repo_root's effective
+# dir for type (after `sync-sources remove`).
 prune_sync_source_repo_symlinks() {
-  local repo_root="${1:-}"
-  shift
-  local target_dir entry resolved kind subdir
+  local repo_root="${1:-}" type="${2:-}"
+  shift 2
+  local target_dir entry resolved kind eff_dir
 
-  [[ -n "$repo_root" ]] || return 0
+  [[ -n "$repo_root" && -n "$type" ]] || return 0
 
   for kind in rules skills; do
-    subdir="$kind"
+    eff_dir="$(sync_source_effective_dir "$repo_root" "$type" "$kind")" || continue
     for target_dir in "$@"; do
       [[ -d "$target_dir" ]] || continue
       while IFS= read -r -d '' entry; do
         [[ -L "$entry" ]] || continue
         resolved="$(_sync_sources_abs_symlink_target "$entry")"
         [[ -n "$resolved" ]] || continue
-        [[ "$resolved" == "$repo_root/$subdir"/* ]] || continue
+        [[ "$(dirname "$resolved")" == "$eff_dir" ]] || continue
         print_action_message "Removing $kind symlink from removed source: $entry"
         rm -f "$entry"
       done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -print0)
