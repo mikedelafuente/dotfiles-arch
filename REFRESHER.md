@@ -119,9 +119,11 @@ Top app bar (Dash to Panel) is always visible on every monitor — small centere
 bash scripts/update-system.sh           # interactive
 bash scripts/update-system.sh --yes     # after IoC scan, non-interactive
 bash scripts/update-system.sh --scan-only
+bash scripts/update-system.sh --force   # bypass the 1-day cooldown
 ```
 
-Scans pending AUR PKGBUILDs for known supply-chain IoCs before upgrading.
+Scans pending AUR PKGBUILDs for known supply-chain IoCs before upgrading. Skips the
+actual upgrade (no prompts) if the last one ran within 24h; `--force` overrides.
 On Btrfs installs it also reminds you about Snapper: `sudo snapper -c root list`,
 or `sudo snapper -c root create -d "before <change>"` ahead of a risky upgrade.
 
