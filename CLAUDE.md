@@ -191,6 +191,8 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 - Config persistence: `~/.config/dotfiles-arch/`
 - Dotfiles link to `$USER_HOME_DIR`, not root’s home when run with sudo
 - Overview at login: `no-overview@fthx` plus optional `hide-gnome-overview` autostart fallback
+- Always do work on a branch, never commit directly to `main`
+- Once a PR is merged, delete both the local and remote branch and check out `main`
 
 ## Agent skills
 
