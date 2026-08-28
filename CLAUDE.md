@@ -191,3 +191,17 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 - Config persistence: `~/.config/dotfiles-arch/`
 - Dotfiles link to `$USER_HOME_DIR`, not root’s home when run with sudo
 - Overview at login: `no-overview@fthx` plus optional `hide-gnome-overview` autostart fallback
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues via the `gh` CLI (repo: `mikedelafuente/dotfiles-arch`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
