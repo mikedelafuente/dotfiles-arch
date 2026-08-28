@@ -140,7 +140,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
 | **Multiplexer** | tmux |
-| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Cursor IDE + Agent CLI (`agent`, work profile only) |
+| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Cursor IDE + Agent CLI (`agent`, work profile only), Zed |
 | **Git** | git, lazygit (`lzg`), GitHub CLI (`gh`) |
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
@@ -223,6 +223,8 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `?` | All bindings |
 
 Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-code.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`. Either agent's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-cursor.sh`.
+
+**Zed:** a Terminal Thread (Agent Panel → "+" → Terminal) runs `zed-agent-init`, which starts the same `DEFAULT_AGENT` CLI as `code` — no separate reveal hook is needed since the agent runs inside the same Zed window as the editor, so Zed's own file watcher picks up its edits.
 
 ### Shell (highlights)
 

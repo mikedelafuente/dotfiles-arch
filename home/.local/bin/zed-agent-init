@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# zed-agent-init - Zed's agent.terminal_init_command (config/zed/settings.json).
+#
+# Resolves the same DEFAULT_AGENT as `code` (see home/.local/bin/code and
+# resolve_default_agent_command in dotfiles-arch-lib.sh), so a Zed Terminal
+# Thread starts the same agent CLI as the tmux `code` agent pane. Zed runs
+# this as if typed into a fresh Terminal Thread shell, in the current
+# project's directory, so no cd/exec bookkeeping is needed here.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/dotfiles-arch-lib.sh"
+
+if AGENT_BIN="$(resolve_default_agent_command)"; then
+    exec "$AGENT_BIN"
+fi
+
+echo "No default agent CLI configured/installed (claude or cursor-agent)."
+echo "Run scripts/setup-claude.sh or scripts/setup-cursor.sh, then scripts/setup-code.sh to pick a default."
+exec "${SHELL:-bash}"

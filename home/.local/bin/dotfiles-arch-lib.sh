@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared helpers for ~/.local/bin wrappers (sync-dotfiles, update-system).
+# Shared helpers for ~/.local/bin wrappers (sync-dotfiles, update-system, code, zed-agent-init).
 # Sourced by those scripts — not meant to be executed directly.
 
 # Resolve the dotfiles-arch repo root. Prefers symlink walk-up, then DOTFILES_ARCH, then candidates.
@@ -28,5 +28,40 @@ resolve_dotfiles_arch() {
       return 0
     fi
   done
+  return 1
+}
+
+# Resolve the saved DEFAULT_AGENT (from setup-code.sh, see fn-lib.sh's
+# resolve_default_agent) to the actual CLI binary to run — echoes "claude",
+# "cursor-agent", or "agent" (cursor-cli's compat shim), or returns 1 if the
+# saved choice is unset/stale (its CLI no longer on PATH). Used by both
+# `code` (no --agent flag) and `zed-agent-init` so the two stay in sync.
+resolve_default_agent_command() {
+  local bootstrap_config="$HOME/.config/dotfiles-arch/.dotfiles_bootstrap_config"
+  local default_agent=""
+
+  if [[ -r "$bootstrap_config" ]]; then
+    # shellcheck source=/dev/null
+    default_agent="$(source "$bootstrap_config" && printf '%s' "${DEFAULT_AGENT:-}")" 2>/dev/null || default_agent=""
+  fi
+
+  case "$default_agent" in
+    cursor)
+      if command -v cursor-agent &>/dev/null; then
+        echo "cursor-agent"
+        return 0
+      elif command -v agent &>/dev/null; then
+        echo "agent"
+        return 0
+      fi
+      ;;
+    claude)
+      if command -v claude &>/dev/null; then
+        echo "claude"
+        return 0
+      fi
+      ;;
+  esac
+
   return 1
 }

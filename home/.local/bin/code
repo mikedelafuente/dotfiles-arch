@@ -17,6 +17,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/dotfiles-arch-lib.sh"
+
 FORCE=0
 AGENT=""
 WORKSPACE=""
@@ -69,18 +73,11 @@ fi
 
 # No --agent given: fall back to the DEFAULT_AGENT chosen during setup-code.sh
 # (whichever agent CLI is actually installed still wins if the saved choice is stale).
-if [[ -z "$AGENT" ]]; then
-    BOOTSTRAP_CONFIG="$HOME/.config/dotfiles-arch/.dotfiles_bootstrap_config"
-    DEFAULT_AGENT=""
-    if [[ -r "$BOOTSTRAP_CONFIG" ]]; then
-        # shellcheck source=/dev/null
-        DEFAULT_AGENT="$(source "$BOOTSTRAP_CONFIG" && printf '%s' "${DEFAULT_AGENT:-}")" 2>/dev/null || DEFAULT_AGENT=""
-    fi
-    if [[ "$DEFAULT_AGENT" == "cursor" ]] && { command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; }; then
-        AGENT="cursor"
-    elif [[ "$DEFAULT_AGENT" == "claude" ]] && command -v claude &>/dev/null; then
-        AGENT="claude"
-    fi
+if [[ -z "$AGENT" ]] && DEFAULT_AGENT_BIN="$(resolve_default_agent_command)"; then
+    case "$DEFAULT_AGENT_BIN" in
+        cursor-agent|agent) AGENT="cursor" ;;
+        claude) AGENT="claude" ;;
+    esac
 fi
 
 if [[ -n "$WORKSPACE" ]]; then
