@@ -7,11 +7,10 @@
 # Default: update-repos, then update-system (day-to-day pacman + yay), then
 # sync-skills (relink personal skills from dotfiles-arch), then sync-rules
 # (relink personal Cursor rules from dotfiles-arch).
-# Use sync-dotfiles instead of (or after) update-system when the dotfiles repo
-# changed and you want setup scripts + re-link, not just package upgrades.
-# morning does not run setup-*.sh itself (that's what sync-dotfiles is for) —
-# it only nudges you to run sync-dotfiles when update-repos pulled new
-# dotfiles-arch commits.
+# If update-repos pulls new dotfiles-arch commits, morning runs sync-dotfiles
+# itself (setup scripts + re-link) right away, then restarts the whole
+# routine from the top so the remaining steps run against the freshly-synced
+# scripts — capped at one restart per invocation.
 #
 # Usage: morning [args…]
 #   Args are forwarded to every step (e.g. morning --yes).
@@ -45,13 +44,17 @@ Default steps:
   sync-skills     relink skills from dotfiles-arch + sync-sources extras
   sync-rules      relink Cursor rules from dotfiles-arch + sync-sources extras
 
+If update-repos pulls new dotfiles-arch commits, sync-dotfiles runs
+automatically and the whole routine restarts from the top (capped at one
+restart per invocation) so the remaining steps see the synced scripts.
+
 Example:
   morning --yes   non-interactive system update (forwarded to update-system)
 EOF
 }
 
 main() {
-  local step
+  local step step_status
   local -a failures=() skipped=()
   local dotfiles_arch_root="" before_sha="" after_sha=""
 
@@ -80,20 +83,36 @@ main() {
 
     printf '\n==> %s\n' "$step"
     if "$step" "$@"; then
-      :
+      step_status=0
     else
-      printf 'morning: %s failed (exit %s)\n' "$step" "$?" >&2
+      step_status=$?
+      printf 'morning: %s failed (exit %s)\n' "$step" "$step_status" >&2
       failures+=("$step")
     fi
-  done
 
-  if [[ -n "$dotfiles_arch_root" ]]; then
-    after_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
-    if [[ -n "$before_sha" && -n "$after_sha" && "$before_sha" != "$after_sha" ]]; then
-      printf '\nmorning: dotfiles-arch updated (%s..%s) — run sync-dotfiles to apply setup script changes\n' \
-        "${before_sha:0:7}" "${after_sha:0:7}"
+    if [[ "$step" == "update-repos" && "$step_status" -eq 0 && -n "$dotfiles_arch_root" ]]; then
+      after_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
+      if [[ -n "$before_sha" && -n "$after_sha" && "$before_sha" != "$after_sha" ]]; then
+        printf '\nmorning: dotfiles-arch updated (%s..%s)\n' "${before_sha:0:7}" "${after_sha:0:7}"
+        if [[ "${_MORNING_RESTARTED:-0}" == 1 ]]; then
+          printf 'morning: already restarted once this run — continuing without another restart\n' >&2
+        elif ! command -v sync-dotfiles &>/dev/null; then
+          printf 'morning: skip sync-dotfiles (not on PATH) — run it manually to apply setup script changes\n' >&2
+          skipped+=("sync-dotfiles")
+        else
+          printf '\n==> sync-dotfiles\n'
+          if sync-dotfiles "$@"; then
+            printf 'morning: restarting to pick up synced changes\n'
+            export _MORNING_RESTARTED=1
+            exec "$_MORNING_SELF" "$@"
+          else
+            printf 'morning: sync-dotfiles failed (exit %s) — continuing with remaining steps\n' "$?" >&2
+            failures+=("sync-dotfiles")
+          fi
+        fi
+      fi
     fi
-  fi
+  done
 
   printf '\n'
   if ((${#skipped[@]})); then

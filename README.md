@@ -22,6 +22,7 @@ Paths use `$HOME` — different usernames on other machines are fine.
 
 ```bash
 morning                       # update-repos + update-system + sync-skills + sync-rules (edit ~/.local/bin/morning)
+                              # if update-repos pulls new dotfiles-arch commits, runs sync-dotfiles and restarts once
 sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then sync-skills && sync-rules
 update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
