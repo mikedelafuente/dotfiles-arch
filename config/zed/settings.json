@@ -22,7 +22,7 @@
   "agent": {
     "dock": "right",
     "default_profile": "ask",
-    "play_sound_when_agent_done": "always",
+    "play_sound_when_agent_done": true,
     "default_model": {
       "provider": "copilot_chat",
       "model": "claude-sonnet-4"
