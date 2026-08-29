@@ -191,6 +191,22 @@ Do this on each machine that should match the repo. Fresh installs still use `bo
 
 Paths use `$HOME` / `$USER_HOME_DIR` so different usernames on other machines work without edits.
 
+### One-time: v1 -> v2 command rename cleanup
+
+The day-to-day commands (`morning`, `sync-dotfiles`, `repos`, etc.) were renamed under a
+`dfa-` prefix. `link-dotfiles.sh` only creates symlinks for files currently in the repo —
+it never removes ones whose source got renamed away — so a machine set up before this
+rename is left with the old commands as dangling `~/.local/bin` symlinks, alongside none
+of the new `dfa-*` ones. Run this once per existing machine, then reload your shell:
+
+```shell
+bash migrations/v1-to-v2-migration.sh
+source ~/.bashrc
+```
+
+Safe to re-run; a machine that's already been migrated (or never had the old names) is a
+no-op.
+
 ## GNOME overview at login
 
 GNOME has no built-in “skip Activities at startup” setting. This repo uses:
