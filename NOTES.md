@@ -67,11 +67,24 @@ Alternately, you can leverage the presaved file on http://archconfig.weekendproj
 archinstall --config-url http://archconfig.weekendproject.app/
 ```
 
-You need to set:
+**Step zero, before running archinstall:** from this repo on the USB (or a clone on the live ISO), run the guided prep script:
 
-- Disk device path in `user_configuration.json` (`disk_config.device_modifications[0].device`)
+```shell
+./prepare-archinstall.sh
+# ./prepare-archinstall.sh --dry-run   # preview the changes first
+```
+
+It lists your block devices and lets you pick the install target, prompts for a hostname, and detects (or lets you override) the graphics driver — then writes all three straight into `user_configuration.json`. It never reads, writes, or references `user_credentials.json`.
+
+You still need to set by hand:
+
+- Authentication (including the LUKS encryption password in `user_credentials.json`)
+
+Or, without the script, hand-edit `user_configuration.json` yourself:
+
+- Disk device path (`disk_config.device_modifications[0].device`)
 - Hostname
-- Authentication (including the LUKS encryption password in credentials)
+- `gfx_driver` (see [GPU / NVIDIA](#gpu--nvidia) below)
 
 ## Disk layout (preconfigured)
 
@@ -90,7 +103,7 @@ You can unmount via `umount /mnt/usb`
 
 ## GPU / NVIDIA
 
-`user_configuration.json` currently sets archinstall `gfx_driver` to **NVIDIA open** (Turing+). On AMD/Intel-only machines, change that before install, for example to `All open-source`, or pick the right driver in the archinstall UI.
+`user_configuration.json` currently sets archinstall `gfx_driver` to **NVIDIA open** (Turing+). `./prepare-archinstall.sh` detects the GPU vendor and proposes the matching value (falling back to `All open-source` if it can't tell); confirm or override it there. Without the script, change `gfx_driver` by hand before install, or pick the right driver in the archinstall UI.
 
 After install, NVIDIA packages are **not** forced:
 
