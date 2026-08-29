@@ -74,3 +74,17 @@ list_git_repos_under() {
   local root_dir="$1"
   find "$root_dir" -mindepth 1 -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null | sort -u
 }
+
+# Derive the tmux session name (and, by extension, the Neovim --listen socket
+# name) for a project directory: translate '.', ' ', ':' in the basename to
+# '_', falling back to a hash-based name when that leaves nothing usable.
+# Shared by `code` (session creation) and `nvim-reveal-edit` (socket lookup
+# during its upward directory walk) so the mapping can't silently diverge.
+tmux_session_name_for() {
+  local dir="$1" name
+  name="$(basename "$dir" | tr '.' '_' | tr ' ' '_' | tr ':' '_')"
+  if [[ -z "$name" || "$name" =~ ^_+$ ]]; then
+    name="dev_$(echo "$dir" | md5sum | cut -c1-8)"
+  fi
+  echo "$name"
+}

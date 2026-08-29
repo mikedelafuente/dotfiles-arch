@@ -109,12 +109,10 @@ if ! command -v nvim &>/dev/null; then
     exit 1
 fi
 
-# Generate a tmux-safe session name from the directory basename (no dots,
-# spaces, or colons); fall back to a hash if that leaves nothing usable.
-SESSION_NAME=$(basename "$TARGET_DIR" | tr '.' '_' | tr ' ' '_' | tr ':' '_')
-if [[ -z "$SESSION_NAME" || "$SESSION_NAME" =~ ^_+$ ]]; then
-    SESSION_NAME="dev_$(echo "$TARGET_DIR" | md5sum | cut -c1-8)"
-fi
+# Tmux-safe session name derived from the directory basename; see
+# tmux_session_name_for in dotfiles-arch-lib.sh (also used by nvim-reveal-edit
+# to find this session's Neovim socket).
+SESSION_NAME="$(tmux_session_name_for "$TARGET_DIR")"
 
 # Resolve the command to start in the agent pane, if any.
 agent_command() {
