@@ -28,6 +28,13 @@ else
   exit 1
 fi
 
+# fn-lib.sh already sources this (its own ensure_yay_pkgs/safe_system_upgrade
+# need it), but sourced explicitly here too since this script calls
+# aur_scan_pending_upgrades directly — keeps the dependency visible locally
+# even if fn-lib.sh's internal wiring ever changes.
+# shellcheck source=/dev/null
+source "$CURRENT_FILE_DIR/aur-lib.sh"
+
 ASSUME_YES=false
 SCAN_ONLY=false
 FORCE=false
