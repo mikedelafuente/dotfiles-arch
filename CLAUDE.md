@@ -43,7 +43,8 @@ dotfiles-arch/
 ├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
 ├── AGENTS.md                     # Short pointer file for agents
 ├── PACKAGES.md                   # Why each installed package exists
-├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty)
+├── prepare-archinstall.sh        # Guided disk/hostname/gfx_driver prep, before archinstall
+├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty); chains into bootstrap.sh
 ├── user_configuration.json       # archinstall 4.4 template
 └── NOTES.md                      # Install / sync notes
 ```
@@ -142,6 +143,7 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 
 ### Special cases
 
+- **prepare-archinstall.sh**: Run from the live ISO before archinstall, not from an installed system. Lists block devices via `lsblk` (excluding loop/optical, and `zram` specifically since it reports `TYPE=disk` too but isn't a real wipeable target), prompts for a hostname, and detects the GPU vendor via `has_nvidia_hardware`/`has_amd_gpu_hardware`/`has_intel_gpu_hardware` (`fn-lib.sh`, sourced defensively like `post_install.sh`) to propose one of the six canonical `gfx_driver` values (`archinstall/lib/hardware.py`'s `GfxDriver` enum, tag 4.4 — see `docs/research/archinstall-config-schema.md`), letting the user confirm or override. Requires typing the disk path a second time to confirm before it's willing to select it (the layout wipes the disk). Patches `disk_config.device_modifications[0].device`, `hostname`, and `profile_config.gfx_driver` into `user_configuration.json` via `python3 -c` (present on the ISO because archinstall itself needs it), preserving key order and the rest of the file untouched. `--dry-run` prints the same planned changes without writing. Never reads, writes, or references `user_credentials.json` — the LUKS/user password stays a manual step by deliberate choice.
 - **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes `~/.config/git/identity` (not the shared `.gitconfig`)
 - **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` (checksummed install.sh, never `curl|bash`); Claude uses user-level `npm` (never `sudo npm`). `setup-claude.sh` also idempotently merges the `nvim-reveal-edit` `PostToolUse` hook into `~/.claude/settings.json` (jq, touching only `.hooks.PostToolUse`)
 - **setup-code.sh**: Installs `tmux`, `lazygit`, `lazydocker`; runs last in `run-profile-setup.sh` (after profile extras) so Cursor/Claude are already on PATH; resolves `DEFAULT_AGENT` via `resolve_default_agent` — auto-picks the one CLI installed, prompts (Enter keeps the saved choice) when both are, leaves it empty when neither is — and persists it with `write_bootstrap_config`
@@ -181,7 +183,8 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 - `scripts/fn-lib.sh` — package/nvm/hardware/config/AUR-scan helpers
 - `scripts/setup-gnome.sh` — theme, Pop Shell, Dash to Panel, keybindings, GPaste, AppIndicator, No Overview
 - `scripts/setup-code.sh` — tmux-based `code` launcher + `DEFAULT_AGENT` resolution
-- `user_configuration.json` — set disk device and `gfx_driver` per machine
+- `prepare-archinstall.sh` — guided disk/hostname/`gfx_driver` prep for `user_configuration.json`, run before archinstall
+- `user_configuration.json` — disk device, hostname, and `gfx_driver` per machine (set by `prepare-archinstall.sh` or by hand)
 - `NOTES.md` — WiFi, USB config, NVIDIA, sync
 
 ## Development notes

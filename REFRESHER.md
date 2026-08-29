@@ -155,8 +155,9 @@ bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
 
 ### …set up a brand-new Arch box
 
-1. archinstall with `user_configuration.json` (set disk + creds — see NOTES)
-2. `./post_install.sh` — chains straight into bootstrap (name, email, work|personal, NVIDIA y/n, laptop|desktop); re-run `bash scripts/bootstrap.sh` on its own later if needed
+1. `./prepare-archinstall.sh` — picks disk/hostname/gfx_driver into `user_configuration.json`; creds still manual
+2. archinstall with `user_configuration.json` — see NOTES
+3. `./post_install.sh` — chains straight into bootstrap (name, email, work|personal, NVIDIA y/n, laptop|desktop); re-run `bash scripts/bootstrap.sh` on its own later if needed
 
 ### …remember work vs personal
 

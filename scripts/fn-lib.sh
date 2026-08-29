@@ -775,6 +775,32 @@ has_intel_hardware() {
   return 1
 }
 
+# Internal: true when a PCI VGA/3D/Display controller line matches the given
+# (already word-bounded) grep -E vendor pattern. Shared by the per-vendor
+# has_*_gpu_hardware helpers below. Unlike has_nvidia_hardware, there's no
+# sysfs vendor-ID fallback when lspci is missing — these two only run from
+# prepare-archinstall.sh on the Arch live ISO, where lspci is always present
+# (archinstall itself depends on it).
+_has_gpu_vendor() {
+  local vendor_pattern="$1"
+  command -v lspci &>/dev/null || return 1
+  lspci -nn 2>/dev/null | grep -qiE "${vendor_pattern}.*(VGA|3D|Display)|(VGA|3D|Display).*${vendor_pattern}"
+}
+
+# True when an AMD/ATI GPU is visible to the system (PCI display controller
+# only — narrower than has_intel_hardware, which also matches Intel CPUs).
+# \b-bounded: "ATI" as a loose substring false-positives on ordinary words
+# like "compatible" (as in lspci's own "VGA compatible controller" text).
+has_amd_gpu_hardware() {
+  _has_gpu_vendor '\b(AMD|ATI)\b'
+}
+
+# True when an Intel GPU is visible to the system (PCI display controller
+# only — narrower than has_intel_hardware, which also matches Intel CPUs).
+has_intel_gpu_hardware() {
+  _has_gpu_vendor '\bIntel\b'
+}
+
 # --------------------------
 # Package helpers
 # --------------------------

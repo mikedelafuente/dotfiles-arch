@@ -9,7 +9,7 @@ cd "$ROOT"
 
 files=()
 shopt -s nullglob
-for f in scripts/*.sh post_install.sh home/.local/bin/*; do
+for f in scripts/*.sh post_install.sh prepare-archinstall.sh home/.local/bin/*; do
   [[ -f "$f" ]] || continue
   # Skip non-shell helpers if any appear later
   case "$f" in

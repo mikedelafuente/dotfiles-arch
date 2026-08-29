@@ -43,10 +43,11 @@ This is the guarded replacement for raw `yay -Syu`: official repos via pacman, t
 Target schema matches **archinstall 4.4** (`user_configuration.json`).
 
 1. Get network (WiFi: `iwctl` — see [NOTES.md](NOTES.md)).
-2. Edit before install:
-   - Disk device: `disk_config.device_modifications[0].device` (this **wipes** the disk)
-   - Hostname, auth, LUKS password (`user_credentials.json`)
-   - `gfx_driver` — NVIDIA open by default; change for AMD/Intel
+2. Prepare `user_configuration.json` before install:
+   ```shell
+   ./prepare-archinstall.sh
+   ```
+   Guided: pick your disk from a live listing (this **wipes** it), enter a hostname, confirm the detected graphics driver. `--dry-run` previews the changes. Doesn't touch `user_credentials.json` — set auth/LUKS password there yourself, or hand-edit `user_configuration.json` directly if you skip the script.
 3. Run archinstall with the config (USB or config URL — details in [NOTES.md](NOTES.md)).
 
 Layout: **Btrfs + LUKS + Snapper**, GNOME + GDM, PipeWire, NetworkManager.
@@ -284,7 +285,8 @@ dotfiles-arch/
 ├── CLAUDE.md              ← architecture notes for AI agents
 ├── AGENTS.md              ← pointer file for Cursor / other agents
 ├── .cursor/rules/         ← repo conventions for AI agents
-├── post_install.sh        ← minimal post-archinstall
+├── prepare-archinstall.sh ← guided disk/hostname/gfx_driver prep, before archinstall
+├── post_install.sh        ← minimal post-archinstall (chains into bootstrap.sh)
 ├── user_configuration.json
 ├── scripts/
 │   ├── bootstrap.sh       # new machine
