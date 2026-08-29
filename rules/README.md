@@ -16,12 +16,12 @@ rules/
 Frontmatter fields: `description`, optional `globs` (comma-separated glob string),
 `alwaysApply: true|false`.
 
-`scripts/sync-rules.sh` (run automatically by `sync-dotfiles`/`bootstrap.sh`, and daily
-via `morning`) symlinks each file here into `~/.cursor/rules/<name>.mdc`, and removes the
+`scripts/sync-rules.sh` (run automatically by `dela-sync-dotfiles`/`bootstrap.sh`, and daily
+via `dela-morning`) symlinks each file here into `~/.cursor/rules/<name>.mdc`, and removes the
 symlink again once the file is deleted from its source repo. dotfiles-arch is always
-synced first; register extra repos with `sync-sources add /path/to/repo` (later sources
+synced first; register extra repos with `dela-sync-sources add /path/to/repo` (later sources
 override on name collision). It never touches anything else already in `~/.cursor/rules/`
 — only managed symlinks under `{source}/rules/`. Cursor only; Claude Code has no
 equivalent auto-loaded rules directory.
 
-Run it manually with `sync-rules`.
+Run it manually with `dela-sync-rules`.

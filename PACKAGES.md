@@ -22,7 +22,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `xsel` | X11 clipboard fallback (XWayland apps) | `xsel` |
 | `eza` | Modern `ls` with icons | `ls`, `ll`, `la`, `l`, `lt` |
 | `starship` | Shell prompt (Catppuccin) | prompt; config `~/.config/starship.toml` |
-| `fzf` | Fuzzy finder | Ctrl-R history, Ctrl-T files, Alt-C cd, `repos`, `r` |
+| `fzf` | Fuzzy finder | Ctrl-R history, Ctrl-T files, Alt-C cd, `dela-repos`, `r` |
 | `ripgrep` | Fast recursive search | `rg`; also used by AUR IoC scans |
 | `fd` | Fast `find` replacement | `fd`; backs `FZF_DEFAULT_COMMAND` |
 | `bat` | Syntax-highlighted pager | `welcome`, `packages`, `vimcheat`, `MANPAGER` |
@@ -36,7 +36,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `net-tools` | Legacy net utilities | `ports` (`netstat`), `ifconfig` |
 | `iw` | Wireless device config/query (nl80211) | `iw list`, `iw dev` |
 | `stow` | Symlink farm manager | manual dotfile experiments |
-| `shellcheck` | Shell static analysis | `check` / `check-dotfiles`, CI |
+| `shellcheck` | Shell static analysis | `check` / `dela-check-dotfiles`, CI |
 | `github-cli` | GitHub from the terminal | `gh`; also the git credential helper |
 | `tldr` | Example-first man pages | `tldr <cmd>` |
 | `fastfetch` | System summary | `fastfetch` |

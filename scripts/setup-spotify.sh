@@ -52,7 +52,7 @@ else
         print_info_message "You can launch Spotify from your application menu or run: spotify"
         echo ""
         print_info_message "To update packages safely, run:"
-        print_info_message "  update-system"
+        print_info_message "  dela-update-system"
         print_info_message "  # or: bash scripts/update-system.sh"
     else
         print_error_message "Spotify installation failed"

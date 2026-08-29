@@ -1,13 +1,18 @@
 #!/bin/bash
 # Pick a repo under ~/repos with fzf and print its path.
 # Usage:
-#   cd "$(repos)"      # or the r alias from ~/.bashrc
-#   repos <filter>     # pre-seed the fzf query
+#   cd "$(dela-repos)"      # or the r alias from ~/.bashrc
+#   dela-repos <filter>     # pre-seed the fzf query
 #
 # Searches ~/repos two levels deep (owner/repo layouts included) and prefers
-# directories that contain a .git.
+# directories that contain a .git; also lists non-git top-level folders as
+# browse targets (e.g. an owner folder that just groups other repos).
 
 set -euo pipefail
+
+_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+source "$_LIB_DIR/dotfiles-arch-lib.sh"
 
 ROOT_DIR="${REPOS_DIR:-$HOME/repos}"
 
@@ -17,8 +22,9 @@ if [[ ! -d "$ROOT_DIR" ]]; then
 fi
 
 list_repos() {
-  # Depth 1 and 2 so both ~/repos/project and ~/repos/owner/project work.
-  find "$ROOT_DIR" -mindepth 1 -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null
+  list_git_repos_under "$ROOT_DIR"
+  # Also list non-git top-level folders as browse targets (e.g. an owner
+  # folder that just groups other repos one level down).
   find "$ROOT_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null
 }
 
@@ -36,7 +42,7 @@ if ! command -v fzf &>/dev/null; then
 fi
 
 if [[ ! -t 0 ]] || [[ ! -t 2 ]]; then
-  echo "repos needs an interactive terminal (use: cd \"\$(repos)\")." >&2
+  echo "dela-repos needs an interactive terminal (use: cd \"\$(dela-repos)\")." >&2
   exit 1
 fi
 
@@ -45,7 +51,7 @@ SELECTED="$(printf '%s\n' "$CANDIDATES" \
   | fzf --height=40% --layout=reverse --border --prompt='repo> ' --query="${1:-}" --select-1 --exit-0)"
 
 if [[ -z "$SELECTED" ]]; then
-  # Nothing picked: stay where we are so `cd "$(repos)"` is a no-op.
+  # Nothing picked: stay where we are so `cd "$(dela-repos)"` is a no-op.
   pwd
   exit 0
 fi

@@ -21,15 +21,15 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ### Day-to-day updates (preferred)
 
 ```bash
-morning                       # update-repos + update-system + sync-skills + sync-rules (edit ~/.local/bin/morning)
-                              # if update-repos pulls new dotfiles-arch commits, runs sync-dotfiles and restarts once
-sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then sync-skills && sync-rules
-update-system                 # after link-dotfiles; or:
+dela-morning                       # dela-update-repos + dela-update-system + dela-sync-skills + dela-sync-rules (edit ~/.local/bin/dela-morning)
+                              # if dela-update-repos pulls new dotfiles-arch commits, runs dela-sync-dotfiles and restarts once
+dela-sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then dela-sync-skills && dela-sync-rules
+dela-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
 bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
 bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
 bash scripts/update-system.sh --force      # bypass the 1-day cooldown
-update-repos                  # parallel git pull --ff-only under ~/repos (MAX_PARALLEL=8)
+dela-update-repos                  # parallel git pull --ff-only under ~/repos (MAX_PARALLEL=8)
 ```
 
 This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Sync always runs the same upgrade path; bootstrap uses it behind a 1-day cooldown. Both use the same scan before any `--noconfirm` AUR install.
@@ -237,7 +237,7 @@ Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the s
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
 | `z` / `zi` | Smart cd (zoxide) |
-| `r` / `repos` | fzf-pick a repo under `~/repos` and cd into it |
+| `r` / `dela-repos` | fzf-pick a repo under `~/repos` and cd into it |
 | `pbcopy` / `pbpaste` | Wayland clipboard in/out |
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
@@ -295,7 +295,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # morning, update-repos, sync-dotfiles, sync-skills, sync-rules, sync-sources, update-system, …
+│   └── .local/bin/        # dela-morning, dela-update-repos, dela-sync-dotfiles, dela-sync-skills, dela-sync-rules, dela-sync-sources, dela-update-system, …
 └── config/                # → ~/.config
 ```
 

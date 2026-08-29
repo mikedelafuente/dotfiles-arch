@@ -381,8 +381,8 @@ fi
 
 print_line_break "Sync complete"
 print_success_message "Profiles: $(format_setup_profiles)"
-print_info_message "Commands on PATH (via ~/.local/bin): sync-dotfiles, update-system"
+print_info_message "Commands on PATH (via ~/.local/bin): dela-sync-dotfiles, dela-update-system"
 print_info_message "Restart the terminal (or log out/in) so PATH, Kitty defaults, and shell aliases refresh."
 print_info_message "If GNOME shortcuts/tray/fonts look wrong: log out and back in so extensions reload."
 print_info_message "Neovim: open nvim once and run :Lazy sync / :TSUpdate if plugins look stale."
-print_info_message "On other machines: clone/pull this repo, then run:  sync-dotfiles   # or: bash scripts/sync.sh"
+print_info_message "On other machines: clone/pull this repo, then run:  dela-sync-dotfiles   # or: bash scripts/sync.sh"

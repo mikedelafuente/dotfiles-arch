@@ -1,6 +1,6 @@
 #!/bin/bash
-# Day-to-day guarded pacman + yay updater (AUR IoC scan).
-# Usage: update-system [--yes|-y] [--scan-only] [--force] [-h]
+# Symlink personal Cursor rules from dotfiles-arch into ~/.cursor/rules
+# (pruning stale ones). Usage: dela-sync-rules
 
 set -euo pipefail
 
@@ -13,4 +13,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/update-system.sh" "$@"
+exec bash "$ROOT/scripts/sync-rules.sh" "$@"

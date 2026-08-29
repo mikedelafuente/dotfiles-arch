@@ -361,7 +361,7 @@ write_sync_source_repos() {
     echo "# Types: standard (default, has rules/ + skills/ subdirs), skills-root"
     echo "# (path is itself a flat folder of skill dirs), rules-root (path is"
     echo "# itself a flat folder of *.mdc files)."
-    echo "# Managed by sync-sources add/remove — dotfiles-arch is always primary"
+    echo "# Managed by dela-sync-sources add/remove — dotfiles-arch is always primary"
     for i in "${!SYNC_SOURCE_REPOS[@]}"; do
       path="${SYNC_SOURCE_REPOS[$i]}"
       type="${SYNC_SOURCE_REPO_TYPES[$i]}"

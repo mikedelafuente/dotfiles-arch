@@ -1,6 +1,6 @@
 #!/bin/bash
-# Syntax + shellcheck pass over the dotfiles-arch scripts.
-# Usage: check-dotfiles
+# Symlink personal skills from dotfiles-arch into ~/.claude/skills and
+# ~/.cursor/skills (pruning stale ones). Usage: dela-sync-skills
 
 set -euo pipefail
 
@@ -13,4 +13,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/check.sh" "$@"
+exec bash "$ROOT/scripts/sync-skills.sh" "$@"
