@@ -1,6 +1,6 @@
 #!/bin/bash
-# Symlink personal Cursor rules from dotfiles-arch into ~/.cursor/rules
-# (pruning stale ones). Usage: sync-rules
+# Syntax + shellcheck pass over the dotfiles-arch scripts.
+# Usage: dfa-check-dotfiles
 
 set -euo pipefail
 
@@ -13,4 +13,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/sync-rules.sh" "$@"
+exec bash "$ROOT/scripts/check.sh" "$@"

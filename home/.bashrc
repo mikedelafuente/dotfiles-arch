@@ -171,13 +171,13 @@ if command -v mullvad &> /dev/null; then
     alias mvst='mullvad status'
 fi
 
-# Maintenance (helpers live in ~/.local/bin)
-alias check='check-dotfiles'
-alias orphans='remove-orphans'
+# Maintenance (helpers live in ~/.local/bin, all prefixed dfa- for discoverability)
+alias check='dfa-check-dotfiles'
+alias orphans='dfa-remove-orphans'
 
-# Jump to a repo with fzf: r → cd "$(repos)"
+# Jump to a repo with fzf: r → cd "$(dfa-repos)"
 if command -v fzf &> /dev/null; then
-    alias r='cd "$(repos)"'
+    alias r='cd "$(dfa-repos)"'
 fi
 
 # Functions
@@ -219,7 +219,7 @@ packages() {
             less "$HOME/.packages.md"
         fi
     else
-        echo "Package catalog not found at $HOME/.packages.md (run sync-dotfiles to link it)"
+        echo "Package catalog not found at $HOME/.packages.md (run dfa-sync-dotfiles to link it)"
     fi
 }
 

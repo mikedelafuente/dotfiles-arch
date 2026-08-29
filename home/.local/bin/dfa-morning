@@ -4,16 +4,16 @@
 # Edit MORNING_STEPS below to add or reorder tasks. Each name must be on PATH
 # (~/.local/bin). Missing commands are skipped with a message.
 #
-# Default: update-repos, then update-system (day-to-day pacman + yay), then
-# sync-skills (relink personal skills from dotfiles-arch), then sync-rules
+# Default: dfa-update-repos, then dfa-update-system (day-to-day pacman + yay), then
+# dfa-sync-skills (relink personal skills from dotfiles-arch), then dfa-sync-rules
 # (relink personal Cursor rules from dotfiles-arch).
-# If update-repos pulls new dotfiles-arch commits, morning runs sync-dotfiles
+# If dfa-update-repos pulls new dotfiles-arch commits, dfa-morning runs dfa-sync-dotfiles
 # itself (setup scripts + re-link) right away, then restarts the whole
 # routine from the top so the remaining steps run against the freshly-synced
 # scripts — capped at one restart per invocation.
 #
-# Usage: morning [args…]
-#   Args are forwarded to every step (e.g. morning --yes).
+# Usage: dfa-morning [args…]
+#   Args are forwarded to every step (e.g. dfa-morning --yes).
 
 set -uo pipefail
 
@@ -25,31 +25,31 @@ if [[ -r "$_MORNING_LIB_DIR/dotfiles-arch-lib.sh" ]]; then
 fi
 
 MORNING_STEPS=(
-  update-repos
-  update-system
-  sync-skills
-  sync-rules
+  dfa-update-repos
+  dfa-update-system
+  dfa-sync-skills
+  dfa-sync-rules
 )
 
 usage() {
   cat <<'EOF'
-Usage: morning [args…]
+Usage: dfa-morning [args…]
 
 Run the morning routine steps in order. Edit MORNING_STEPS in this script to
 customize. Steps not on PATH are skipped.
 
 Default steps:
-  update-repos    git pull under ~/repos
-  update-system   guarded pacman + yay update
-  sync-skills     relink skills from dotfiles-arch + sync-sources extras
-  sync-rules      relink Cursor rules from dotfiles-arch + sync-sources extras
+  dfa-update-repos    git pull under ~/repos
+  dfa-update-system   guarded pacman + yay update
+  dfa-sync-skills     relink skills from dotfiles-arch + dfa-sync-sources extras
+  dfa-sync-rules      relink Cursor rules from dotfiles-arch + dfa-sync-sources extras
 
-If update-repos pulls new dotfiles-arch commits, sync-dotfiles runs
+If dfa-update-repos pulls new dotfiles-arch commits, dfa-sync-dotfiles runs
 automatically and the whole routine restarts from the top (capped at one
 restart per invocation) so the remaining steps see the synced scripts.
 
 Example:
-  morning --yes   non-interactive system update (forwarded to update-system)
+  dfa-morning --yes   non-interactive system update (forwarded to dfa-update-system)
 EOF
 }
 
@@ -76,7 +76,7 @@ main() {
 
   for step in "${MORNING_STEPS[@]}"; do
     if ! command -v "$step" &>/dev/null; then
-      printf 'morning: skip %s (not on PATH)\n' "$step" >&2
+      printf 'dfa-morning: skip %s (not on PATH)\n' "$step" >&2
       skipped+=("$step")
       continue
     fi
@@ -86,28 +86,28 @@ main() {
       step_status=0
     else
       step_status=$?
-      printf 'morning: %s failed (exit %s)\n' "$step" "$step_status" >&2
+      printf 'dfa-morning: %s failed (exit %s)\n' "$step" "$step_status" >&2
       failures+=("$step")
     fi
 
-    if [[ "$step" == "update-repos" && "$step_status" -eq 0 && -n "$dotfiles_arch_root" ]]; then
+    if [[ "$step" == "dfa-update-repos" && "$step_status" -eq 0 && -n "$dotfiles_arch_root" ]]; then
       after_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
       if [[ -n "$before_sha" && -n "$after_sha" && "$before_sha" != "$after_sha" ]]; then
-        printf '\nmorning: dotfiles-arch updated (%s..%s)\n' "${before_sha:0:7}" "${after_sha:0:7}"
+        printf '\ndfa-morning: dotfiles-arch updated (%s..%s)\n' "${before_sha:0:7}" "${after_sha:0:7}"
         if [[ "${_MORNING_RESTARTED:-0}" == 1 ]]; then
-          printf 'morning: already restarted once this run — continuing without another restart\n' >&2
-        elif ! command -v sync-dotfiles &>/dev/null; then
-          printf 'morning: skip sync-dotfiles (not on PATH) — run it manually to apply setup script changes\n' >&2
-          skipped+=("sync-dotfiles")
+          printf 'dfa-morning: already restarted once this run — continuing without another restart\n' >&2
+        elif ! command -v dfa-sync-dotfiles &>/dev/null; then
+          printf 'dfa-morning: skip dfa-sync-dotfiles (not on PATH) — run it manually to apply setup script changes\n' >&2
+          skipped+=("dfa-sync-dotfiles")
         else
-          printf '\n==> sync-dotfiles\n'
-          if sync-dotfiles "$@"; then
-            printf 'morning: restarting to pick up synced changes\n'
+          printf '\n==> dfa-sync-dotfiles\n'
+          if dfa-sync-dotfiles "$@"; then
+            printf 'dfa-morning: restarting to pick up synced changes\n'
             export _MORNING_RESTARTED=1
             exec "$_MORNING_SELF" "$@"
           else
-            printf 'morning: sync-dotfiles failed (exit %s) — continuing with remaining steps\n' "$?" >&2
-            failures+=("sync-dotfiles")
+            printf 'dfa-morning: dfa-sync-dotfiles failed (exit %s) — continuing with remaining steps\n' "$?" >&2
+            failures+=("dfa-sync-dotfiles")
           fi
         fi
       fi
@@ -116,13 +116,13 @@ main() {
 
   printf '\n'
   if ((${#skipped[@]})); then
-    printf 'morning: skipped (not on PATH): %s\n' "${skipped[*]}"
+    printf 'dfa-morning: skipped (not on PATH): %s\n' "${skipped[*]}"
   fi
   if ((${#failures[@]})); then
-    printf 'morning: finished with failures: %s\n' "${failures[*]}" >&2
+    printf 'dfa-morning: finished with failures: %s\n' "${failures[*]}" >&2
     exit 1
   fi
-  printf 'morning: done\n'
+  printf 'dfa-morning: done\n'
 }
 
 main "$@"

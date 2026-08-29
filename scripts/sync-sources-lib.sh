@@ -113,7 +113,7 @@ prune_managed_symlinks() {
 }
 
 # Remove all managed rules/skills symlinks pointing at repo_root's effective
-# dir for type (after `sync-sources remove`).
+# dir for type (after `dfa-sync-sources remove`).
 prune_sync_source_repo_symlinks() {
   local repo_root="${1:-}" type="${2:-}"
   shift 2

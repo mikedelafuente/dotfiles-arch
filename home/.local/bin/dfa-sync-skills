@@ -1,6 +1,6 @@
 #!/bin/bash
 # Symlink personal skills from dotfiles-arch into ~/.claude/skills and
-# ~/.cursor/skills (pruning stale ones). Usage: sync-skills
+# ~/.cursor/skills (pruning stale ones). Usage: dfa-sync-skills
 
 set -euo pipefail
 

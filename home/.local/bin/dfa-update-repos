@@ -1,16 +1,20 @@
 #!/bin/bash
-# Git pull every repo under ~/repos (same search depth as repos).
+# Git pull every repo under ~/repos (same search depth as dfa-repos).
 # Pulls run in parallel (MAX_PARALLEL, default 8), like dela-dotfiles' update-repos.
-# Usage: update-repos [--dry-run] [-h]
+# Usage: dfa-update-repos [--dry-run] [-h]
 
 set -uo pipefail
+
+_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+source "$_LIB_DIR/dotfiles-arch-lib.sh"
 
 ROOT_DIR="${REPOS_DIR:-$HOME/repos}"
 MAX_PARALLEL="${MAX_PARALLEL:-8}"
 
 usage() {
   cat <<'EOF'
-Usage: update-repos [--dry-run] [-h]
+Usage: dfa-update-repos [--dry-run] [-h]
 
 Pull the latest changes for each git repo under ~/repos (REPOS_DIR overrides).
 Skips repos with a dirty working tree. Uses git pull --ff-only.
@@ -19,8 +23,7 @@ EOF
 }
 
 list_repos() {
-  find "$ROOT_DIR" -mindepth 1 -maxdepth 3 -type d -name .git -prune -printf '%h\n' 2>/dev/null \
-    | sort -u
+  list_git_repos_under "$ROOT_DIR"
 }
 
 # Write one status file for the parent to aggregate (skip|ok|fail).
@@ -70,7 +73,7 @@ main() {
         exit 0
         ;;
       *)
-        echo "update-repos: unknown option: $arg" >&2
+        echo "dfa-update-repos: unknown option: $arg" >&2
         usage >&2
         exit 2
         ;;
@@ -78,13 +81,13 @@ main() {
   done
 
   if [[ ! -d "$ROOT_DIR" ]]; then
-    echo "update-repos: no directory at $ROOT_DIR (set REPOS_DIR to override)" >&2
+    echo "dfa-update-repos: no directory at $ROOT_DIR (set REPOS_DIR to override)" >&2
     exit 1
   fi
 
   mapfile -t repos < <(list_repos)
   if ((${#repos[@]} == 0)); then
-    echo "update-repos: no git repositories found under $ROOT_DIR" >&2
+    echo "dfa-update-repos: no git repositories found under $ROOT_DIR" >&2
     exit 0
   fi
 
@@ -107,7 +110,7 @@ main() {
   updated="$(find "$RESULT_DIR" -maxdepth 1 -name 'ok.*' 2>/dev/null | wc -l | tr -d ' ')"
   failed="$(find "$RESULT_DIR" -maxdepth 1 -name 'fail.*' 2>/dev/null | wc -l | tr -d ' ')"
 
-  printf '\nupdate-repos: %d updated, %d skipped (dirty), %d failed (parallel=%s)\n' \
+  printf '\ndfa-update-repos: %d updated, %d skipped (dirty), %d failed (parallel=%s)\n' \
     "$updated" "$skipped" "$failed" "$MAX_PARALLEL"
   ((failed > 0)) && exit 1
   exit 0
