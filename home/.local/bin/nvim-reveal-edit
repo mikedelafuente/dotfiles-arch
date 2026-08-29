@@ -18,6 +18,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+source "$SCRIPT_DIR/dotfiles-arch-lib.sh"
+
 command -v jq &>/dev/null || exit 0
 command -v nvim &>/dev/null || exit 0
 
@@ -28,12 +32,12 @@ FILE_PATH="$(jq -r '.file_path // .tool_input.file_path // .tool_input.notebook_
 
 FILE_PATH="$(realpath -m "$FILE_PATH")"
 
-# Walk up from the file looking for a live socket, matching the SESSION_NAME
-# derivation in home/.local/bin/code exactly (basename with '.', ' ', ':' -> '_').
+# Walk up from the file looking for a live socket, deriving each ancestor's
+# session name via the same tmux_session_name_for `code` uses to name it.
 SOCKET=""
 dir="$(dirname "$FILE_PATH")"
 while [[ -n "$dir" && "$dir" != "/" ]]; do
-  name="$(basename "$dir" | tr '.' '_' | tr ' ' '_' | tr ':' '_')"
+  name="$(tmux_session_name_for "$dir")"
   candidate="${XDG_RUNTIME_DIR:-/tmp}/dotfiles-arch-nvim-${name}.sock"
   if [[ -S "$candidate" ]]; then
     SOCKET="$candidate"
