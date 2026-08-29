@@ -156,8 +156,7 @@ bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
 ### …set up a brand-new Arch box
 
 1. archinstall with `user_configuration.json` (set disk + creds — see NOTES)
-2. `./post_install.sh`
-3. `bash scripts/bootstrap.sh` (name, email, work|personal, NVIDIA y/n, laptop|desktop)
+2. `./post_install.sh` — chains straight into bootstrap (name, email, work|personal, NVIDIA y/n, laptop|desktop); re-run `bash scripts/bootstrap.sh` on its own later if needed
 
 ### …remember work vs personal
 

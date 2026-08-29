@@ -5,7 +5,8 @@
 # - optionally install NVIDIA drivers (detect / saved preference / prompt)
 # - install Kitty + base tooling
 #
-# After this, run: bash scripts/bootstrap.sh
+# Hands off directly into bootstrap.sh at the end (any args are forwarded),
+# so a single run does both. Run bootstrap.sh on its own for later re-runs.
 
 set -euo pipefail
 
@@ -76,4 +77,5 @@ sudo pacman -S --needed --noconfirm kitty git base-devel linux-headers man-db
 sudo mandb
 
 echo ""
-echo "post_install complete. Next: bash scripts/bootstrap.sh"
+echo "post_install complete. Handing off to bootstrap..."
+exec bash "$SCRIPT_DIR/scripts/bootstrap.sh" "$@"
