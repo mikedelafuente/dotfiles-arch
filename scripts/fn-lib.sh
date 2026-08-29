@@ -560,6 +560,43 @@ has_intel_gpu_hardware() {
 }
 
 # --------------------------
+# JSON config helpers
+# --------------------------
+
+# Idempotently merge a hook registration into a JSON config file via jq.
+# Args: file, seed_json (written if file doesn't exist), present_filter (a jq
+# -e boolean expression; a match means the hook is already registered, so
+# this is a no-op), merge_filter (a jq program producing the updated
+# document), label (human-readable description used in log messages).
+# Leaves the file untouched (with a warning) if jq is missing or the merge
+# filter fails against a malformed existing file.
+ensure_json_hook_registered() {
+  local file="$1" seed_json="$2" present_filter="$3" merge_filter="$4" label="$5"
+
+  if ! command -v jq &>/dev/null; then
+    print_warning_message "jq not found — skipping $label"
+    return
+  fi
+
+  mkdir -p "$(dirname "$file")"
+  [ -f "$file" ] || echo "$seed_json" > "$file"
+
+  if jq -e "$present_filter" "$file" &>/dev/null; then
+    return
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  if jq "$merge_filter" "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+    print_success_message "Added $label to $file"
+  else
+    rm -f "$tmp"
+    print_warning_message "Could not update $file — add $label manually"
+  fi
+}
+
+# --------------------------
 # Package helpers
 # --------------------------
 
