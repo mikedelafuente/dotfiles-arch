@@ -160,6 +160,7 @@ else
   print_info_message "Using profiles: $(fmt_choice "$(format_setup_profiles "$SETUP_PROFILES")")"
 fi
 
+# shellcheck disable=SC2034 # exported by run_profile_setup_scripts (fn-lib.sh)
 SETUP_PROFILE="$(primary_setup_profile)"
 if ! validate_bootstrap_profile; then
   print_error_message "Profiles must be a non-empty subset of work|personal|devcontainer (got: ${SETUP_PROFILES:-})"
@@ -208,15 +209,7 @@ if [ "$(whoami)" = "${SUDO_USER:-$(whoami)}" ]; then
   sudo -v
 fi
 
-{
-  while true; do
-    sudo -n true
-    sleep 60
-    kill -0 "$$" 2>/dev/null || exit
-  done
-} &
-SUDO_KEEPALIVE_PID=$!
-trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
+start_sudo_keepalive
 
 ensure_yay_installed || print_warning_message "yay install failed — AUR steps may fail"
 
@@ -240,21 +233,7 @@ fi
 
 if [ "$SKIP_BOOTSTRAP" = false ]; then
   print_line_break "Running setup scripts (safe to re-run)"
-
-  export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
-  export SETUP_CONTINUE_ON_ERROR=true
-  if [ "$ASSUME_YES" = true ]; then
-    export DOTFILES_AUR_ASSUME_YES=true
-  else
-    unset DOTFILES_AUR_ASSUME_YES 2>/dev/null || true
-  fi
-  set +e
-  bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
-  SETUP_RC=$?
-  set -e
-  if [ "$SETUP_RC" -ne 0 ]; then
-    print_warning_message "Some setup scripts failed (see above). Continuing with link/cleanup."
-  fi
+  run_profile_setup_scripts "$ASSUME_YES" || true
 else
   print_info_message "Skipping setup scripts (--skip-bootstrap)"
 fi
