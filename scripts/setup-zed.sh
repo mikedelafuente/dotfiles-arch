@@ -55,6 +55,27 @@ if [ -d "$LEGACY_ZED_APP_DIR" ] && [ -x "$LEGACY_ZED_APP_DIR/libexec/zed-editor"
     rm -rf "$LEGACY_ZED_APP_DIR"
 fi
 
+# The manual installer also dropped its own desktop entry into
+# ~/.local/share/applications, which — being a user data dir — takes
+# priority over the pacman package's /usr/share/applications entry of the
+# same ID. If Exec/TryExec/Icon in it point under $LEGACY_ZED_APP_DIR (now
+# removed above, or removed on a prior run), it's a dead entry: GNOME hides
+# it from the app grid (TryExec target missing) and its Icon path resolves
+# to nothing, showing a generic gear. Remove it so the system entry wins.
+LEGACY_ZED_DESKTOP_FILE="$USER_HOME_DIR/.local/share/applications/dev.zed.Zed.desktop"
+USER_APPLICATIONS_DIR="$USER_HOME_DIR/.local/share/applications"
+
+if [ -f "$LEGACY_ZED_DESKTOP_FILE" ] && grep -q "$LEGACY_ZED_APP_DIR" "$LEGACY_ZED_DESKTOP_FILE" 2>/dev/null; then
+    print_action_message "Removing stray Zed desktop entry: $LEGACY_ZED_DESKTOP_FILE (pointed at the removed manual install)"
+    rm -f "$LEGACY_ZED_DESKTOP_FILE"
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database "$USER_APPLICATIONS_DIR" &>/dev/null || true
+    fi
+    if command -v gtk-update-icon-cache &>/dev/null; then
+        gtk-update-icon-cache -qf "$USER_HOME_DIR/.local/share/icons/hicolor" &>/dev/null || true
+    fi
+fi
+
 # --------------------------
 # Install Zed via pacman
 # --------------------------
