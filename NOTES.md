@@ -106,8 +106,9 @@ GNOME + GDM are installed by archinstall. For multilib, optional NVIDIA, Kitty, 
 ./post_install.sh
 ```
 
-Then run bootstrap for the rest of the tooling. You will be prompted for profiles
-(multi-select; any combination):
+This hands off directly into bootstrap for the rest of the tooling (any arguments you
+pass to `post_install.sh` are forwarded to it) — no separate command needed. You will be
+prompted for profiles (multi-select; any combination):
 
 - **work** — shared stack + Zoom + Slack + Chrome
 - **personal** — shared stack + Steam + Discord + Firefox + Mullvad

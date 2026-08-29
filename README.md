@@ -10,7 +10,7 @@ This README is the starting point. Detailed install notes live in [NOTES.md](NOT
 
 | Situation | What to run |
 |-----------|-------------|
-| **Brand-new Arch install** | archinstall → `./post_install.sh` → `bash scripts/bootstrap.sh` |
+| **Brand-new Arch install** | archinstall → `./post_install.sh` (chains straight into bootstrap) |
 | **Existing machine / other PC** | `bash scripts/sync.sh` |
 | **Day-to-day package updates** | `bash scripts/update-system.sh` (guarded `pacman` + `yay`) |
 | **Just re-link configs** | `bash scripts/link-dotfiles.sh` |
@@ -59,9 +59,11 @@ After first reboot, from a clone of this repo:
 ./post_install.sh
 ```
 
-Enables multilib, updates packages, optional NVIDIA (`setup-nvidia.sh`), and installs Kitty + build basics.
+Enables multilib, updates packages, optional NVIDIA (`setup-nvidia.sh`), and installs Kitty + build basics. Then hands off directly into bootstrap (step 3) — no separate command needed.
 
 ### 3. Bootstrap (full workstation)
+
+Runs automatically at the end of `post_install.sh`. To re-run it later on its own (it's idempotent):
 
 ```bash
 # Do not run with sudo
