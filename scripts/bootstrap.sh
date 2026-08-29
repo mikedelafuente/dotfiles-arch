@@ -89,6 +89,7 @@ if [ -n "$FORCE_PROFILE" ]; then
 elif ! SETUP_PROFILES="$(normalize_setup_profiles "$SETUP_PROFILES")"; then
   SETUP_PROFILES="work"
 fi
+# shellcheck disable=SC2034 # exported by run_profile_setup_scripts (fn-lib.sh)
 SETUP_PROFILE="$(primary_setup_profile)"
 
 if [ "$ASSUME_YES" = true ]; then
@@ -135,6 +136,7 @@ else
       exit 1
     fi
   fi
+  # shellcheck disable=SC2034 # exported by run_profile_setup_scripts (fn-lib.sh)
   SETUP_PROFILE="$(primary_setup_profile)"
 fi
 
@@ -169,15 +171,7 @@ print_info_message "User: $(whoami)  Home: $USER_HOME_DIR"
 print_info_message "Profiles: $(format_setup_profiles)  INSTALL_NVIDIA: $INSTALL_NVIDIA  MACHINE_TYPE: $MACHINE_TYPE"
 
 sudo -v
-{
-  while true; do
-    sudo -n true
-    sleep 60
-    kill -0 "$$" 2>/dev/null || exit
-  done
-} &
-SUDO_KEEPALIVE_PID=$!
-trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
+start_sudo_keepalive
 
 # --------------------------
 # Allow multilib in pacman
@@ -217,16 +211,7 @@ fi
 
 print_info_message "Running bootstrap with profiles: $(format_setup_profiles)"
 
-export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
-export SETUP_CONTINUE_ON_ERROR=true
-export DOTFILES_AUR_ASSUME_YES=true
-set +e
-bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
-SETUP_RC=$?
-set -e
-if [ "$SETUP_RC" -ne 0 ]; then
-  print_warning_message "Some setup scripts failed (see above). Continuing with link/cleanup."
-fi
+run_profile_setup_scripts "true" || true
 
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)"
 bash "$DF_SCRIPT_DIR/post-link-hooks.sh"

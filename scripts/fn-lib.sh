@@ -771,6 +771,52 @@ remove_orphaned_packages() {
 }
 
 # --------------------------
+# bootstrap.sh / sync.sh shared orchestration
+# --------------------------
+
+# Start a background sudo-refresh loop plus an EXIT trap to kill it. Does not
+# itself call `sudo -v` — callers decide whether/how to prime the sudo
+# timestamp first (bootstrap.sh always does; sync.sh guards it by SUDO_USER).
+start_sudo_keepalive() {
+  {
+    while true; do
+      sudo -n true
+      sleep 60
+      kill -0 "$$" 2>/dev/null || exit
+    done
+  } &
+  SUDO_KEEPALIVE_PID=$!
+  trap 'kill $SUDO_KEEPALIVE_PID 2>/dev/null' EXIT
+}
+
+# Export the shared setup-profile env vars, run run-profile-setup.sh under
+# DF_SCRIPT_DIR, and report (without aborting under `set -e`) if it failed.
+# assume_yes ("true"/"false") controls DOTFILES_AUR_ASSUME_YES: bootstrap.sh
+# always passes "true"; sync.sh passes its --yes-derived flag, unsetting the
+# var (not just leaving it false) to match its original interactive-prompt
+# behavior when not assumed.
+run_profile_setup_scripts() {
+  local assume_yes="${1:-false}" rc
+
+  export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
+  export SETUP_CONTINUE_ON_ERROR=true
+  if [[ "$assume_yes" == "true" ]]; then
+    export DOTFILES_AUR_ASSUME_YES=true
+  else
+    unset DOTFILES_AUR_ASSUME_YES 2>/dev/null || true
+  fi
+
+  set +e
+  bash "$DF_SCRIPT_DIR/run-profile-setup.sh"
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    print_warning_message "Some setup scripts failed (see above). Continuing with link/cleanup."
+  fi
+  return "$rc"
+}
+
+# --------------------------
 # NVM / Node
 # --------------------------
 
