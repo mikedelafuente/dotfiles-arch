@@ -1,6 +1,5 @@
 #!/bin/bash
-# Symlink personal Cursor rules from dotfiles-arch into ~/.cursor/rules
-# (pruning stale ones). Usage: dela-sync-rules
+# List, add, or remove extra rules/skills source repos. Usage: dfa-sync-sources
 
 set -euo pipefail
 
@@ -13,4 +12,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/sync-rules.sh" "$@"
+exec bash "$ROOT/scripts/sync-sources.sh" "$@"

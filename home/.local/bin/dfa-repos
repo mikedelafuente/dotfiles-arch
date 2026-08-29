@@ -1,8 +1,8 @@
 #!/bin/bash
 # Pick a repo under ~/repos with fzf and print its path.
 # Usage:
-#   cd "$(dela-repos)"      # or the r alias from ~/.bashrc
-#   dela-repos <filter>     # pre-seed the fzf query
+#   cd "$(dfa-repos)"      # or the r alias from ~/.bashrc
+#   dfa-repos <filter>     # pre-seed the fzf query
 #
 # Searches ~/repos two levels deep (owner/repo layouts included) and prefers
 # directories that contain a .git; also lists non-git top-level folders as
@@ -42,7 +42,7 @@ if ! command -v fzf &>/dev/null; then
 fi
 
 if [[ ! -t 0 ]] || [[ ! -t 2 ]]; then
-  echo "dela-repos needs an interactive terminal (use: cd \"\$(dela-repos)\")." >&2
+  echo "dfa-repos needs an interactive terminal (use: cd \"\$(dfa-repos)\")." >&2
   exit 1
 fi
 
@@ -51,7 +51,7 @@ SELECTED="$(printf '%s\n' "$CANDIDATES" \
   | fzf --height=40% --layout=reverse --border --prompt='repo> ' --query="${1:-}" --select-1 --exit-0)"
 
 if [[ -z "$SELECTED" ]]; then
-  # Nothing picked: stay where we are so `cd "$(dela-repos)"` is a no-op.
+  # Nothing picked: stay where we are so `cd "$(dfa-repos)"` is a no-op.
   pwd
   exit 0
 fi

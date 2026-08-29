@@ -3,10 +3,10 @@
 # Sync personal Cursor rules
 # --------------------------
 # Symlinks each *.mdc rule file from dotfiles-arch and any extra repos
-# registered via dela-sync-sources into ~/.cursor/rules/<name>.mdc, and prunes managed
+# registered via dfa-sync-sources into ~/.cursor/rules/<name>.mdc, and prunes managed
 # symlinks when the source is removed or the repo is unlisted. Standard-type
 # sources contribute their rules/ subfolder; rules-root sources contribute their
-# own folder directly (see dela-sync-sources --type). Only ever touches symlinks
+# own folder directly (see dfa-sync-sources --type). Only ever touches symlinks
 # whose target is a configured source's effective rules dir — real files
 # elsewhere are left alone. Cursor only — Claude Code has no equivalent
 # auto-loaded rules directory. Safe to re-run.

@@ -173,7 +173,7 @@ bash scripts/sync.sh --yes --profile work,devcontainer --cleanup
 
 If no profiles are saved yet, sync prompts you to choose one or more of **work**, **personal**, **devcontainer** (with `--yes`, you must pass `--profile`).
 
-Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`. For day-to-day package-only updates, prefer `dela-update-system`.
+Do this on each machine that should match the repo. Fresh installs still use `bootstrap.sh`. For day-to-day package-only updates, prefer `dfa-update-system`.
 
 Paths use `$HOME` / `$USER_HOME_DIR` so different usernames on other machines work without edits.
 

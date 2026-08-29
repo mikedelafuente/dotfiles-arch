@@ -1,5 +1,6 @@
 #!/bin/bash
-# List, add, or remove extra rules/skills source repos. Usage: dela-sync-sources
+# Syntax + shellcheck pass over the dotfiles-arch scripts.
+# Usage: dfa-check-dotfiles
 
 set -euo pipefail
 
@@ -12,4 +13,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/sync-sources.sh" "$@"
+exec bash "$ROOT/scripts/check.sh" "$@"

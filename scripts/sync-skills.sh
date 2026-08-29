@@ -3,10 +3,10 @@
 # Sync personal Claude/Cursor skills
 # --------------------------
 # Symlinks each skill folder from dotfiles-arch and any extra repos registered
-# via dela-sync-sources into ~/.claude/skills/<name> and ~/.cursor/skills/<name>, and
+# via dfa-sync-sources into ~/.claude/skills/<name> and ~/.cursor/skills/<name>, and
 # prunes managed symlinks when the source is removed or the repo is unlisted.
 # Standard-type sources contribute their skills/ subfolder; skills-root sources
-# contribute their own folder directly (see dela-sync-sources --type). Only ever
+# contribute their own folder directly (see dfa-sync-sources --type). Only ever
 # touches symlinks whose target is a configured source's effective skills dir —
 # real directories elsewhere are left alone. Safe to re-run.
 

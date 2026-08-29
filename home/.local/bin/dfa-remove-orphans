@@ -1,6 +1,6 @@
 #!/bin/bash
-# Symlink personal skills from dotfiles-arch into ~/.claude/skills and
-# ~/.cursor/skills (pruning stale ones). Usage: dela-sync-skills
+# Remove orphaned pacman packages (pacman -Qtdq) using the repo helper.
+# Usage: dfa-remove-orphans
 
 set -euo pipefail
 
@@ -13,4 +13,7 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/sync-skills.sh" "$@"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/dotheader.sh"
+
+remove_orphaned_packages

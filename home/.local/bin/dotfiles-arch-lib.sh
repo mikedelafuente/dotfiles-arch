@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared helpers for ~/.local/bin wrappers (dela-sync-dotfiles, dela-update-system, code, zed-agent-init).
+# Shared helpers for ~/.local/bin wrappers (dfa-sync-dotfiles, dfa-update-system, code, zed-agent-init).
 # Sourced by those scripts — not meant to be executed directly.
 
 # Resolve the dotfiles-arch repo root. Prefers symlink walk-up, then DOTFILES_ARCH, then candidates.
@@ -68,7 +68,7 @@ resolve_default_agent_command() {
 
 # Find git repositories under a root directory (depth 3, so both
 # <root>/project and <root>/owner/project layouts work). Echoes one path per
-# line, deduped. Shared by dela-repos and dela-update-repos so they can never
+# line, deduped. Shared by dfa-repos and dfa-update-repos so they can never
 # drift on what counts as "a repo under the root".
 list_git_repos_under() {
   local root_dir="$1"

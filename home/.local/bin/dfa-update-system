@@ -1,6 +1,6 @@
 #!/bin/bash
-# Syntax + shellcheck pass over the dotfiles-arch scripts.
-# Usage: dela-check-dotfiles
+# Day-to-day guarded pacman + yay updater (AUR IoC scan).
+# Usage: dfa-update-system [--yes|-y] [--scan-only] [--force] [-h]
 
 set -euo pipefail
 
@@ -13,4 +13,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
-exec bash "$ROOT/scripts/check.sh" "$@"
+exec bash "$ROOT/scripts/update-system.sh" "$@"

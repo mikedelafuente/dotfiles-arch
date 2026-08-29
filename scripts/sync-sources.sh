@@ -3,7 +3,7 @@
 # Manage extra rules/skills source repos
 # --------------------------
 # dotfiles-arch is always the primary source; this command lists, adds, or
-# removes additional sources synced by dela-sync-rules and dela-sync-skills.
+# removes additional sources synced by dfa-sync-rules and dfa-sync-skills.
 # Each source has a type:
 #   standard    (default) — the path has rules/ and/or skills/ subdirs, same
 #               layout as dotfiles-arch itself.
@@ -31,7 +31,7 @@ CURSOR_RULES_DIR="$USER_HOME_DIR/.cursor/rules"
 CLAUDE_SKILLS_DIR="$USER_HOME_DIR/.claude/skills"
 CURSOR_SKILLS_DIR="$USER_HOME_DIR/.cursor/skills"
 
-SYNC_SOURCES_HINT="Run dela-sync-skills && dela-sync-rules to apply changes."
+SYNC_SOURCES_HINT="Run dfa-sync-skills && dfa-sync-rules to apply changes."
 
 cmd_list() {
   local i path type
@@ -39,7 +39,7 @@ cmd_list() {
   print_info_message "Primary (always, standard): $REPO_ROOT"
   _read_sync_source_repo_lines
   if [[ ${#SYNC_SOURCE_REPO_LINES[@]} -eq 0 ]]; then
-    print_info_message "Extra sources: (none — use: dela-sync-sources add /path/to/repo)"
+    print_info_message "Extra sources: (none — use: dfa-sync-sources add /path/to/repo)"
     return 0
   fi
   print_info_message "Extra sources:"
@@ -76,7 +76,7 @@ cmd_add() {
     esac
   done
   if [[ -z "$raw" ]]; then
-    print_error_message "Usage: dela-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]"
+    print_error_message "Usage: dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]"
     exit 1
   fi
   if ! add_sync_source_repo "$raw" "$type"; then
@@ -107,7 +107,7 @@ cmd_remove() {
     esac
   done
   if [[ -z "$raw" ]]; then
-    print_error_message "Usage: dela-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]"
+    print_error_message "Usage: dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]"
     exit 1
   fi
   if [[ -n "$type" ]] && ! is_valid_sync_source_type "$type"; then
@@ -147,9 +147,9 @@ cmd_remove() {
 
 usage() {
   cat <<EOF
-Usage: dela-sync-sources list
-       dela-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]
-       dela-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]
+Usage: dfa-sync-sources list
+       dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]
+       dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]
 
 dotfiles-arch is always synced first; extra sources override on name collision.
 
@@ -159,9 +159,9 @@ Types:
   rules-root  path itself is a flat folder of *.mdc files
 
 Examples:
-  dela-sync-sources add ~/repos/someone/rules-and-skills-repo
-  dela-sync-sources add ~/repos/mattpocock/skills/skills/engineering --type skills-root
-  dela-sync-sources remove ~/repos/mattpocock/skills/skills/engineering --type skills-root
+  dfa-sync-sources add ~/repos/someone/rules-and-skills-repo
+  dfa-sync-sources add ~/repos/mattpocock/skills/skills/engineering --type skills-root
+  dfa-sync-sources remove ~/repos/mattpocock/skills/skills/engineering --type skills-root
 EOF
 }
 
