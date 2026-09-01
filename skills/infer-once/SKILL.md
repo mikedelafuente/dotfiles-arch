@@ -1,69 +1,67 @@
 ---
 name: infer-once
-description: "Turns a solved, repeatable LLM task into a reusable script, tool, or template so future runs need zero (or far less) inference. Use when a task will recur (data transforms, table/scaffold generation, migrations, boilerplate, report generation, CI steps, repeated code-review checks), when the user asks to automate/speed up/reduce the cost of something they keep asking for, or when the user mentions token burn, cost optimization, or 'do this every time'. Also self-apply: if you notice you're about to redo the same multi-step manual work a third time, stop and export it first."
+description: "Export recurring LLM work as scripts, tools, or templates so future runs need zero inference. Use when the same task will recur (transforms, scaffolds, migrations, boilerplate, reports, CI steps, repeated review checks), when the user asks to automate something or mentions token cost, or self-apply when you are about to hand-walk the same multi-step sequence a third time."
 license: MIT
 ---
 
 # Infer Once
 
-Kelsey Hightower's "zero token architecture," compressed to one line: **infer once, export the result, run it again without inference.** Not a tech, a discipline — the same reason caches, compiled binaries, and libraries exist. You don't pay a developer to hand-write a SQL driver on every query; don't pay an LLM to re-derive a solved procedure on every run either.
+**Infer once, export, re-run without inference.** Same discipline as caches and compiled binaries: pay the reasoning cost once, then let a CPU run the artifact.
 
-## The core loop
+One-shot and exploratory work stays inline — the trigger is **repetition**, not "could this be a script."
 
-1. **Do the work once, with full reasoning.** Use inference to explore, make mistakes, and converge on the *correct* approach. Don't skip this — you can't export what you haven't understood.
-2. **Export it as a durable artifact**, not a one-off answer: a script, CLI tool, function, template, Makefile/CI target, or config generator. Something that runs on a plain interpreter/CPU with no model call.
-3. **Re-run the artifact, not the prompt**, for every future instance of the same task.
-4. **Only re-invoke inference when the underlying requirement changes** — new shape of input, new rule, new edge case. Then you update the artifact once, and it's cheap again forever.
+## Signal check
 
-If a task will only ever happen once, this loop doesn't pay for itself — just answer it. The trigger is repetition, not "could this be a script."
+Run this **before** the work, not after the third manual pass:
 
-## Recognizing the signal
+- **Recurrence** — will this exact kind of request come up again? (another table, endpoint, report, environment)
+- **Determinism** — once the approach is decided, are inputs → steps → output shape fixed?
+- **Déjà vu** — are you about to hand-walk a multi-step sequence you already walked this session or recently?
+- **User intent** — did they say "every time," "automate," "from now on," or mention cost/tokens?
 
-Ask this before doing the work, not after the third time you've done it:
+Any **yes** → run the steps below. All **no** → answer normally; one-shot edits and exploration need no ceremony.
 
-- **Will this exact kind of request come up again?** (another table, another endpoint, another report, another environment)
-- **Is the procedure actually deterministic** once the approach is decided — same inputs, same steps, same output shape?
-- **Am I about to hand-walk a multi-step sequence I've already walked before** in this session or a recent one?
-- **Did the user say "every time," "again," "from now on," "automate," "make this faster/cheaper," or mention token cost?**
+## Steps
 
-Any "yes" is the moment to propose exporting — before grinding through the Nth manual pass.
+1. **Propose the export.** Stop before the Nth manual pass. Say explicitly, e.g.:
+   > "You'll likely need this again — want me to turn this into a script you can re-run without me?"
+   **Done when:** user has said yes, or you have a clear implicit mandate ("automate this," "every time").
+2. **Finish this instance with full reasoning.** Explore, converge on the correct approach. You cannot export what you have not understood.
+   **Done when:** today's task is complete and you can explain why the approach works.
+3. **Write the artifact.** Capture exactly what you did — script, CLI, template, Makefile/CI target, linter rule, or codemod. Parameterize **only** what varies between instances; export today's case, not a hypothetical future.
+   **Done when:** a plain interpreter/CPU can run it with no model call.
+4. **Verify.** Run the artifact on the same inputs you just used; output must match what you produced manually — zero meaningful differences.
+   **Done when:** verify command passes; if it fails, fix the artifact before handoff.
+5. **Hand off.** Give one command, one example input, and the expected output shape so the user can re-run without you.
+   **Done when:** invocation needs no agent in the loop.
 
-## What "export" looks like
+## Export kinds
 
-Match the artifact to the task, in order of preference:
+Match artifact to task; prefer the plainest tool (shell script → single script → package — never a framework):
 
 | Task shape | Export as |
 |---|---|
-| Repeated data transform / migration | A script (Python/bash/etc.) that takes the same inputs and produces the same outputs deterministically |
-| Repeated scaffold (table, module, test file, boilerplate) | A generator script or template the user (or you) invokes directly next time |
-| Repeated review/lint check | A static rule (linter config, SonarQube rule, grep/AST check) instead of an inference pass every PR |
-| Repeated CI/deploy step | A pipeline step or Makefile target, not an agent loop re-deciding the steps each run |
-| Repeated multi-file edit pattern | A codemod or find/replace script, not a fresh multi-tool-call edit sequence each time |
+| Data transform / migration | Deterministic script (Python, bash, …) |
+| Scaffold (table, module, test, boilerplate) | Generator or template invoked directly |
+| Review / lint check | Static rule (linter, SonarQube, grep/AST) — not an inference pass per PR |
+| CI / deploy step | Pipeline step or Makefile target |
+| Multi-file edit pattern | Codemod or find/replace script |
 
-Prefer the plainest tool that does the job (a shell script beats a Python package beats a "framework"). The goal is something a CPU runs for pennies, not something that re-derives the plan.
+## Reference
 
-## Doing this well vs. cargo-culting
+### Core loop
 
-The talk's warning applies to you too: exporting a script you don't understand just relocates the problem. Before exporting:
+1. Infer once with full reasoning.
+2. **Export** a durable artifact.
+3. Re-run the artifact, not the prompt.
+4. Re-infer only when requirements change — new input shape, rule, or edge case — then update the artifact once.
 
-- Make sure *you* (not just "the model") can explain why the script does what it does — you may need to modify it later without inference.
-- Don't wrap the export in unnecessary flexibility "for the future" — export what today's repeated case actually needs (see repo-wide anti-over-engineering guidance).
-- If the user can't maintain the artifact once it's handed over, that's a signal to keep it simple and documented, not to add more agent scaffolding around it.
+### Export well
 
-## Anti-pattern: burning tokens to save tokens
+- You (not just the model) can explain why the script does what it does — you may edit it later without inference.
+- Parameterize only what actually varied today.
+- If the user cannot maintain the artifact, keep it simpler and document the invocation — do not wrap it in agent scaffolding.
 
-Don't respond to "this costs too much" by building an agent that manages/monitors/optimizes the inference loop. That's more inference spent guarding inference. The fix is almost always: stop calling the model for this at all, run a script instead.
+### Meta-agents
 
-## Applying this in a coding session
-
-When you notice the signal above, say so and propose the export explicitly, e.g.:
-
-> "You'll likely need this again — want me to turn this into a script/generator you can re-run directly instead of asking me each time?"
-
-Then:
-1. Finish the current instance using normal reasoning.
-2. Write the script/tool capturing exactly what you just did (parameterized on whatever varies between instances).
-3. Verify the script reproduces the just-completed result.
-4. Tell the user how to invoke it next time without you.
-
-Don't silently export everything — routine one-shot edits and exploratory questions don't need this ceremony. Reserve it for genuinely recurring, deterministic work.
+When cost is the complaint, the fix is a **plain script**, not an agent that monitors or optimizes inference. More inference guarding inference rarely pays.
