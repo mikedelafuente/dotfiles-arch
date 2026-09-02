@@ -71,5 +71,6 @@ for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
   sync_claude_rule_import "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
 done
 prune_claude_rule_imports
+prune_orphaned_rules_build_dirs
 
 print_success_message "Rules synced: $SYNC_RULES_LINKED_COUNT linked, $SYNC_RULES_PRUNED_COUNT pruned"

@@ -641,3 +641,27 @@ prune_claude_rule_imports() {
   done <"$claude_md"
   mv "$kept_tmp" "$claude_md"
 }
+
+# Remove any rules-build/<slug>/ dir that doesn't belong to a currently
+# configured source — covers a source dropped by hand-editing sync-sources
+# (rather than via `dfa-sync-sources remove`, which already cleans up its own
+# source's build dir immediately). Expects SYNC_SOURCE_REPOS_ALL to already be
+# populated.
+prune_orphaned_rules_build_dirs() {
+  local build_root entry slug i
+  build_root="$(bootstrap_config_dir)/rules-build"
+  local -A expected_slugs=()
+
+  [[ -d "$build_root" ]] || return 0
+
+  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+    expected_slugs["$(_sync_source_slug "${SYNC_SOURCE_REPOS_ALL[$i]}")"]=1
+  done
+
+  while IFS= read -r -d '' entry; do
+    slug="$(basename "$entry")"
+    [[ -n "${expected_slugs[$slug]:-}" ]] && continue
+    print_action_message "Removing orphaned rules-build dir (source no longer configured): $entry"
+    rm -rf "$entry"
+  done < <(find "$build_root" -mindepth 1 -maxdepth 1 -type d -print0)
+}
