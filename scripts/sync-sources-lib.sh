@@ -4,16 +4,27 @@
 # Expects fn-lib.sh (print_*, bootstrap_config_dir) to be loaded.
 #
 # Each configured source has a type:
-#   standard    — repo root has rules/ (*.mdc files) and/or skills/ (skill dirs)
-#                 under it, same layout as dotfiles-arch itself.
+#   standard    — repo root has rules/ and/or skills/ (skill dirs) under it,
+#                 same layout as dotfiles-arch itself.
 #   skills-root — the path itself IS a flat folder of skill dirs (no skills/
 #                 subdir). Useful for a subfolder of someone else's skills repo,
 #                 e.g. mattpocock/skills/skills/engineering.
-#   rules-root  — the path itself IS a flat folder of *.mdc files (no rules/
+#   rules-root  — the path itself IS a flat folder of rule files (no rules/
 #                 subdir).
 #
 # Config file lines: bare "path" means standard (for backwards compatibility);
 # "type:path" is explicit. Comments (#) and blank lines are ignored.
+#
+# Rules go through a per-source build step (build_sync_source_rules) before
+# linking: a source's raw rules dir may hold ready-made *.mdc (Cursor format,
+# copied as-is) or plain *.md with YAML frontmatter (Cursor-only shorthand,
+# auto-detected by extension and converted). The build also derives a
+# per-source Claude file — description-stripped bodies of only the
+# `alwaysApply: true` rules — since Claude Code has no rules directory of its
+# own, only CLAUDE.md @imports. Build output lives under
+# rules-build/<slug>/ in the bootstrap config dir and is fully rebuilt on
+# every sync, so it can never drift from the source. Skills need no such
+# build step — SKILL.md already works unchanged for both tools.
 
 SYNC_SOURCE_KNOWN_TYPES=(standard skills-root rules-root)
 
@@ -170,8 +181,8 @@ add_sync_source_repo() {
       fi
       ;;
     rules-root)
-      if [[ -z "$(find "$normalized" -mindepth 1 -maxdepth 1 -type f -name '*.mdc' -print -quit 2>/dev/null)" ]]; then
-        print_warning_message "No *.mdc files under $normalized — nothing to sync until rule files appear"
+      if [[ -z "$(find "$normalized" -mindepth 1 -maxdepth 1 -type f \( -name '*.mdc' -o -name '*.md' \) -print -quit 2>/dev/null)" ]]; then
+        print_warning_message "No *.mdc/*.md files under $normalized — nothing to sync until rule files appear"
       fi
       ;;
   esac
@@ -226,19 +237,143 @@ collect_sync_source_repos() {
   SYNC_SOURCE_REPOS_ALL_TYPES+=("${SYNC_SOURCE_REPO_TYPES[@]}")
 }
 
+# Filesystem-safe, collision-free slug for a normalized repo path (stdout).
+_sync_source_slug() {
+  local path="${1:-}"
+  path="${path#/}"
+  echo "${path//\//-}"
+}
+
+# Root of a source's generated rules build output (stdout).
+sync_source_rules_build_dir() {
+  local repo_root="${1:-}"
+  echo "$(bootstrap_config_dir)/rules-build/$(_sync_source_slug "$repo_root")"
+}
+
+# The source's own, unconverted rules directory (stdout). Returns 1 when this
+# source type has no rules to contribute (e.g. skills-root).
+sync_source_raw_rules_dir() {
+  local repo_root="${1:-}" type="${2:-}"
+  case "$type" in
+    standard) echo "$repo_root/rules" ;;
+    rules-root) echo "$repo_root" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Effective directory to scan for a given source (repo_root, type, kind),
 # where kind is "rules" or "skills" (stdout). Returns 1 when this
 # source/kind combination doesn't apply (e.g. a skills-root source has no
 # rules to contribute).
+#
+# For "rules", this is the source's *build output* dir (see
+# build_sync_source_rules), not its raw rules dir — every source's rules are
+# staged and normalized to .mdc there before anything links to them.
 sync_source_effective_dir() {
   local repo_root="${1:-}" type="${2:-}" kind="${3:-}"
   case "$kind:$type" in
-    rules:standard) echo "$repo_root/rules" ;;
-    rules:rules-root) echo "$repo_root" ;;
+    rules:standard | rules:rules-root) echo "$(sync_source_rules_build_dir "$repo_root")/mdc" ;;
     skills:standard) echo "$repo_root/skills" ;;
     skills:skills-root) echo "$repo_root" ;;
     *) return 1 ;;
   esac
+}
+
+# Read a frontmatter field (description|alwaysApply|globs) from a rule file's
+# YAML block (between the first pair of "---" lines) into stdout.
+_sync_rule_frontmatter_field() {
+  local file="${1:-}" field="${2:-}" in_fm=0 line
+  while IFS= read -r line; do
+    if [[ "$in_fm" == 0 && "$line" == "---" ]]; then
+      in_fm=1
+      continue
+    fi
+    if [[ "$in_fm" == 1 && "$line" == "---" ]]; then
+      break
+    fi
+    [[ "$in_fm" == 1 ]] || continue
+    if [[ "$line" == "$field:"* ]]; then
+      line="${line#"$field":}"
+      line="${line# }"
+      echo "$line"
+      return 0
+    fi
+  done <"$file"
+}
+
+# Body of a rule file: everything after the closing frontmatter delimiter
+# (preserves any "---" horizontal rules in the body itself).
+_sync_rule_body() {
+  awk 'BEGIN{fm=0} /^---$/{if(fm<2){fm++;next}} fm>=2{print}' "${1:-}"
+}
+
+# Build (from scratch) one source's rules-build dir: rules-build/<slug>/mdc/
+# (Cursor-ready .mdc, one per rule) and rules-build/<slug>/claude-rules.md
+# (bodies of only the alwaysApply:true rules, concatenated, frontmatter
+# stripped — omitted entirely when the source has none). type is
+# standard|rules-root; no-ops for other types (e.g. skills-root).
+build_sync_source_rules() {
+  local repo_root="${1:-}" type="${2:-}" raw_dir build_dir mdc_out claude_out
+  local rule_file base description always_apply globs body
+
+  raw_dir="$(sync_source_raw_rules_dir "$repo_root" "$type")" || return 0
+  build_dir="$(sync_source_rules_build_dir "$repo_root")"
+  mdc_out="$build_dir/mdc"
+  claude_out="$build_dir/claude-rules.md"
+
+  rm -rf "$build_dir"
+  mkdir -p "$mdc_out"
+
+  [[ -d "$raw_dir" ]] || return 0
+
+  local claude_tmp
+  claude_tmp="$(mktemp)"
+  local claude_rule_count=0
+
+  while IFS= read -r -d '' rule_file; do
+    base="$(basename "$rule_file")"
+    base="${base%.*}"
+
+    description="$(_sync_rule_frontmatter_field "$rule_file" description)"
+    always_apply="$(_sync_rule_frontmatter_field "$rule_file" alwaysApply)"
+    globs="$(_sync_rule_frontmatter_field "$rule_file" globs)"
+    body="$(_sync_rule_body "$rule_file")"
+
+    case "$rule_file" in
+      *.mdc)
+        cp "$rule_file" "$mdc_out/$base.mdc"
+        ;;
+      *)
+        {
+          echo "---"
+          echo "description: ${description:-Rule}"
+          [[ -n "$globs" ]] && echo "globs: ${globs}"
+          echo "alwaysApply: ${always_apply:-false}"
+          echo "---"
+          echo "$body"
+        } >"$mdc_out/$base.mdc"
+        ;;
+    esac
+
+    if [[ "$always_apply" =~ ^true[[:space:]]*$ ]]; then
+      {
+        echo "## ${description:-$base}"
+        echo ""
+        echo "$body"
+        echo ""
+      } >>"$claude_tmp"
+      claude_rule_count=$((claude_rule_count + 1))
+    fi
+  done < <(find "$raw_dir" -mindepth 1 -maxdepth 1 -type f \( -name '*.mdc' -o -name '*.md' \) ! -iname 'readme.md' -print0)
+
+  if [[ "$claude_rule_count" -gt 0 ]]; then
+    {
+      echo "<!-- managed-by: dotfiles-arch dfa-sync-rules — do not edit; source: $repo_root -->"
+      echo ""
+      cat "$claude_tmp"
+    } >"$claude_out"
+  fi
+  rm -f "$claude_tmp"
 }
 
 # Resolve a symlink to an absolute path (works for broken links).
@@ -271,6 +406,10 @@ sync_rules_from_repo() {
     if ! head -n1 "$rule_file" | grep -q '^---$'; then
       print_warning_message "$rules_dir/$rule_name has no YAML frontmatter — linking anyway"
     fi
+    if [[ -e "$target_dir/$rule_name" && ! -L "$target_dir/$rule_name" ]]; then
+      print_action_message "Removing local (non-symlinked) rule, superseded by source: $target_dir/$rule_name"
+      rm -rf "${target_dir:?}/$rule_name"
+    fi
     ln -sfn "$rule_file" "$target_dir/$rule_name"
     print_info_message "Linked: $target_dir/$rule_name"
     _sync_rules_linked_names["$rule_name"]="$repo_root"
@@ -294,6 +433,10 @@ sync_skills_from_repo() {
     fi
     if [[ ! -f "$skill_dir/SKILL.md" ]]; then
       print_warning_message "$skills_dir/$skill_name has no SKILL.md — linking anyway"
+    fi
+    if [[ -e "$target_dir/$skill_name" && ! -L "$target_dir/$skill_name" ]]; then
+      print_action_message "Removing local (non-symlinked) skill, superseded by source: $target_dir/$skill_name"
+      rm -rf "${target_dir:?}/$skill_name"
     fi
     ln -sfn "$skill_dir" "$target_dir/$skill_name"
     print_info_message "Linked: $target_dir/$skill_name"
@@ -352,7 +495,8 @@ prune_managed_symlinks() {
 }
 
 # Remove all managed rules/skills symlinks pointing at repo_root's effective
-# dir for type (after `dfa-sync-sources remove`).
+# dir for type (after `dfa-sync-sources remove`), plus that source's Claude
+# rules import/symlink and its rules-build staging dir.
 prune_sync_source_repo_symlinks() {
   local repo_root="${1:-}" type="${2:-}"
   shift 2
@@ -374,4 +518,126 @@ prune_sync_source_repo_symlinks() {
       done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -print0)
     done
   done
+
+  _remove_claude_rule_import "$repo_root"
+  rm -rf "$(sync_source_rules_build_dir "$repo_root")"
+}
+
+# ~/.claude/CLAUDE.md import line for a source's generated Claude rules file.
+_claude_rule_import_line() {
+  echo "@dfa-rules-$(_sync_source_slug "${1:-}").md"
+}
+
+# Path to a source's generated-and-symlinked Claude rules file.
+_claude_rule_dest() {
+  echo "$USER_HOME_DIR/.claude/dfa-rules-$(_sync_source_slug "${1:-}").md"
+}
+
+# Idempotently append the import line for repo_root to ~/.claude/CLAUDE.md.
+# Only ever adds/removes its own "@dfa-rules-*.md" lines — never touches any
+# other content, since CLAUDE.md is user-owned.
+_ensure_claude_import_line() {
+  local repo_root="${1:-}" claude_md import_line
+  claude_md="$USER_HOME_DIR/.claude/CLAUDE.md"
+  import_line="$(_claude_rule_import_line "$repo_root")"
+
+  if [[ ! -e "$claude_md" ]]; then
+    mkdir -p "$(dirname "$claude_md")"
+    printf '%s\n' "$import_line" >"$claude_md"
+    return 0
+  fi
+  grep -qxF "$import_line" "$claude_md" 2>/dev/null && return 0
+  printf '\n%s\n' "$import_line" >>"$claude_md"
+}
+
+# Remove repo_root's generated Claude rules symlink and its CLAUDE.md import
+# line (if present).
+_remove_claude_rule_import() {
+  local repo_root="${1:-}" dest claude_md import_line
+  dest="$(_claude_rule_dest "$repo_root")"
+  claude_md="$USER_HOME_DIR/.claude/CLAUDE.md"
+  import_line="$(_claude_rule_import_line "$repo_root")"
+
+  [[ -e "$dest" || -L "$dest" ]] && rm -f "$dest"
+  [[ -f "$claude_md" ]] || return 0
+  grep -qxF "$import_line" "$claude_md" 2>/dev/null || return 0
+  grep -vxF "$import_line" "$claude_md" >"$claude_md.tmp" && mv "$claude_md.tmp" "$claude_md"
+}
+
+# Symlink repo_root's generated claude-rules.md (if it produced one) to
+# ~/.claude/dfa-rules-<slug>.md and ensure CLAUDE.md imports it; otherwise
+# remove both. Call after build_sync_source_rules. type is standard|rules-root.
+sync_claude_rule_import() {
+  local repo_root="${1:-}" type="${2:-}" claude_out dest
+
+  case "$type" in
+    standard | rules-root) ;;
+    *) return 0 ;;
+  esac
+
+  claude_out="$(sync_source_rules_build_dir "$repo_root")/claude-rules.md"
+  if [[ -f "$claude_out" ]]; then
+    dest="$(_claude_rule_dest "$repo_root")"
+    mkdir -p "$(dirname "$dest")"
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+      print_action_message "Removing local (non-symlinked) Claude rules file, superseded by source: $dest"
+      rm -rf "$dest"
+    fi
+    ln -sfn "$claude_out" "$dest"
+    _ensure_claude_import_line "$repo_root"
+    print_info_message "Linked: $dest"
+  else
+    _remove_claude_rule_import "$repo_root"
+  fi
+}
+
+# Remove Claude rules symlinks/import lines for any dfa-rules-*.md file in
+# ~/.claude that no longer corresponds to a currently active, rules-capable
+# source (covers a removed/unlisted source, and a source that no longer has
+# any alwaysApply rules). Expects SYNC_SOURCE_REPOS_ALL /
+# SYNC_SOURCE_REPOS_ALL_TYPES to already be populated.
+prune_claude_rule_imports() {
+  local dir="$USER_HOME_DIR/.claude" entry slug i repo_type
+  local -A expected_slugs=()
+
+  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+    repo_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+    case "$repo_type" in
+      standard | rules-root) ;;
+      *) continue ;;
+    esac
+    if [[ -f "$(sync_source_rules_build_dir "${SYNC_SOURCE_REPOS_ALL[$i]}")/claude-rules.md" ]]; then
+      expected_slugs["$(_sync_source_slug "${SYNC_SOURCE_REPOS_ALL[$i]}")"]=1
+    fi
+  done
+
+  [[ -d "$dir" ]] || return 0
+  while IFS= read -r -d '' entry; do
+    slug="$(basename "$entry")"
+    slug="${slug#dfa-rules-}"
+    slug="${slug%.md}"
+    [[ -n "${expected_slugs[$slug]:-}" ]] && continue
+    print_action_message "Removing stale Claude rules import: $entry"
+    rm -f "$entry"
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type l -name 'dfa-rules-*.md' -print0)
+
+  # Drop CLAUDE.md import lines for slugs with no surviving symlink.
+  local claude_md="$dir/CLAUDE.md" line slug_from_line kept_tmp
+  [[ -f "$claude_md" ]] || return 0
+  kept_tmp="$(mktemp)"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      @dfa-rules-*.md)
+        slug_from_line="${line#@dfa-rules-}"
+        slug_from_line="${slug_from_line%.md}"
+        if [[ -n "${expected_slugs[$slug_from_line]:-}" ]]; then
+          printf '%s\n' "$line" >>"$kept_tmp"
+        fi
+        ;;
+      *)
+        printf '%s\n' "$line" >>"$kept_tmp"
+        ;;
+    esac
+  done <"$claude_md"
+  mv "$kept_tmp" "$claude_md"
 }
