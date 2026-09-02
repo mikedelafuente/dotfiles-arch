@@ -145,13 +145,122 @@ cmd_remove() {
   fi
 }
 
+# Redraw the reorder TUI: current _REORDER_PATHS/_REORDER_TYPES order with
+# _REORDER_CURSOR highlighted. Bottom of the list = highest priority, since
+# sync_rules_from_repo/sync_skills_from_repo apply sources in file order and
+# later sources override earlier ones on a name collision.
+_reorder_draw() {
+  clear
+  print_line_break "Reorder sync sources"
+  print_info_message "Primary (always synced first, lowest priority, standard): $REPO_ROOT"
+  echo
+  print_info_message "Later entries override earlier ones on a name collision — bottom = highest priority."
+  echo
+  local i
+  for i in "${!_REORDER_PATHS[@]}"; do
+    if [[ "$i" -eq "$_REORDER_CURSOR" ]]; then
+      printf '\e[7m > [%s] %s\e[0m\n' "${_REORDER_TYPES[$i]}" "${_REORDER_PATHS[$i]}"
+    else
+      printf '   [%s] %s\n' "${_REORDER_TYPES[$i]}" "${_REORDER_PATHS[$i]}"
+    fi
+  done
+  echo
+  print_info_message "↑/k ↓/j move cursor   K/J move entry up/down   Enter/w save   q cancel"
+}
+
+# Swap two entries in the working _REORDER_PATHS/_REORDER_TYPES arrays.
+_reorder_swap() {
+  local a="$1" b="$2" tmp_p tmp_t
+  tmp_p="${_REORDER_PATHS[$a]}"
+  tmp_t="${_REORDER_TYPES[$a]}"
+  _REORDER_PATHS[a]="${_REORDER_PATHS[$b]}"
+  _REORDER_TYPES[a]="${_REORDER_TYPES[$b]}"
+  _REORDER_PATHS[b]="$tmp_p"
+  _REORDER_TYPES[b]="$tmp_t"
+}
+
+cmd_reorder() {
+  _read_sync_source_repo_lines
+  local n=${#SYNC_SOURCE_REPO_LINES[@]}
+  if [[ "$n" -eq 0 ]]; then
+    print_info_message "No extra sources to reorder — use: dfa-sync-sources add /path/to/repo"
+    return 0
+  fi
+  if [[ "$n" -eq 1 ]]; then
+    print_info_message "Only one extra source — nothing to reorder."
+    return 0
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    print_error_message "reorder requires an interactive terminal"
+    return 1
+  fi
+
+  _REORDER_PATHS=("${SYNC_SOURCE_REPO_LINES[@]}")
+  _REORDER_TYPES=("${SYNC_SOURCE_REPO_LINE_TYPES[@]}")
+  _REORDER_CURSOR=0
+
+  local key esc
+  while true; do
+    _reorder_draw
+    IFS= read -rsn1 key
+    if [[ "$key" == $'\x1b' ]]; then
+      read -rsn2 -t 0.01 esc 2>/dev/null || esc=""
+      case "$esc" in
+        '[A') key='k' ;;
+        '[B') key='j' ;;
+        *) key='' ;;
+      esac
+    fi
+    case "$key" in
+      k)
+        ((_REORDER_CURSOR > 0)) && _REORDER_CURSOR=$((_REORDER_CURSOR - 1))
+        ;;
+      j)
+        ((_REORDER_CURSOR < n - 1)) && _REORDER_CURSOR=$((_REORDER_CURSOR + 1))
+        ;;
+      K)
+        if ((_REORDER_CURSOR > 0)); then
+          _reorder_swap "$_REORDER_CURSOR" "$((_REORDER_CURSOR - 1))"
+          _REORDER_CURSOR=$((_REORDER_CURSOR - 1))
+        fi
+        ;;
+      J)
+        if ((_REORDER_CURSOR < n - 1)); then
+          _reorder_swap "$_REORDER_CURSOR" "$((_REORDER_CURSOR + 1))"
+          _REORDER_CURSOR=$((_REORDER_CURSOR + 1))
+        fi
+        ;;
+      w | "")
+        # shellcheck disable=SC2034 # consumed by write_sync_source_repos (sync-sources-lib.sh)
+        SYNC_SOURCE_REPOS=("${_REORDER_PATHS[@]}")
+        # shellcheck disable=SC2034 # consumed by write_sync_source_repos (sync-sources-lib.sh)
+        SYNC_SOURCE_REPO_TYPES=("${_REORDER_TYPES[@]}")
+        write_sync_source_repos
+        clear
+        print_success_message "Saved new priority order."
+        cmd_list
+        print_info_message "$SYNC_SOURCES_HINT"
+        return 0
+        ;;
+      q)
+        clear
+        print_info_message "Cancelled — no changes made."
+        return 0
+        ;;
+    esac
+  done
+}
+
 usage() {
   cat <<EOF
 Usage: dfa-sync-sources list
        dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]
        dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]
+       dfa-sync-sources reorder
 
 dotfiles-arch is always synced first; extra sources override on name collision.
+Use 'reorder' to change extra sources' relative priority (bottom of the list
+wins on a name collision).
 
 Types:
   standard    (default) path has rules/ and/or skills/ subdirs
@@ -162,6 +271,7 @@ Examples:
   dfa-sync-sources add ~/repos/someone/rules-and-skills-repo
   dfa-sync-sources add ~/repos/mattpocock/skills/skills/engineering --type skills-root
   dfa-sync-sources remove ~/repos/mattpocock/skills/skills/engineering --type skills-root
+  dfa-sync-sources reorder
 EOF
 }
 
@@ -176,6 +286,9 @@ case "${1:-}" in
   remove | rm)
     shift
     cmd_remove "$@"
+    ;;
+  reorder | order | rank)
+    cmd_reorder
     ;;
   -h | --help | help)
     usage
