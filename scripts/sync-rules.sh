@@ -1,15 +1,24 @@
 #!/bin/bash
 # --------------------------
-# Sync personal Cursor rules
+# Sync personal Cursor + Claude rules
 # --------------------------
-# Symlinks each *.mdc rule file from dotfiles-arch and any extra repos
-# registered via dfa-sync-sources into ~/.cursor/rules/<name>.mdc, and prunes managed
-# symlinks when the source is removed or the repo is unlisted. Standard-type
-# sources contribute their rules/ subfolder; rules-root sources contribute their
-# own folder directly (see dfa-sync-sources --type). Only ever touches symlinks
-# whose target is a configured source's effective rules dir — real files
-# elsewhere are left alone. Cursor only — Claude Code has no equivalent
-# auto-loaded rules directory. Safe to re-run.
+# For each source registered via dfa-sync-sources (plus dotfiles-arch itself),
+# builds a normalized rules-build/<slug>/ staging dir (build_sync_source_rules
+# in sync-sources-lib.sh): ready-made *.mdc rules are copied as-is, plain *.md
+# rules with YAML frontmatter are auto-converted, and a per-source Claude file
+# is generated from the bodies of just the alwaysApply:true rules. Standard-type
+# sources contribute their rules/ subfolder; rules-root sources contribute
+# their own folder directly (see dfa-sync-sources --type).
+#
+# From that staging dir: symlinks each *.mdc into ~/.cursor/rules/<name>.mdc,
+# and (when a source produced one) symlinks its Claude file to
+# ~/.claude/dfa-rules-<slug>.md with a matching @import line appended once to
+# ~/.claude/CLAUDE.md. Any pre-existing real (non-symlinked) file at a target
+# name — e.g. a leftover copy from another tool's installer — is deleted and
+# replaced by the symlink. Prunes managed symlinks/import lines when a source
+# is removed, unlisted, or no longer produces that output. Only ever touches
+# entries whose target is a configured source's effective dir — real files
+# elsewhere are left alone. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -42,6 +51,10 @@ SYNC_RULES_PRUNED_COUNT=0
 declare -A _sync_rules_linked_names=()
 
 for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+  build_sync_source_rules "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+done
+
+for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
   repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
   source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
   if ! { rules_dir="$(sync_source_effective_dir "$repo_root" "$source_type" rules)" && [[ -d "$rules_dir" ]]; }; then
@@ -52,5 +65,12 @@ for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
 done
 
 prune_managed_symlinks "$TARGET_DIR" rules
+
+print_line_break "Syncing Claude rule imports"
+for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+  sync_claude_rule_import "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+done
+prune_claude_rule_imports
+prune_orphaned_rules_build_dirs
 
 print_success_message "Rules synced: $SYNC_RULES_LINKED_COUNT linked, $SYNC_RULES_PRUNED_COUNT pruned"
