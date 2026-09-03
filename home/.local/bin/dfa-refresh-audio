@@ -1,0 +1,71 @@
+#!/bin/bash
+# Restart the PipeWire/WirePlumber audio stack.
+#
+# Docking/undocking (or resuming from suspend) can re-probe the laptop's HDA
+# codec without WirePlumber tearing down the old device nodes, leaving
+# duplicate entries in `wpctl status` / the GNOME quick-settings speaker and
+# microphone menus. Restarting the user services clears the duplicates.
+#
+# Usage: dfa-refresh-audio [--status]
+#   --status   only print `wpctl status`, don't restart anything
+
+set -uo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: dfa-refresh-audio [--status]
+
+Restart wireplumber, pipewire, and pipewire-pulse (user services) to clear
+duplicate sink/source entries left behind after docking, undocking, or
+resuming from suspend.
+
+  --status   only print `wpctl status`, don't restart anything
+EOF
+}
+
+main() {
+  local status_only=0
+
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      --status)
+        status_only=1
+        ;;
+      *)
+        printf 'dfa-refresh-audio: unknown argument: %s\n' "$arg" >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  if ! command -v wpctl &>/dev/null; then
+    printf 'dfa-refresh-audio: wpctl not found (is wireplumber installed?)\n' >&2
+    exit 1
+  fi
+
+  if ((status_only)); then
+    wpctl status
+    return 0
+  fi
+
+  printf '==> Restarting wireplumber, pipewire, pipewire-pulse\n'
+  if ! systemctl --user restart wireplumber.service pipewire.service pipewire-pulse.service; then
+    printf 'dfa-refresh-audio: failed to restart one or more services\n' >&2
+    exit 1
+  fi
+
+  # Give WirePlumber a moment to re-enumerate before printing status.
+  sleep 1
+
+  printf '\n==> Current audio devices\n'
+  wpctl status
+
+  printf '\ndfa-refresh-audio: done — reload any open browser/Meet/Zoom tab so it re-enumerates devices\n'
+}
+
+main "$@"

@@ -299,7 +299,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # dfa-morning, dfa-update-repos, dfa-sync-dotfiles, dfa-sync-skills, dfa-sync-rules, dfa-sync-sources, dfa-update-system, …
+│   └── .local/bin/        # dfa-morning, dfa-update-repos, dfa-sync-dotfiles, dfa-sync-skills, dfa-sync-rules, dfa-sync-sources, dfa-update-system, dfa-refresh-audio, …
 └── config/                # → ~/.config
 ```
 
