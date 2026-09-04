@@ -190,6 +190,7 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 ## Development notes
 
 - Scripts use bash; prefer `pacman -Q` for install checks
+- Favor official-repo (`pacman`) packages over AUR (`ensure_yay_pkgs`) whenever both provide the same package; reach for AUR only when there's no official-repo equivalent
 - Run `bash scripts/check.sh` (or `check`) after shell changes — `bash -n` + `shellcheck -x`
 - Config persistence: `~/.config/dotfiles-arch/`
 - Dotfiles link to `$USER_HOME_DIR`, not root’s home when run with sudo
