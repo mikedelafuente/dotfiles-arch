@@ -115,6 +115,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `postman-bin` (AUR) | `setup-postman.sh` | API client |
 | `spotify` (AUR) | `setup-spotify.sh` | Music |
 | `obsidian` (AUR) | `setup-obsidian.sh` | Notes |
+| `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
 | `zed` | `setup-zed.sh` | Code editor |
 | `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
 
