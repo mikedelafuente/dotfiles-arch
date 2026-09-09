@@ -618,6 +618,25 @@ ensure_pacman_pkgs() {
   sudo pacman -S --needed --noconfirm "${missing[@]}"
 }
 
+# Remove installed pacman packages (idempotent). Usage: remove_pacman_pkgs pkg1 pkg2 ...
+# No-op (and no error) for any package that's already absent.
+remove_pacman_pkgs() {
+  local pkg
+  local present=()
+  for pkg in "$@"; do
+    if pacman -Q "$pkg" &>/dev/null; then
+      present+=("$pkg")
+    else
+      print_info_message "Already absent: $pkg"
+    fi
+  done
+  if [[ ${#present[@]} -eq 0 ]]; then
+    return 0
+  fi
+  print_action_message "Removing via pacman: ${present[*]}"
+  sudo pacman -Rns --noconfirm "${present[@]}"
+}
+
 # Ensure [multilib] (and its Include) are uncommented in pacman.conf.
 # Sets MULTILIB_CHANGED=true when the file was modified; false otherwise.
 ensure_multilib_enabled() {
@@ -712,6 +731,15 @@ ensure_yay_pkgs() {
     print_info_message "IoC scan clean. Running interactive yay (review PKGBUILD if prompted)."
     yay -S --needed "${missing[@]}"
   fi
+}
+
+# Remove installed AUR packages (idempotent). Usage: remove_yay_pkgs pkg1 pkg2 ...
+# AUR packages are removed the same way official ones are — `pacman -R`, not
+# `yay -R` (yay has no removal mode beyond what pacman already does) — so this
+# is a thin, semantically-named wrapper kept alongside remove_pacman_pkgs to
+# mirror ensure_yay_pkgs's existence next to ensure_pacman_pkgs.
+remove_yay_pkgs() {
+  remove_pacman_pkgs "$@"
 }
 
 # Guarded full system update: pacman -Syu + AUR scan + yay -Syu.
