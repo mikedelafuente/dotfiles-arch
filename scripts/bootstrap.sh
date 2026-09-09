@@ -221,3 +221,33 @@ remove_orphaned_packages
 
 print_line_break "Bootstrap completed. Please restart your terminal or log out and log back in."
 print_info_message "Shell: $SHELL"
+
+# --------------------------
+# Build and hand off to dfa
+# --------------------------
+# bootstrap.sh is shrinking toward a minimal stub (see issue #35/#38): ensure
+# Go is available, build the dfa TUI from dfa/, then hand off into
+# `dfa bootstrap`. Later tickets move more of the flow above into dfa itself.
+
+print_line_break "Handing off to dfa"
+
+if ! command -v go &>/dev/null; then
+  print_info_message "Go not found — installing"
+  ensure_pacman_pkgs go
+fi
+
+if command -v go &>/dev/null; then
+  mkdir -p "$USER_HOME_DIR/.local/bin"
+  DFA_BIN="$USER_HOME_DIR/.local/bin/dfa"
+  print_action_message "Building dfa -> $DFA_BIN"
+  if (cd "$DF_SCRIPT_DIR/../dfa" && go build -o "$DFA_BIN" .); then
+    print_success_message "Built dfa"
+    if [ -x "$DFA_BIN" ]; then
+      "$DFA_BIN" bootstrap || print_warning_message "dfa exited with an error (e.g. no interactive terminal available)"
+    fi
+  else
+    print_warning_message "Failed to build dfa — skipping handoff"
+  fi
+else
+  print_warning_message "Go still unavailable — skipping dfa build/handoff"
+fi
