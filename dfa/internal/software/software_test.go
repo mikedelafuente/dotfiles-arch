@@ -93,13 +93,16 @@ func keyMsg(s string) tea.KeyMsg {
 	}
 }
 
-func TestNew_StartsWithNoSelectionByDefault(t *testing.T) {
+func TestNew_PreSelectsCoreItemsOnlyByDefault(t *testing.T) {
 	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{}, nil)
 	if len(m.items) != 3 {
 		t.Fatalf("len(items) = %d, want 3", len(m.items))
 	}
-	for id := range m.selection {
-		t.Errorf("selection[%q] unexpectedly present in empty starting selection", id)
+	if !m.selection["git"] {
+		t.Errorf("selection[git] = false, want true (core item pre-selected)")
+	}
+	if m.selection["git-delta"] || m.selection["starship"] {
+		t.Errorf("selection = %v, want only the core item pre-selected", m.selection)
 	}
 }
 
@@ -115,8 +118,9 @@ func TestUpdate_SpaceSelectsItemAndRunsInstall(t *testing.T) {
 		t.Errorf("selection = %v, want git-delta and its dependency git selected", m.selection)
 	}
 
+	// git is core, so it's already pre-selected by New — selecting git-delta
+	// only needs to install git-delta itself.
 	want := []scriptCall{
-		{script: "setup-essentials.sh", args: []string{"--install", "git"}},
 		{script: "setup-essentials.sh", args: []string{"--install", "git-delta"}},
 	}
 	if !reflect.DeepEqual(runner.calls, want) {
@@ -176,8 +180,10 @@ func TestUpdate_SelectAllInCategory(t *testing.T) {
 			t.Errorf("selection[%q] = false, want true after select-all", id)
 		}
 	}
-	if len(runner.calls) != 3 {
-		t.Errorf("len(calls) = %d, want 3 (one install per item)", len(runner.calls))
+	// git is core and already pre-selected by New, so only the two optional
+	// items need an install call.
+	if len(runner.calls) != 2 {
+		t.Errorf("len(calls) = %d, want 2 (one install per optional item)", len(runner.calls))
 	}
 }
 
@@ -308,6 +314,18 @@ func TestView_ShowsDisabledCapabilityGatedItemWithReason(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "unavailable") || !strings.Contains(view, "No NVIDIA GPU detected on this machine") {
 		t.Errorf("View() = %q, want it to show the item disabled with its unmet-capability reason", view)
+	}
+}
+
+func TestView_ShowsCoreItemPreCheckedAndLocked(t *testing.T) {
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{}, nil)
+
+	view := m.View()
+	if !strings.Contains(view, "[x] git") {
+		t.Errorf("View() = %q, want the core item git shown checked", view)
+	}
+	if !strings.Contains(view, "core, locked") {
+		t.Errorf("View() = %q, want the core item shown locked", view)
 	}
 }
 

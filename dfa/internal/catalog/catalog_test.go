@@ -318,3 +318,45 @@ func TestManifest_ItemsByCategoryPreservesDeclarationOrder(t *testing.T) {
 		t.Errorf("ItemsByCategory ids = %v, want %v", ids, want)
 	}
 }
+
+func TestWithCoreSelected_MarksCoreItemsSelectedRegardlessOfInput(t *testing.T) {
+	m := fixtureManifest(t)
+	out := WithCoreSelected(m, Selection{})
+
+	if !out["git"] {
+		t.Errorf("out[git] = false, want true (core item forced selected)")
+	}
+	if out["git-delta"] || out["lazygit"] || out["starship"] || out["nvidia"] {
+		t.Errorf("out = %v, want only the core item selected, no others added", out)
+	}
+}
+
+func TestWithCoreSelected_TransitivelySelectsCoreItemDependencies(t *testing.T) {
+	m, err := NewManifest([]Item{
+		{ID: "base", Name: "base", Description: "Base dependency", Categories: []string{"essentials"}, Tier: TierOptional},
+		{ID: "core-with-dep", Name: "core-with-dep", Description: "Core item with a dependency", Categories: []string{"essentials"}, Tier: TierCore, Dependencies: []string{"base"}},
+	})
+	if err != nil {
+		t.Fatalf("NewManifest() error = %v", err)
+	}
+
+	out := WithCoreSelected(m, Selection{})
+
+	if !out["core-with-dep"] || !out["base"] {
+		t.Errorf("out = %v, want both the core item and its dependency selected", out)
+	}
+}
+
+func TestWithCoreSelected_PreservesExistingOptionalSelectionsAndDoesNotMutateInput(t *testing.T) {
+	m := fixtureManifest(t)
+	in := Selection{"starship": true}
+
+	out := WithCoreSelected(m, in)
+
+	if !out["git"] || !out["starship"] {
+		t.Errorf("out = %v, want both git (core) and starship (pre-existing) selected", out)
+	}
+	if in["git"] {
+		t.Errorf("input selection mutated: in[git] = true, want WithCoreSelected to leave it alone")
+	}
+}

@@ -69,16 +69,17 @@ type Model struct {
 
 // New builds a software Model scoped to one category, starting from the
 // given selection (e.g. derived from querying what's currently installed).
-// capabilities is the machine facts a capability-gated item's requirements
-// are checked against (see catalog.Gaps/Available) — an item whose
-// requirements aren't met is shown disabled, with the reason, and can't be
-// selected.
+// Every Core item is forced selected regardless of what selection said —
+// Core items are always pre-checked and locked in this screen. capabilities
+// is the machine facts a capability-gated item's requirements are checked
+// against (see catalog.Gaps/Available) — an item whose requirements aren't
+// met is shown disabled, with the reason, and can't be selected.
 func New(manifest catalog.Manifest, category string, selection catalog.Selection, runner ScriptRunner, capabilities catalog.Capabilities) Model {
 	return Model{
 		manifest:     manifest,
 		category:     category,
 		items:        manifest.ItemsByCategory(category),
-		selection:    selection.Clone(),
+		selection:    catalog.WithCoreSelected(manifest, selection),
 		capabilities: capabilities,
 		runner:       runner,
 	}

@@ -178,6 +178,36 @@ func (s Selection) Clone() Selection {
 	return out
 }
 
+// WithCoreSelected returns a copy of selection with every Core item — and,
+// same as Select, its transitive dependencies — marked selected, regardless
+// of what selection said. Core items are always considered selected in the
+// UI — locked, pre-checked, non-negotiable — so any caller building a
+// starting Selection (e.g. from queried install state) runs it through here
+// rather than re-deriving the same rule.
+func WithCoreSelected(manifest Manifest, selection Selection) Selection {
+	out := selection.Clone()
+	var selectWithDeps func(id string)
+	selectWithDeps = func(id string) {
+		if out[id] {
+			return
+		}
+		it, ok := manifest.byID[id]
+		if !ok {
+			return
+		}
+		out[id] = true
+		for _, dep := range it.Dependencies {
+			selectWithDeps(dep)
+		}
+	}
+	for _, id := range manifest.byOrder {
+		if manifest.byID[id].Tier == TierCore {
+			selectWithDeps(id)
+		}
+	}
+	return out
+}
+
 // ErrUnknownItem is returned when an action names an id the manifest does
 // not have.
 var ErrUnknownItem = errors.New("catalog: unknown item id")

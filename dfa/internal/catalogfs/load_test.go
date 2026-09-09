@@ -1,9 +1,12 @@
 package catalogfs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mikedelafuente/dotfiles-arch/dfa/internal/catalog"
 )
 
 func writeFile(t *testing.T, dir, name, content string) {
@@ -131,5 +134,33 @@ func TestLoadDir_LoadsTheRealEssentialsManifest(t *testing.T) {
 
 	if _, ok := m.Item("git"); !ok {
 		t.Error(`expected "git" item to exist`)
+	}
+}
+
+// TestLoadDir_RealGitItemIsCoreAndRefusesUninstall proves the real catalog
+// data — not just an in-memory fixture — actually demonstrates Tier
+// (Core/Optional): git.toml is marked core, so it comes back pre-selected
+// and the Catalog Engine refuses to uninstall it.
+func TestLoadDir_RealGitItemIsCoreAndRefusesUninstall(t *testing.T) {
+	m, err := LoadDir(filepath.Join("..", "..", "catalog", "items"))
+	if err != nil {
+		t.Fatalf("LoadDir(catalog/items) error = %v", err)
+	}
+
+	git, ok := m.Item("git")
+	if !ok {
+		t.Fatal(`expected "git" item to exist`)
+	}
+	if git.Tier != catalog.TierCore {
+		t.Errorf("git.Tier = %q, want %q", git.Tier, catalog.TierCore)
+	}
+
+	selected := catalog.WithCoreSelected(m, catalog.Selection{})
+	if !selected["git"] {
+		t.Error("WithCoreSelected(realManifest, {})[git] = false, want true")
+	}
+
+	if _, err := catalog.Deselect(m, catalog.Selection{"git": true}, "git"); !errors.Is(err, catalog.ErrCoreItemUninstall) {
+		t.Errorf("Deselect(realManifest, git) error = %v, want %v", err, catalog.ErrCoreItemUninstall)
 	}
 }
