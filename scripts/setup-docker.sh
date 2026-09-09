@@ -21,8 +21,64 @@ else
 fi
 
 # --------------------------
-# End Import Common Header 
+# End Import Common Header
 # --------------------------
+
+# docker_target_user / docker_ensure_ready are shared by both the catalog
+# dispatch below and the direct-invocation flow further down, so there is
+# exactly one place that decides who to add to the docker group and how.
+docker_target_user() {
+  if [ -n "${SUDO_USER-}" ]; then
+    echo "$SUDO_USER"
+  else
+    echo "$USER"
+  fi
+}
+
+# Enables/starts the docker service and adds the target user to the docker
+# group if not already a member. Idempotent — safe to call every run.
+docker_ensure_ready() {
+  sudo systemctl enable --now docker
+  local target_user
+  target_user="$(docker_target_user)"
+  if ! groups "$target_user" | grep -q docker; then
+    print_info_message "Adding user '$target_user' to docker group"
+    sudo usermod -aG docker "$target_user"
+    print_warning_message "You need to log out and log back in for group changes to take effect"
+  fi
+}
+
+# --install / --uninstall <packages...>
+#   The dfa Catalog Engine's System Adapter path — the "docker" catalog item
+#   (dfa/catalog/items/docker.toml). Installs/removes exactly the given
+#   pacman packages via the shared ensure_pacman_pkgs/remove_pacman_pkgs
+#   helpers; --install also brings the service/group up (skipped if the
+#   package install failed) so a dfa-driven install is actually usable, not
+#   just packages on disk.
+case "${1:-}" in
+  --install)
+    shift
+    ensure_pacman_pkgs "$@"
+    status=$?
+    if [ "$status" -eq 0 ] && command -v docker >/dev/null 2>&1; then
+      docker_ensure_ready
+    fi
+    exit $status
+    ;;
+  --uninstall)
+    shift
+    target_user="$(docker_target_user)"
+    if groups "$target_user" | grep -q docker; then
+      print_info_message "Removing user '$target_user' from docker group"
+      sudo gpasswd -d "$target_user" docker >/dev/null 2>&1 || true
+    fi
+    if command -v docker >/dev/null 2>&1; then
+      sudo systemctl disable --now docker >/dev/null 2>&1 || true
+    fi
+    remove_pacman_pkgs "$@"
+    exit $?
+    ;;
+esac
 
 print_tool_setup_start "Docker"
 
@@ -33,19 +89,7 @@ print_tool_setup_start "Docker"
 # Check to see if Docker is already installed and working
 if command -v docker >/dev/null 2>&1 && docker --version >/dev/null 2>&1; then
   print_info_message "Docker is already installed and working."
-
-  # Ensure user is in docker group
-  if [ -n "${SUDO_USER-}" ]; then
-    TARGET_USER="$SUDO_USER"
-  else
-    TARGET_USER="$USER"
-  fi
-
-  if ! groups "$TARGET_USER" | grep -q docker; then
-    print_info_message "Adding user '$TARGET_USER' to docker group"
-    sudo usermod -aG docker "$TARGET_USER"
-    print_warning_message "You need to log out and log back in for group changes to take effect"
-  fi
+  docker_ensure_ready
 
   print_tool_setup_complete "Docker"
   exit 0
@@ -66,27 +110,10 @@ remove_pacman_pkgs docker-compose podman podman-docker
 print_info_message "Installing Docker Engine, CLI, and plugins"
 sudo pacman -S --needed --noconfirm docker docker-compose docker-buildx
 # --------------------------
-# Configure and Start Docker Service
+# Configure and Start Docker Service, Add User to Group
 # --------------------------
 
-# Start and enable Docker service
-print_info_message "Starting and enabling Docker service"
-sudo systemctl start docker
-sudo systemctl enable --now docker
-
-# --------------------------
-# Add User to Docker Group
-# --------------------------
-
-# Add original user (when run with sudo) or current user to the docker group
-if [ -n "${SUDO_USER-}" ]; then
-  TARGET_USER="$SUDO_USER"
-else
-  TARGET_USER="$USER"
-fi
-
-print_info_message "Adding user '$TARGET_USER' to docker group"
-sudo usermod -aG docker "$TARGET_USER"
+docker_ensure_ready
 
 # --------------------------
 # Install Lazy Docker

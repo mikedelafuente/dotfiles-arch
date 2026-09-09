@@ -60,6 +60,11 @@ type Model struct {
 	runner       ScriptRunner
 	cursor       int
 	statusMsg    string
+	// pendingPlan holds a computed cascade-deselect plan awaiting user
+	// confirmation (y/n) before it's applied — set whenever Deselect or
+	// DeselectCategory would also remove other selected dependents, so the
+	// user sees the full list before anything is uninstalled.
+	pendingPlan *catalog.Plan
 }
 
 // New builds a software Model scoped to one category, starting from the
@@ -86,6 +91,16 @@ func (m Model) Init() tea.Cmd { return nil }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyMsg)
 	if !ok {
+		return m, nil
+	}
+
+	if m.pendingPlan != nil {
+		switch keyMsg.String() {
+		case "y", "enter":
+			m.confirmPending()
+		case "n", "esc":
+			m.cancelPending()
+		}
 		return m, nil
 	}
 
@@ -132,16 +147,50 @@ func (m *Model) toggleCurrent() {
 			m.statusMsg = capabilityUnavailableMessage(item, gaps)
 			return
 		}
+		plan, err := catalog.Select(m.manifest, m.selection, item.ID, m.capabilities)
+		m.applyPlanOrError(plan, err)
+		return
 	}
 
-	var plan catalog.Plan
-	var err error
-	if m.selection[item.ID] {
-		plan, err = catalog.Deselect(m.manifest, m.selection, item.ID)
-	} else {
-		plan, err = catalog.Select(m.manifest, m.selection, item.ID, m.capabilities)
+	plan, err := catalog.Deselect(m.manifest, m.selection, item.ID)
+	if err != nil {
+		m.statusMsg = err.Error()
+		return
 	}
-	m.applyPlanOrError(plan, err)
+	m.confirmOrApply(plan)
+}
+
+// confirmOrApply runs plan immediately unless it would also deselect other
+// currently-selected dependents, in which case it's held as pendingPlan and
+// the full cascade list is shown to the user first — nothing is uninstalled
+// until they confirm with "y"/enter, or discarded with "n"/esc.
+func (m *Model) confirmOrApply(plan catalog.Plan) {
+	if len(plan.CascadeDeselected) > 0 {
+		m.pendingPlan = &plan
+		m.statusMsg = cascadeConfirmMessage(plan.CascadeDeselected)
+		return
+	}
+	m.runPlan(plan)
+}
+
+// cascadeConfirmMessage renders the confirmation prompt listing every extra
+// item a cascade-deselect would also remove.
+func cascadeConfirmMessage(cascade []string) string {
+	return fmt.Sprintf("Also removing (depends on this): %s — confirm? (y/n)", strings.Join(cascade, ", "))
+}
+
+func (m *Model) confirmPending() {
+	if m.pendingPlan == nil {
+		return
+	}
+	plan := *m.pendingPlan
+	m.pendingPlan = nil
+	m.runPlan(plan)
+}
+
+func (m *Model) cancelPending() {
+	m.pendingPlan = nil
+	m.statusMsg = "Cancelled — selection unchanged"
 }
 
 // capabilityUnavailableMessage renders the status-bar explanation for why a
@@ -167,7 +216,11 @@ func (m *Model) selectAll() {
 
 func (m *Model) deselectAll() {
 	plan, err := catalog.DeselectCategory(m.manifest, m.selection, m.category)
-	m.applyPlanOrError(plan, err)
+	if err != nil {
+		m.statusMsg = err.Error()
+		return
+	}
+	m.confirmOrApply(plan)
 }
 
 func (m *Model) applyPlanOrError(plan catalog.Plan, err error) {
@@ -279,6 +332,10 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(helpStyle.Render("space: toggle  •  a: select all  •  u: deselect all  •  esc: back"))
+	help := "space: toggle  •  a: select all  •  u: deselect all  •  esc: back"
+	if m.pendingPlan != nil {
+		help = "y: confirm removal  •  n: cancel"
+	}
+	b.WriteString(helpStyle.Render(help))
 	return b.String()
 }

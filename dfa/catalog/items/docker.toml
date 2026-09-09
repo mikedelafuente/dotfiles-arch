@@ -1,0 +1,12 @@
+id = "docker"
+name = "Docker"
+description = "Container engine (Docker Engine, CLI, Compose, Buildx, lazydocker)."
+categories = ["development"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-docker.sh"
+
+[packages]
+pacman = ["docker", "docker-compose", "docker-buildx", "lazydocker"]
+aur = []

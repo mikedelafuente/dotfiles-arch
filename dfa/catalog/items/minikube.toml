@@ -1,0 +1,12 @@
+id = "minikube"
+name = "Minikube"
+description = "Local Kubernetes cluster (minikube, kubectl, k9s)."
+categories = ["development"]
+tier = "optional"
+capabilities = []
+dependencies = ["docker"]
+setup_script = "setup-minikube.sh"
+
+[packages]
+pacman = ["minikube", "kubectl", "k9s"]
+aur = []
