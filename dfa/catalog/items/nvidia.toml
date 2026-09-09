@@ -1,0 +1,12 @@
+id = "nvidia"
+name = "NVIDIA driver"
+description = "Open-source NVIDIA DKMS driver stack (nvidia-open-dkms + utils)."
+categories = ["hardware"]
+tier = "optional"
+capabilities = ["nvidia-gpu"]
+dependencies = []
+setup_script = "setup-nvidia.sh"
+
+[packages]
+pacman = ["nvidia-open-dkms", "nvidia-utils", "nvidia-settings", "linux-headers"]
+aur = []

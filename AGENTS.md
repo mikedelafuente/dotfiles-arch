@@ -17,7 +17,8 @@ Bash scripts plus symlinked configs — no build system, no test suite.
 
 1. Read/write saved settings only via `load_bootstrap_config` / `write_bootstrap_config`
    (`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` multi-select, `SETUP_PROFILE` primary,
-   `INSTALL_NVIDIA`, `MACHINE_TYPE`).
+   `MACHINE_TYPE`). NVIDIA driver install is not a saved setting — it's an ordinary
+   `dfa` catalog item gated on the "NVIDIA GPU detected" capability.
 2. Use `USER_HOME_DIR`; machines have different usernames.
 3. No new `curl | bash` installers; AUR goes through the IoC-scanning helpers.
 4. Scripts must be safe to re-run — `sync.sh` runs all of them every time.

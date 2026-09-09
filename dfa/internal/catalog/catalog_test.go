@@ -53,7 +53,7 @@ func TestSelect_AutoSelectsDependency(t *testing.T) {
 	m := fixtureManifest(t)
 	current := Selection{"git": true}
 
-	plan, err := Select(m, current, "git-delta")
+	plan, err := Select(m, current, "git-delta", nil)
 	if err != nil {
 		t.Fatalf("Select() error = %v", err)
 	}
@@ -73,7 +73,7 @@ func TestSelect_AutoSelectsMissingDependencyAndReportsIt(t *testing.T) {
 	m := fixtureManifest(t)
 	current := Selection{}
 
-	plan, err := Select(m, current, "git-delta")
+	plan, err := Select(m, current, "git-delta", nil)
 	if err != nil {
 		t.Fatalf("Select() error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSelect_AutoSelectsMissingDependencyAndReportsIt(t *testing.T) {
 
 func TestSelect_UnknownItem(t *testing.T) {
 	m := fixtureManifest(t)
-	_, err := Select(m, Selection{}, "does-not-exist")
+	_, err := Select(m, Selection{}, "does-not-exist", nil)
 	if !errors.Is(err, ErrUnknownItem) {
 		t.Errorf("err = %v, want ErrUnknownItem", err)
 	}
@@ -152,7 +152,7 @@ func TestDeselect_RefusesWhenCascadeWouldHitCoreItem(t *testing.T) {
 func TestSelectCategory_SelectsEveryItemAndDeps(t *testing.T) {
 	m := fixtureManifest(t)
 
-	plan, err := SelectCategory(m, Selection{}, "essentials")
+	plan, err := SelectCategory(m, Selection{}, "essentials", nil)
 	if err != nil {
 		t.Fatalf("SelectCategory() error = %v", err)
 	}
@@ -169,7 +169,7 @@ func TestSelectCategory_SelectsEveryItemAndDeps(t *testing.T) {
 
 func TestSelectCategory_UnknownCategory(t *testing.T) {
 	m := fixtureManifest(t)
-	_, err := SelectCategory(m, Selection{}, "does-not-exist")
+	_, err := SelectCategory(m, Selection{}, "does-not-exist", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown category, got nil")
 	}
@@ -203,6 +203,106 @@ func TestDiff_ComputesInstallAndUninstall(t *testing.T) {
 	}
 	if want := []string{"a"}; !reflect.DeepEqual(plan.ToUninstall, want) {
 		t.Errorf("ToUninstall = %v, want %v", plan.ToUninstall, want)
+	}
+}
+
+func TestGaps_NoRequirementsIsAlwaysAvailable(t *testing.T) {
+	m := fixtureManifest(t)
+	git, _ := m.Item("git")
+	if gaps := Gaps(git, nil); gaps != nil {
+		t.Errorf("Gaps() = %v, want nil for an item with no capability requirements", gaps)
+	}
+	if !Available(git, nil) {
+		t.Error("Available() = false, want true for an item with no capability requirements")
+	}
+}
+
+func TestGaps_ReportsUnmetCapabilityWithReason(t *testing.T) {
+	m := fixtureManifest(t)
+	nvidia, _ := m.Item("nvidia")
+	caps := Capabilities{"nvidia-gpu": {Met: false, Reason: "No NVIDIA GPU detected on this machine"}}
+
+	gaps := Gaps(nvidia, caps)
+	want := []CapabilityGap{{Name: "nvidia-gpu", Reason: "No NVIDIA GPU detected on this machine"}}
+	if !reflect.DeepEqual(gaps, want) {
+		t.Errorf("Gaps() = %v, want %v", gaps, want)
+	}
+	if Available(nvidia, caps) {
+		t.Error("Available() = true, want false (capability not met)")
+	}
+}
+
+func TestGaps_MissingCapabilityEntryUsesDefaultReason(t *testing.T) {
+	m := fixtureManifest(t)
+	nvidia, _ := m.Item("nvidia")
+
+	gaps := Gaps(nvidia, Capabilities{})
+	if len(gaps) != 1 || gaps[0].Name != "nvidia-gpu" || gaps[0].Reason == "" {
+		t.Errorf("Gaps() = %v, want one gap for nvidia-gpu with a non-empty default reason", gaps)
+	}
+}
+
+func TestAvailable_MetCapabilityAllowsItem(t *testing.T) {
+	m := fixtureManifest(t)
+	nvidia, _ := m.Item("nvidia")
+	caps := Capabilities{"nvidia-gpu": {Met: true}}
+
+	if !Available(nvidia, caps) {
+		t.Error("Available() = false, want true when the required capability is met")
+	}
+}
+
+func TestSelect_RefusesWhenCapabilityNotMet(t *testing.T) {
+	m := fixtureManifest(t)
+	caps := Capabilities{"nvidia-gpu": {Met: false, Reason: "no GPU"}}
+
+	_, err := Select(m, Selection{}, "nvidia", caps)
+	if !errors.Is(err, ErrCapabilityNotMet) {
+		t.Errorf("err = %v, want ErrCapabilityNotMet", err)
+	}
+}
+
+func TestSelect_AllowsWhenCapabilityMet(t *testing.T) {
+	m := fixtureManifest(t)
+	caps := Capabilities{"nvidia-gpu": {Met: true}}
+
+	plan, err := Select(m, Selection{}, "nvidia", caps)
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+	if !plan.Selection["nvidia"] {
+		t.Errorf("Selection = %v, want nvidia selected", plan.Selection)
+	}
+}
+
+func TestSelectCategory_SkipsCapabilityBlockedItemsAndReportsThem(t *testing.T) {
+	m := fixtureManifest(t)
+
+	plan, err := SelectCategory(m, Selection{}, "hardware", Capabilities{})
+	if err != nil {
+		t.Fatalf("SelectCategory() error = %v", err)
+	}
+	if plan.Selection["nvidia"] {
+		t.Errorf("Selection[nvidia] = true, want false (capability not met)")
+	}
+	want := []string{"nvidia"}
+	if !reflect.DeepEqual(plan.CapabilityBlocked, want) {
+		t.Errorf("CapabilityBlocked = %v, want %v", plan.CapabilityBlocked, want)
+	}
+}
+
+func TestSelectCategory_IncludesCapabilityMetItems(t *testing.T) {
+	m := fixtureManifest(t)
+
+	plan, err := SelectCategory(m, Selection{}, "hardware", Capabilities{"nvidia-gpu": {Met: true}})
+	if err != nil {
+		t.Fatalf("SelectCategory() error = %v", err)
+	}
+	if !plan.Selection["nvidia"] {
+		t.Errorf("Selection[nvidia] = false, want true (capability met)")
+	}
+	if plan.CapabilityBlocked != nil {
+		t.Errorf("CapabilityBlocked = %v, want nil", plan.CapabilityBlocked)
 	}
 }
 

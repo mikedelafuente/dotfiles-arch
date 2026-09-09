@@ -59,7 +59,7 @@ cd /path/to/dotfiles-arch
 bash scripts/bootstrap.sh
 ```
 
-Prompts for name, email, **multi-select profiles** (`work`, `personal`, `devcontainer`), **INSTALL_NVIDIA**, and **MACHINE_TYPE** (laptop|desktop; default from `has_battery`), or `--yes` for non-interactive. Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
+Prompts for name, email, **multi-select profiles** (`work`, `personal`, `devcontainer`), and **MACHINE_TYPE** (laptop|desktop; default from `has_battery`), or `--yes` for non-interactive. Then enables multilib, rate-limited guarded package upgrade, installs yay if needed, runs setup scripts, links dotfiles.
 
 ### Sync (existing / drifted machine)
 
@@ -105,7 +105,7 @@ These scripts (`code`, `zed-agent-init`, `dfa-sync-dotfiles`, `dfa-sync-skills`,
 - Packages: `ensure_pacman_pkgs`, `ensure_yay_installed` (scanned before makepkg), `ensure_yay_pkgs`, `ensure_multilib_enabled`, `safe_system_upgrade`, `remove_orphaned_packages`
 - AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`, `resolve_default_agent`
+- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`, `resolve_default_agent`
 - Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 
@@ -125,8 +125,10 @@ Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config
 Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
 
 - `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
-  `SETUP_PROFILE` (primary for older readers), `INSTALL_NVIDIA`, `MACHINE_TYPE`,
-  `DEFAULT_AGENT` (`cursor`|`claude`, resolved by `setup-code.sh` — see below)
+  `SETUP_PROFILE` (primary for older readers), `MACHINE_TYPE`,
+  `DEFAULT_AGENT` (`cursor`|`claude`, resolved by `setup-code.sh` — see below).
+  NVIDIA driver install is not a saved setting; it's a `dfa` catalog item
+  gated on the "NVIDIA GPU detected" Capability (see `setup-nvidia.sh` below).
 
 `bootstrap.sh` / `sync.sh` export `MACHINE_TYPE` for the setup scripts; `setup-gnome.sh` also falls back to `load_bootstrap_config` + `has_battery`.
 
@@ -149,7 +151,7 @@ Shared: Kitty, tmux, Claude Code, Neovim, languages, Docker, Spotify, Obsidian, 
 - **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` (checksummed install.sh, never `curl|bash`); Claude uses user-level `npm` (never `sudo npm`). `setup-claude.sh` also idempotently merges the `nvim-reveal-edit` `PostToolUse` hook into `~/.claude/settings.json` (jq, touching only `.hooks.PostToolUse`)
 - **setup-code.sh**: Installs `tmux`, `lazygit`, `lazydocker`; runs last in `run-profile-setup.sh` (after profile extras) so Cursor/Claude are already on PATH; resolves `DEFAULT_AGENT` via `resolve_default_agent` — auto-picks the one CLI installed, prompts (Enter keeps the saved choice) when both are, leaves it empty when neither is — and persists it with `write_bootstrap_config`
 - **setup-gnome.sh**: Only when `gnome-shell` is installed; power policy from `MACHINE_TYPE` (`power-profiles-daemon` profile, `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` — laptop suspends on battery lid-close but ignores lid on AC/docked, `90-dotfiles-arch-usb-wakeup.rules` for KVM HID wake, audio powersave), falling back to `has_battery`; installs/configures Dash to Panel (always-visible full-width top bar, small centered icons, every monitor); Pop Shell auto-tiling off by default
-- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
+- **setup-nvidia.sh**: `--install`/`--uninstall <packages...>` is the dfa Catalog Engine's System Adapter path for the `nvidia` catalog item (`dfa/catalog/items/nvidia.toml`, gated on the "nvidia-gpu" Capability, detected via `system.HasNVIDIAHardware` mirroring `has_nvidia_hardware`); direct invocation (`run-profile-setup.sh --yes`) auto-installs `nvidia-open-dkms` only when NVIDIA hardware/packages are detected — no saved preference, no prompt. Never swaps an existing driver flavor.
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
 - **setup-cursor.sh**: work-profile-only (see Profiles table); IDE via AUR (`cursor-bin`); Agent CLI via AUR (`cursor-cli`), which ships only `/usr/bin/cursor-agent` — the script adds an `agent` compat symlink and clears any older `curl | bash` install from `~/.local/share/cursor-agent`. On machines with no NVIDIA hardware (integrated-GPU-only; checked via `has_nvidia_hardware` PCI detection, not driver packages), it also drops a `~/.local/share/applications/cursor.desktop` override that adds `--ozone-platform=x11` and idempotently forces `disable-hardware-acceleration: true` in `~/.cursor/argv.json` (JSONC — comments preserved, not a jq rewrite), working around an Electron native-Wayland hang-on-quit/slowness bug; both are removed/left alone automatically if NVIDIA hardware is later detected. It also idempotently merges the `nvim-reveal-edit` `afterFileEdit` hook into `~/.cursor/hooks.json` (jq, touching only `.hooks.afterFileEdit` — this file is plain JSON, unlike JSONC `argv.json`)
 - **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh` already shared); the Cursor Dev Containers extension step warns and skips if Cursor isn't installed (i.e. devcontainer profile without work)
