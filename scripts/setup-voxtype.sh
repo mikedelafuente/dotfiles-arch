@@ -93,12 +93,24 @@ fi
 # Download the default speech model (idempotent)
 # --------------------------
 
-print_info_message "Ensuring the default Voxtype speech model is downloaded"
-voxtype setup --download --no-post-install || print_warning_message "voxtype setup --download failed — run it manually to fetch the speech model"
+# NVIDIA has a CUDA-accelerated Parakeet backend, which is faster and more
+# accurate than the default Whisper model. Check for a working driver
+# (nvidia-smi), not just NVIDIA PCI hardware — a card with no driver
+# installed (e.g. INSTALL_NVIDIA=false, or nouveau) has no CUDA to use.
+if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+    print_info_message "NVIDIA driver detected — downloading and activating the Parakeet model"
+    voxtype setup --download --model parakeet-tdt-0.6b-v3 --activate --no-post-install || print_warning_message "voxtype setup --download (parakeet) failed — run it manually to fetch the speech model"
+else
+    print_info_message "Ensuring the default Voxtype speech model is downloaded"
+    voxtype setup --download --no-post-install || print_warning_message "voxtype setup --download failed — run it manually to fetch the speech model"
+fi
 
-# GPU-accelerate transcription when a Vulkan ICD is present (any vendor).
-if [[ -d /usr/share/vulkan/icd.d ]] && find /usr/share/vulkan/icd.d -maxdepth 1 -name "*.json" -print -quit 2>/dev/null | grep -q .; then
-    print_info_message "Vulkan detected — enabling GPU transcription"
+# GPU-accelerate transcription: Vulkan for Whisper (any vendor), CUDA for
+# Parakeet on a working NVIDIA driver. voxtype auto-detects the right
+# backend for the active engine/model, so the same --enable call covers
+# both cases.
+if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null || { [[ -d /usr/share/vulkan/icd.d ]] && find /usr/share/vulkan/icd.d -maxdepth 1 -name "*.json" -print -quit 2>/dev/null | grep -q .; }; then
+    print_info_message "GPU detected — enabling GPU transcription"
     voxtype setup gpu --enable || print_warning_message "voxtype setup gpu --enable failed — transcription will stay on CPU"
 fi
 
