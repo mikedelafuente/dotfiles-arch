@@ -101,9 +101,18 @@ else
 fi
 alias grep='grep --color=auto'
 alias mkdir='mkdir -pv'
-alias cp='cp -i'
-alias mv='mv -i'
-alias rm='rm -i'
+# Confirm-before-overwrite/delete only in real interactive terminals. This
+# shell's alias expansion is on regardless of interactivity (see `shopt
+# expand_aliases`), so without this guard a non-interactive caller (an agent
+# driving bash, a script) that runs a bare cp/mv/rm hangs forever on a `-i`
+# prompt nobody can answer.
+case $- in
+  *i*)
+    alias cp='cp -i'
+    alias mv='mv -i'
+    alias rm='rm -i'
+    ;;
+esac
 
 # Git
 alias ga='git add'
