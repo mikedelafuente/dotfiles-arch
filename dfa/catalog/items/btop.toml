@@ -1,0 +1,12 @@
+id = "btop"
+name = "btop"
+description = "Richer, graphical resource monitor."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["btop"]
+aur = []

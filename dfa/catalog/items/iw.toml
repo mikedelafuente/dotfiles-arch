@@ -1,0 +1,12 @@
+id = "iw"
+name = "iw"
+description = "Wireless device configuration and query (nl80211)."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["iw"]
+aur = []

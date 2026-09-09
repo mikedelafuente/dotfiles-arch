@@ -1,0 +1,12 @@
+id = "shellcheck"
+name = "shellcheck"
+description = "Static analysis for shell scripts."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["shellcheck"]
+aur = []

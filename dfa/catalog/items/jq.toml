@@ -1,0 +1,12 @@
+id = "jq"
+name = "jq"
+description = "Command-line JSON processor."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["jq"]
+aur = []

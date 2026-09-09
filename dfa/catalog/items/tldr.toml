@@ -1,0 +1,12 @@
+id = "tldr"
+name = "tldr"
+description = "Example-first, community-maintained man pages."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["tldr"]
+aur = []

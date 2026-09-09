@@ -1,0 +1,12 @@
+id = "fastfetch"
+name = "fastfetch"
+description = "Fast system information summary."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["fastfetch"]
+aur = []

@@ -1,0 +1,12 @@
+id = "ripgrep"
+name = "ripgrep"
+description = "Fast recursive text search (`rg`)."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["ripgrep"]
+aur = []

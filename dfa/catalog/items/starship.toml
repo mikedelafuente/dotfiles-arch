@@ -1,0 +1,12 @@
+id = "starship"
+name = "starship"
+description = "Fast, customizable cross-shell prompt."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["starship"]
+aur = []

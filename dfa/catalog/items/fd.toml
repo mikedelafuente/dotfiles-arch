@@ -1,0 +1,12 @@
+id = "fd"
+name = "fd"
+description = "Fast, user-friendly `find` replacement."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["fd"]
+aur = []

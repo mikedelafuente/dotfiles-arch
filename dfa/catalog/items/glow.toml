@@ -1,0 +1,12 @@
+id = "glow"
+name = "glow"
+description = "Terminal Markdown renderer."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["glow"]
+aur = []
