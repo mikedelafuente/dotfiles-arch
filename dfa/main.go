@@ -1,8 +1,7 @@
 // Command dfa is the front door for dotfiles-arch day-to-day tooling: a
-// Bubble Tea dashboard (this ticket) that later tickets grow into a full
-// software catalog + maintenance TUI. See CONTEXT.md and GitHub issue #35
-// for the full vision; this file only wires up the skeleton described in
-// issue #38.
+// Bubble Tea dashboard that later work grows into a full software catalog +
+// maintenance TUI. See CONTEXT.md for the full vision; this file only wires
+// up the skeleton.
 package main
 
 import (

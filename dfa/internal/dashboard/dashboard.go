@@ -1,7 +1,6 @@
 // Package dashboard implements the top-level dfa dashboard: a Bubble Tea
-// list of every planned dfa screen. This ticket (#38) only wires up the
-// shell — most entries are placeholders that later tickets (#39, #40,
-// #49-#53) will turn into real screens.
+// list of every planned dfa screen. Only the shell is wired up so far — most
+// entries are placeholders that later work will turn into real screens.
 package dashboard
 
 import (
@@ -23,10 +22,10 @@ func (i screenItem) Title() string       { return i.title }
 func (i screenItem) Description() string { return i.description }
 func (i screenItem) FilterValue() string { return i.title }
 
-// Screens is the full set of planned dfa dashboard screens, per the #35
-// epic. Every entry is a placeholder for this ticket (#38) — later tickets
-// implement the real behavior behind each one.
-func Screens() []screenItem {
+// screens is the full set of planned dfa dashboard screens. Every entry is
+// a placeholder for now — later work implements the real behavior behind
+// each one.
+func screens() []screenItem {
 	return []screenItem{
 		{
 			title:       "Install/Uninstall Software",
@@ -80,15 +79,13 @@ type Model struct {
 	list     list.Model
 	selected *screenItem
 	quitting bool
-	width    int
-	height   int
 }
 
 // New builds a dashboard Model listing every planned dfa screen.
 func New() Model {
-	screens := Screens()
-	items := make([]list.Item, len(screens))
-	for i, s := range screens {
+	scr := screens()
+	items := make([]list.Item, len(scr))
+	for i, s := range scr {
 		items[i] = s
 	}
 
@@ -111,7 +108,6 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
 		m.list.SetSize(msg.Width, msg.Height-4)
 		return m, nil
 

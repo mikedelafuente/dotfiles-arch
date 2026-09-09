@@ -17,16 +17,16 @@ func TestScreens_ListsAllSevenPlannedScreens(t *testing.T) {
 		"Settings",
 	}
 
-	screens := Screens()
-	if len(screens) != len(want) {
-		t.Fatalf("Screens() returned %d entries, want %d", len(screens), len(want))
+	scr := screens()
+	if len(scr) != len(want) {
+		t.Fatalf("screens() returned %d entries, want %d", len(scr), len(want))
 	}
-	for i, s := range screens {
+	for i, s := range scr {
 		if s.title != want[i] {
-			t.Errorf("Screens()[%d].title = %q, want %q", i, s.title, want[i])
+			t.Errorf("screens()[%d].title = %q, want %q", i, s.title, want[i])
 		}
 		if s.description == "" {
-			t.Errorf("Screens()[%d] (%s) has an empty description", i, s.title)
+			t.Errorf("screens()[%d] (%s) has an empty description", i, s.title)
 		}
 	}
 }
@@ -70,7 +70,7 @@ func TestUpdate_EnterSelectsThenEscReturnsToList(t *testing.T) {
 	if dm.selected == nil {
 		t.Fatalf("selected == nil after enter, want a selected screen")
 	}
-	firstTitle := Screens()[0].title
+	firstTitle := screens()[0].title
 	if dm.selected.title != firstTitle {
 		t.Errorf("selected.title = %q, want %q", dm.selected.title, firstTitle)
 	}

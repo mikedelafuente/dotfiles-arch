@@ -1,7 +1,6 @@
 // Package system provides the System Adapter primitive: a thin wrapper for
 // running external commands/scripts and capturing their output and exit
-// status. Later tickets (#39, #40, ...) build the catalog/install engine on
-// top of this seam.
+// status. Later work builds the catalog/install engine on top of this seam.
 package system
 
 import (

@@ -225,9 +225,8 @@ print_info_message "Shell: $SHELL"
 # --------------------------
 # Build and hand off to dfa
 # --------------------------
-# bootstrap.sh is shrinking toward a minimal stub (see issue #35/#38): ensure
-# Go is available, build the dfa TUI from dfa/, then hand off into
-# `dfa bootstrap`. Later tickets move more of the flow above into dfa itself.
+# Ensure Go is available, build the dfa TUI from dfa/, then hand off into
+# `dfa bootstrap`.
 
 print_line_break "Handing off to dfa"
 
