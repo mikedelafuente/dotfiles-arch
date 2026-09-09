@@ -17,6 +17,7 @@ Includes:
 
 ```
 dotfiles-arch/
+├── dfa/                           # Go module for the `dfa` TUI (Bubble Tea dashboard; bootstrap.sh builds/execs it)
 ├── scripts/
 │   ├── bootstrap.sh              # Full new-machine orchestration
 │   ├── sync.sh                   # Bring an existing machine up to date
