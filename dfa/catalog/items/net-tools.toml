@@ -1,0 +1,12 @@
+id = "net-tools"
+name = "net-tools"
+description = "Legacy network utilities (ifconfig, netstat)."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["net-tools"]
+aur = []

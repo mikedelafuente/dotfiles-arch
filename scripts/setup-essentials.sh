@@ -13,6 +13,25 @@ else
   exit 1
 fi
 
+# dfa (the Catalog Engine's System Adapter) drives individual Essentials
+# catalog items through this script one package at a time, rather than the
+# full ESSENTIAL_PACKAGES bundle below. Keep this a thin pass-through to the
+# shared ensure_pacman_pkgs/remove_pacman_pkgs helpers so behavior (and its
+# IoC/AUR guarding, if ever needed here) stays identical either way it's
+# invoked.
+case "${1:-}" in
+  --install)
+    shift
+    ensure_pacman_pkgs "$@"
+    exit $?
+    ;;
+  --uninstall)
+    shift
+    remove_pacman_pkgs "$@"
+    exit $?
+    ;;
+esac
+
 print_tool_setup_start "Essential Packages"
 
 # Keep PACKAGES.md in sync when changing this list

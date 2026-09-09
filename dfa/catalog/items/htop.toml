@@ -1,0 +1,12 @@
+id = "htop"
+name = "htop"
+description = "Interactive process viewer."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["htop"]
+aur = []

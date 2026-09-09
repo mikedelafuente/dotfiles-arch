@@ -1,0 +1,12 @@
+id = "xsel"
+name = "xsel"
+description = "X11 clipboard access for XWayland apps."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["xsel"]
+aur = []

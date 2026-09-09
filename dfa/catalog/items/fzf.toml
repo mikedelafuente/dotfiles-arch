@@ -1,0 +1,12 @@
+id = "fzf"
+name = "fzf"
+description = "Command-line fuzzy finder for files and history."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["fzf"]
+aur = []

@@ -7,8 +7,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/mikedelafuente/dotfiles-arch/dfa/internal/dashboard"
+	"github.com/mikedelafuente/dotfiles-arch/dfa/internal/system"
 )
 
 func main() {
@@ -32,7 +34,18 @@ func main() {
 		}
 	}
 
-	if err := dashboard.Run(); err != nil {
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dfa: locating own executable: %v\n", err)
+		os.Exit(1)
+	}
+	repoRoot, err := system.ResolveRepoRoot(filepath.Dir(exe))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dfa: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := dashboard.Run(repoRoot); err != nil {
 		fmt.Fprintf(os.Stderr, "dfa: %v\n", err)
 		os.Exit(1)
 	}

@@ -1,0 +1,12 @@
+id = "git-delta"
+name = "git-delta"
+description = "Syntax-highlighted, side-by-side git diffs."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["git-delta"]
+aur = []

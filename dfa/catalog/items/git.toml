@@ -1,0 +1,12 @@
+id = "git"
+name = "git"
+description = "Distributed version control."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["git"]
+aur = []

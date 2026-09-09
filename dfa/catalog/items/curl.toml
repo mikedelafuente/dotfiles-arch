@@ -1,0 +1,12 @@
+id = "curl"
+name = "curl"
+description = "Command-line HTTP/file transfer client."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["curl"]
+aur = []

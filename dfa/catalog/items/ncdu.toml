@@ -1,0 +1,12 @@
+id = "ncdu"
+name = "ncdu"
+description = "Interactive disk usage explorer."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["ncdu"]
+aur = []

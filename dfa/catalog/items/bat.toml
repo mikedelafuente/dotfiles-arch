@@ -1,0 +1,12 @@
+id = "bat"
+name = "bat"
+description = "Syntax-highlighted `cat`/pager replacement."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["bat"]
+aur = []

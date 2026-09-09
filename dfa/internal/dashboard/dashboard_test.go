@@ -1,10 +1,47 @@
 package dashboard
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// writeFixtureRepo builds a minimal repo skeleton (catalog manifest +
+// scripts dir) so tests can exercise the real Install/Uninstall Software
+// wiring without touching the actual dotfiles-arch checkout.
+func writeFixtureRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+
+	itemsDir := filepath.Join(root, "dfa", "catalog", "items")
+	if err := os.MkdirAll(itemsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(itemsDir): %v", err)
+	}
+	item := `
+id = "dfa-test-fixture-item"
+name = "Fixture Item"
+description = "A fixture item used only by dashboard tests."
+categories = ["essentials"]
+tier = "optional"
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["dfa-test-fixture-package-does-not-exist"]
+`
+	if err := os.WriteFile(filepath.Join(itemsDir, "fixture.toml"), []byte(item), 0o644); err != nil {
+		t.Fatalf("WriteFile(fixture.toml): %v", err)
+	}
+
+	scriptsDir := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(scriptsDir): %v", err)
+	}
+
+	return root
+}
 
 func TestScreens_ListsAllSevenPlannedScreens(t *testing.T) {
 	want := []string{
@@ -32,7 +69,7 @@ func TestScreens_ListsAllSevenPlannedScreens(t *testing.T) {
 }
 
 func TestUpdate_QuitsOnQ(t *testing.T) {
-	m := New()
+	m := New(t.TempDir())
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	dm := updated.(Model)
@@ -49,7 +86,7 @@ func TestUpdate_QuitsOnQ(t *testing.T) {
 }
 
 func TestUpdate_QuitsOnCtrlC(t *testing.T) {
-	m := New()
+	m := New(t.TempDir())
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
 	dm := updated.(Model)
@@ -63,7 +100,7 @@ func TestUpdate_QuitsOnCtrlC(t *testing.T) {
 }
 
 func TestUpdate_EnterSelectsThenEscReturnsToList(t *testing.T) {
-	m := New()
+	m := New(t.TempDir())
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	dm := updated.(Model)
@@ -82,8 +119,39 @@ func TestUpdate_EnterSelectsThenEscReturnsToList(t *testing.T) {
 	}
 }
 
+func TestUpdate_EnterOnInstallSoftwareOpensRealSoftwareScreen(t *testing.T) {
+	m := New(writeFixtureRepo(t))
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	dm := updated.(Model)
+
+	if dm.software == nil {
+		t.Fatalf("software == nil after opening Install/Uninstall Software, want the real screen wired up (manifestErr: %v)", dm.manifestErr)
+	}
+	if !strings.Contains(dm.View(), "Fixture Item") {
+		t.Errorf("View() = %q, want it to list the fixture item", dm.View())
+	}
+
+	// Esc from within the software screen returns a BackMsg via Cmd (real
+	// bubbletea usage: the runtime calls cmd() and feeds the result back in).
+	updated, cmd := dm.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	dm = updated.(Model)
+	if cmd == nil {
+		t.Fatalf("expected a Cmd carrying BackMsg after esc from the software screen, got nil")
+	}
+	updated, _ = dm.Update(cmd())
+	dm = updated.(Model)
+
+	if dm.software != nil {
+		t.Errorf("software = %+v after esc, want nil", dm.software)
+	}
+	if dm.selected != nil {
+		t.Errorf("selected = %+v after esc, want nil", dm.selected)
+	}
+}
+
 func TestView_DoesNotPanicBeforeOrAfterSelection(t *testing.T) {
-	m := New()
+	m := New(t.TempDir())
 	if m.View() == "" {
 		t.Errorf("View() on a fresh model should render something")
 	}

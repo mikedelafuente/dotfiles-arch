@@ -1,0 +1,12 @@
+id = "tree"
+name = "tree"
+description = "Recursive directory listing as a tree."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["tree"]
+aur = []

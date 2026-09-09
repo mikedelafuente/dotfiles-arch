@@ -1,0 +1,12 @@
+id = "zoxide"
+name = "zoxide"
+description = "Directory jumping that learns your habits (`z`)."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["zoxide"]
+aur = []

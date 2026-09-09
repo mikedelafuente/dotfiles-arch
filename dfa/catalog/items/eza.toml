@@ -1,0 +1,12 @@
+id = "eza"
+name = "eza"
+description = "Modern `ls` replacement with icons and git status."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["eza"]
+aur = []

@@ -1,0 +1,12 @@
+id = "github-cli"
+name = "github-cli"
+description = "GitHub from the terminal (`gh`); also the git credential helper."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["github-cli"]
+aur = []

@@ -1,0 +1,12 @@
+id = "duf"
+name = "duf"
+description = "Friendly, colorized `df` replacement."
+categories = ["essentials"]
+tier = "optional"
+capabilities = []
+dependencies = []
+setup_script = "setup-essentials.sh"
+
+[packages]
+pacman = ["duf"]
+aur = []
