@@ -24,6 +24,25 @@ fi
 # End Import Common Header
 # --------------------------
 
+# --install / --uninstall <packages...>
+#   The dfa Catalog Engine's System Adapter path — the "minikube" catalog
+#   item (dfa/catalog/items/minikube.toml, depends on "docker"). Installs/
+#   removes exactly the given pacman packages via the shared
+#   ensure_pacman_pkgs/remove_pacman_pkgs helpers, same convention as
+#   setup-essentials.sh / setup-nvidia.sh.
+case "${1:-}" in
+  --install)
+    shift
+    ensure_pacman_pkgs "$@"
+    exit $?
+    ;;
+  --uninstall)
+    shift
+    remove_pacman_pkgs "$@"
+    exit $?
+    ;;
+esac
+
 print_tool_setup_start "Minikube"
 
 # --------------------------

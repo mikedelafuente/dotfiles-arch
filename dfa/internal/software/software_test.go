@@ -61,6 +61,18 @@ func fixtureManifest(t *testing.T) catalog.Manifest {
 			Capabilities: []string{"nvidia-gpu"}, SetupScript: "setup-nvidia.sh",
 			Packages: catalog.Packages{Pacman: []string{"nvidia-open-dkms"}},
 		},
+		{
+			ID: "docker", Name: "docker", Description: "Container engine",
+			Categories: []string{"development"}, Tier: catalog.TierOptional,
+			SetupScript: "setup-docker.sh",
+			Packages:    catalog.Packages{Pacman: []string{"docker"}},
+		},
+		{
+			ID: "minikube", Name: "minikube", Description: "Local Kubernetes cluster",
+			Categories: []string{"development"}, Tier: catalog.TierOptional,
+			Dependencies: []string{"docker"}, SetupScript: "setup-minikube.sh",
+			Packages: catalog.Packages{Pacman: []string{"minikube"}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewManifest() error = %v", err)
@@ -296,6 +308,131 @@ func TestView_ShowsDisabledCapabilityGatedItemWithReason(t *testing.T) {
 	view := m.View()
 	if !strings.Contains(view, "unavailable") || !strings.Contains(view, "No NVIDIA GPU detected on this machine") {
 		t.Errorf("View() = %q, want it to show the item disabled with its unmet-capability reason", view)
+	}
+}
+
+func TestUpdate_DeselectDependencyWithSelectedDependentAsksConfirmationFirst(t *testing.T) {
+	runner := &fakeRunner{}
+	current := catalog.Selection{"docker": true, "minikube": true}
+	m := New(fixtureManifest(t), "development", current, runner, nil)
+	m.cursor = 0 // docker
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+
+	if !m.selection["docker"] || !m.selection["minikube"] {
+		t.Errorf("selection = %v, want unchanged until the cascade is confirmed", m.selection)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("calls = %+v, want none until confirmed", runner.calls)
+	}
+	if !strings.Contains(m.statusMsg, "minikube") {
+		t.Errorf("statusMsg = %q, want it to name the cascaded dependent", m.statusMsg)
+	}
+}
+
+func TestUpdate_ConfirmingCascadeAppliesBothUninstalls(t *testing.T) {
+	runner := &fakeRunner{}
+	current := catalog.Selection{"docker": true, "minikube": true}
+	m := New(fixtureManifest(t), "development", current, runner, nil)
+	m.cursor = 0 // docker
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+	updated, _ = m.Update(keyMsg("y"))
+	m = updated.(Model)
+
+	if m.selection["docker"] || m.selection["minikube"] {
+		t.Errorf("selection = %v, want both deselected after confirming", m.selection)
+	}
+	want := []scriptCall{
+		{script: "setup-docker.sh", args: []string{"--uninstall", "docker"}},
+		{script: "setup-minikube.sh", args: []string{"--uninstall", "minikube"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Errorf("calls = %+v, want %+v", runner.calls, want)
+	}
+}
+
+func TestUpdate_CancellingCascadeLeavesSelectionAndSkipsScripts(t *testing.T) {
+	runner := &fakeRunner{}
+	current := catalog.Selection{"docker": true, "minikube": true}
+	m := New(fixtureManifest(t), "development", current, runner, nil)
+	m.cursor = 0 // docker
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+	updated, _ = m.Update(keyMsg("n"))
+	m = updated.(Model)
+
+	if !m.selection["docker"] || !m.selection["minikube"] {
+		t.Errorf("selection = %v, want unchanged after cancelling", m.selection)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("calls = %+v, want none after cancelling", runner.calls)
+	}
+	if m.pendingPlan != nil {
+		t.Errorf("pendingPlan = %+v, want nil after cancelling", m.pendingPlan)
+	}
+}
+
+func TestUpdate_SelectDependentAutoSelectsDependencyWithoutConfirmation(t *testing.T) {
+	runner := &fakeRunner{}
+	m := New(fixtureManifest(t), "development", catalog.Selection{}, runner, nil)
+	m.cursor = 1 // minikube
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+
+	if !m.selection["docker"] || !m.selection["minikube"] {
+		t.Errorf("selection = %v, want both docker and minikube selected", m.selection)
+	}
+	want := []scriptCall{
+		{script: "setup-docker.sh", args: []string{"--install", "docker"}},
+		{script: "setup-minikube.sh", args: []string{"--install", "minikube"}},
+	}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Errorf("calls = %+v, want %+v", runner.calls, want)
+	}
+}
+
+func TestUpdate_DeselectAllCascadeAsksConfirmationFirst(t *testing.T) {
+	runner := &fakeRunner{}
+	current := catalog.Selection{"docker": true, "minikube": true}
+	m := New(fixtureManifest(t), "development", current, runner, nil)
+
+	updated, _ := m.Update(keyMsg("u"))
+	m = updated.(Model)
+
+	if !m.selection["docker"] || !m.selection["minikube"] {
+		t.Errorf("selection = %v, want unchanged until confirmed", m.selection)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("calls = %+v, want none until confirmed", runner.calls)
+	}
+
+	updated, _ = m.Update(keyMsg("y"))
+	m = updated.(Model)
+
+	if m.selection["docker"] || m.selection["minikube"] {
+		t.Errorf("selection = %v, want both deselected after confirming", m.selection)
+	}
+	if len(runner.calls) != 2 {
+		t.Errorf("len(calls) = %d, want 2 after confirming", len(runner.calls))
+	}
+}
+
+func TestView_ShowsCascadeConfirmationHelp(t *testing.T) {
+	current := catalog.Selection{"docker": true, "minikube": true}
+	m := New(fixtureManifest(t), "development", current, &fakeRunner{}, nil)
+	m.cursor = 0 // docker
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+
+	view := m.View()
+	if !strings.Contains(view, "confirm removal") {
+		t.Errorf("View() = %q, want it to show the confirm/cancel help", view)
 	}
 }
 
