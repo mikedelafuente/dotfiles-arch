@@ -56,17 +56,7 @@ fi
 # --------------------------
 
 # Uninstall old incompatible packages if they exist
-OLD_PACKAGES=()
-for pkg in docker-compose podman podman-docker; do
-  if pacman -Q "$pkg" &> /dev/null; then
-    OLD_PACKAGES+=("$pkg")
-  fi
-done
-
-if [ ${#OLD_PACKAGES[@]} -gt 0 ]; then
-  print_info_message "Removing old/conflicting packages: ${OLD_PACKAGES[*]}"
-  sudo pacman -R --noconfirm "${OLD_PACKAGES[@]}"
-fi
+remove_pacman_pkgs docker-compose podman podman-docker
 
 # --------------------------
 # Install Docker Packages
