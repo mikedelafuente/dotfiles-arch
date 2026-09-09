@@ -40,35 +40,42 @@ func (r ScriptsDirRunner) RunScript(scriptName string, args ...string) (system.R
 }
 
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Padding(0, 1)
-	helpStyle  = lipgloss.NewStyle().Faint(true).Padding(1, 1, 0, 1)
-	lockStyle  = lipgloss.NewStyle().Faint(true)
-	errStyle   = lipgloss.NewStyle().Padding(0, 1)
-	cursorSign = "> "
-	noCursor   = "  "
+	titleStyle    = lipgloss.NewStyle().Bold(true).Padding(0, 1)
+	helpStyle     = lipgloss.NewStyle().Faint(true).Padding(1, 1, 0, 1)
+	lockStyle     = lipgloss.NewStyle().Faint(true)
+	disabledStyle = lipgloss.NewStyle().Faint(true).Italic(true)
+	errStyle      = lipgloss.NewStyle().Padding(0, 1)
+	cursorSign    = "> "
+	noCursor      = "  "
 )
 
 // Model is the Bubble Tea model for one category's Install/Uninstall
 // Software screen.
 type Model struct {
-	manifest  catalog.Manifest
-	category  string
-	items     []catalog.Item
-	selection catalog.Selection
-	runner    ScriptRunner
-	cursor    int
-	statusMsg string
+	manifest     catalog.Manifest
+	category     string
+	items        []catalog.Item
+	selection    catalog.Selection
+	capabilities catalog.Capabilities
+	runner       ScriptRunner
+	cursor       int
+	statusMsg    string
 }
 
 // New builds a software Model scoped to one category, starting from the
 // given selection (e.g. derived from querying what's currently installed).
-func New(manifest catalog.Manifest, category string, selection catalog.Selection, runner ScriptRunner) Model {
+// capabilities is the machine facts a capability-gated item's requirements
+// are checked against (see catalog.Gaps/Available) — an item whose
+// requirements aren't met is shown disabled, with the reason, and can't be
+// selected.
+func New(manifest catalog.Manifest, category string, selection catalog.Selection, runner ScriptRunner, capabilities catalog.Capabilities) Model {
 	return Model{
-		manifest:  manifest,
-		category:  category,
-		items:     manifest.ItemsByCategory(category),
-		selection: selection.Clone(),
-		runner:    runner,
+		manifest:     manifest,
+		category:     category,
+		items:        manifest.ItemsByCategory(category),
+		selection:    selection.Clone(),
+		capabilities: capabilities,
+		runner:       runner,
 	}
 }
 
@@ -120,18 +127,41 @@ func (m *Model) toggleCurrent() {
 	}
 	item := m.items[m.cursor]
 
+	if !m.selection[item.ID] {
+		if gaps := catalog.Gaps(item, m.capabilities); len(gaps) > 0 {
+			m.statusMsg = capabilityUnavailableMessage(item, gaps)
+			return
+		}
+	}
+
 	var plan catalog.Plan
 	var err error
 	if m.selection[item.ID] {
 		plan, err = catalog.Deselect(m.manifest, m.selection, item.ID)
 	} else {
-		plan, err = catalog.Select(m.manifest, m.selection, item.ID)
+		plan, err = catalog.Select(m.manifest, m.selection, item.ID, m.capabilities)
 	}
 	m.applyPlanOrError(plan, err)
 }
 
+// capabilityUnavailableMessage renders the status-bar explanation for why a
+// capability-gated item's toggle key press was ignored.
+func capabilityUnavailableMessage(item catalog.Item, gaps []catalog.CapabilityGap) string {
+	return fmt.Sprintf("%s is unavailable: %s", item.Name, joinGapReasons(gaps))
+}
+
+// joinGapReasons renders a list of CapabilityGaps as one semicolon-separated
+// reason string, shared by the status-bar message and the disabled row label.
+func joinGapReasons(gaps []catalog.CapabilityGap) string {
+	reasons := make([]string, len(gaps))
+	for i, g := range gaps {
+		reasons[i] = g.Reason
+	}
+	return strings.Join(reasons, "; ")
+}
+
 func (m *Model) selectAll() {
-	plan, err := catalog.SelectCategory(m.manifest, m.selection, m.category)
+	plan, err := catalog.SelectCategory(m.manifest, m.selection, m.category, m.capabilities)
 	m.applyPlanOrError(plan, err)
 }
 
@@ -188,11 +218,19 @@ func (m *Model) runPlan(plan catalog.Plan) {
 	m.statusMsg = summarizePlan(plan)
 	if len(plan.CoreItemsSkipped) > 0 {
 		skipped := "left alone (core, locked): " + strings.Join(plan.CoreItemsSkipped, ", ")
-		if m.statusMsg == "" {
-			m.statusMsg = skipped
-		} else {
-			m.statusMsg += " • " + skipped
-		}
+		m.appendStatus(skipped)
+	}
+	if len(plan.CapabilityBlocked) > 0 {
+		blocked := "unavailable (capability not met): " + strings.Join(plan.CapabilityBlocked, ", ")
+		m.appendStatus(blocked)
+	}
+}
+
+func (m *Model) appendStatus(msg string) {
+	if m.statusMsg == "" {
+		m.statusMsg = msg
+	} else {
+		m.statusMsg += " • " + msg
 	}
 }
 
@@ -226,7 +264,9 @@ func (m Model) View() string {
 			checkbox = "[x]"
 		}
 		line := fmt.Sprintf("%s%s %s — %s", cursor, checkbox, item.Name, item.Description)
-		if item.Tier == catalog.TierCore {
+		if gaps := catalog.Gaps(item, m.capabilities); len(gaps) > 0 {
+			line = disabledStyle.Render(line + " (unavailable: " + joinGapReasons(gaps) + ")")
+		} else if item.Tier == catalog.TierCore {
 			line = lockStyle.Render(line + " (core, locked)")
 		}
 		b.WriteString(line)

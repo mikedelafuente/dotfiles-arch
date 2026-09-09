@@ -55,6 +55,12 @@ func fixtureManifest(t *testing.T) catalog.Manifest {
 			SetupScript: "setup-essentials.sh",
 			Packages:    catalog.Packages{Pacman: []string{"starship"}},
 		},
+		{
+			ID: "nvidia", Name: "nvidia", Description: "NVIDIA driver",
+			Categories: []string{"hardware"}, Tier: catalog.TierOptional,
+			Capabilities: []string{"nvidia-gpu"}, SetupScript: "setup-nvidia.sh",
+			Packages: catalog.Packages{Pacman: []string{"nvidia-open-dkms"}},
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewManifest() error = %v", err)
@@ -76,7 +82,7 @@ func keyMsg(s string) tea.KeyMsg {
 }
 
 func TestNew_StartsWithNoSelectionByDefault(t *testing.T) {
-	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{})
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{}, nil)
 	if len(m.items) != 3 {
 		t.Fatalf("len(items) = %d, want 3", len(m.items))
 	}
@@ -87,7 +93,7 @@ func TestNew_StartsWithNoSelectionByDefault(t *testing.T) {
 
 func TestUpdate_SpaceSelectsItemAndRunsInstall(t *testing.T) {
 	runner := &fakeRunner{}
-	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, runner)
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, runner, nil)
 	m.cursor = 1 // git-delta
 
 	updated, _ := m.Update(keyMsg(" "))
@@ -109,7 +115,7 @@ func TestUpdate_SpaceSelectsItemAndRunsInstall(t *testing.T) {
 func TestUpdate_SpaceTogglesBackToDeselectAndRunsUninstall(t *testing.T) {
 	runner := &fakeRunner{}
 	current := catalog.Selection{"git": true, "starship": true}
-	m := New(fixtureManifest(t), "essentials", current, runner)
+	m := New(fixtureManifest(t), "essentials", current, runner, nil)
 	m.cursor = 2 // starship
 
 	updated, _ := m.Update(keyMsg(" "))
@@ -129,7 +135,7 @@ func TestUpdate_SpaceTogglesBackToDeselectAndRunsUninstall(t *testing.T) {
 func TestUpdate_SpaceOnCoreItemRefusesAndShowsError(t *testing.T) {
 	runner := &fakeRunner{}
 	current := catalog.Selection{"git": true}
-	m := New(fixtureManifest(t), "essentials", current, runner)
+	m := New(fixtureManifest(t), "essentials", current, runner, nil)
 	m.cursor = 0 // git (core)
 
 	updated, _ := m.Update(keyMsg(" "))
@@ -148,7 +154,7 @@ func TestUpdate_SpaceOnCoreItemRefusesAndShowsError(t *testing.T) {
 
 func TestUpdate_SelectAllInCategory(t *testing.T) {
 	runner := &fakeRunner{}
-	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, runner)
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, runner, nil)
 
 	updated, _ := m.Update(keyMsg("a"))
 	m = updated.(Model)
@@ -166,7 +172,7 @@ func TestUpdate_SelectAllInCategory(t *testing.T) {
 func TestUpdate_DeselectAllInCategoryLeavesCoreItems(t *testing.T) {
 	runner := &fakeRunner{}
 	current := catalog.Selection{"git": true, "git-delta": true, "starship": true}
-	m := New(fixtureManifest(t), "essentials", current, runner)
+	m := New(fixtureManifest(t), "essentials", current, runner, nil)
 
 	updated, _ := m.Update(keyMsg("u"))
 	m = updated.(Model)
@@ -188,7 +194,7 @@ func TestUpdate_DeselectAllInCategoryLeavesCoreItems(t *testing.T) {
 
 func TestUpdate_FailedInstallDoesNotMarkItemSelected(t *testing.T) {
 	runner := &fakeRunner{err: errBoom}
-	m := New(fixtureManifest(t), "essentials", catalog.Selection{"git": true}, runner)
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{"git": true}, runner, nil)
 	m.cursor = 2 // starship
 
 	updated, _ := m.Update(keyMsg(" "))
@@ -205,7 +211,7 @@ func TestUpdate_FailedInstallDoesNotMarkItemSelected(t *testing.T) {
 func TestUpdate_FailedUninstallLeavesItemSelected(t *testing.T) {
 	runner := &fakeRunner{err: errBoom}
 	current := catalog.Selection{"git": true, "starship": true}
-	m := New(fixtureManifest(t), "essentials", current, runner)
+	m := New(fixtureManifest(t), "essentials", current, runner, nil)
 	m.cursor = 2 // starship
 
 	updated, _ := m.Update(keyMsg(" "))
@@ -219,7 +225,7 @@ func TestUpdate_FailedUninstallLeavesItemSelected(t *testing.T) {
 func TestUpdate_DeselectAllReportsCoreItemsLeftAlone(t *testing.T) {
 	runner := &fakeRunner{}
 	current := catalog.Selection{"git": true, "starship": true}
-	m := New(fixtureManifest(t), "essentials", current, runner)
+	m := New(fixtureManifest(t), "essentials", current, runner, nil)
 
 	updated, _ := m.Update(keyMsg("u"))
 	m = updated.(Model)
@@ -230,7 +236,7 @@ func TestUpdate_DeselectAllReportsCoreItemsLeftAlone(t *testing.T) {
 }
 
 func TestUpdate_CursorMovesWithinBounds(t *testing.T) {
-	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{})
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{}, nil)
 
 	updated, _ := m.Update(keyMsg("up"))
 	m = updated.(Model)
@@ -247,8 +253,54 @@ func TestUpdate_CursorMovesWithinBounds(t *testing.T) {
 	}
 }
 
+func TestUpdate_SpaceOnCapabilityBlockedItemRefusesAndShowsReason(t *testing.T) {
+	runner := &fakeRunner{}
+	caps := catalog.Capabilities{"nvidia-gpu": {Met: false, Reason: "No NVIDIA GPU detected on this machine"}}
+	m := New(fixtureManifest(t), "hardware", catalog.Selection{}, runner, caps)
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+
+	if m.selection["nvidia"] {
+		t.Errorf("selection[nvidia] = true, want false (capability not met)")
+	}
+	if !strings.Contains(m.statusMsg, "No NVIDIA GPU detected on this machine") {
+		t.Errorf("statusMsg = %q, want it to include the capability's reason", m.statusMsg)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("calls = %+v, want no script invocations", runner.calls)
+	}
+}
+
+func TestUpdate_SpaceOnCapabilityMetItemInstalls(t *testing.T) {
+	runner := &fakeRunner{}
+	caps := catalog.Capabilities{"nvidia-gpu": {Met: true}}
+	m := New(fixtureManifest(t), "hardware", catalog.Selection{}, runner, caps)
+
+	updated, _ := m.Update(keyMsg(" "))
+	m = updated.(Model)
+
+	if !m.selection["nvidia"] {
+		t.Errorf("selection[nvidia] = false, want true (capability met)")
+	}
+	want := []scriptCall{{script: "setup-nvidia.sh", args: []string{"--install", "nvidia-open-dkms"}}}
+	if !reflect.DeepEqual(runner.calls, want) {
+		t.Errorf("calls = %+v, want %+v", runner.calls, want)
+	}
+}
+
+func TestView_ShowsDisabledCapabilityGatedItemWithReason(t *testing.T) {
+	caps := catalog.Capabilities{"nvidia-gpu": {Met: false, Reason: "No NVIDIA GPU detected on this machine"}}
+	m := New(fixtureManifest(t), "hardware", catalog.Selection{}, &fakeRunner{}, caps)
+
+	view := m.View()
+	if !strings.Contains(view, "unavailable") || !strings.Contains(view, "No NVIDIA GPU detected on this machine") {
+		t.Errorf("View() = %q, want it to show the item disabled with its unmet-capability reason", view)
+	}
+}
+
 func TestUpdate_EscRequestsBack(t *testing.T) {
-	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{})
+	m := New(fixtureManifest(t), "essentials", catalog.Selection{}, &fakeRunner{}, nil)
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {

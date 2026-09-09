@@ -2,7 +2,7 @@
 
 # Minimal post-install after archinstall:
 # - enable multilib
-# - optionally install NVIDIA drivers (detect / saved preference / prompt)
+# - install NVIDIA drivers when hardware/packages are detected
 # - install Kitty + base tooling
 #
 # Hands off directly into bootstrap.sh at the end (any args are forwarded),
@@ -56,15 +56,11 @@ fi
 # --------------------------
 # NVIDIA (conditional)
 # --------------------------
-# Use --yes when INSTALL_NVIDIA is already saved (re-runs); otherwise prompt.
+# setup-nvidia.sh auto-installs only when NVIDIA hardware/packages are
+# detected — no prompt, no saved preference.
 
 if [ -r "$SCRIPT_DIR/scripts/setup-nvidia.sh" ]; then
-  load_bootstrap_config 2>/dev/null || true
-  if [ "${INSTALL_NVIDIA:-}" = "true" ] || [ "${INSTALL_NVIDIA:-}" = "false" ]; then
-    bash "$SCRIPT_DIR/scripts/setup-nvidia.sh" --yes
-  else
-    bash "$SCRIPT_DIR/scripts/setup-nvidia.sh"
-  fi
+  bash "$SCRIPT_DIR/scripts/setup-nvidia.sh"
 else
   echo "Warning: scripts/setup-nvidia.sh not found; skipping NVIDIA setup"
 fi

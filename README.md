@@ -76,11 +76,13 @@ You will be prompted for:
 
 - Full name + email (git)
 - Profiles (multi-select): **work**, **personal**, and/or **devcontainer**
-- Whether to install NVIDIA (`nvidia-open-dkms`)
 - Machine type: **laptop** or **desktop** (defaults to battery detection)
 
 Config is saved at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
-(`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES`, `SETUP_PROFILE` primary, `INSTALL_NVIDIA`, `MACHINE_TYPE`).
+(`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES`, `SETUP_PROFILE` primary, `MACHINE_TYPE`).
+NVIDIA driver install (`nvidia-open-dkms`) is no longer a saved preference — it
+auto-installs when hardware/packages are detected, and is also an ordinary
+`dfa` catalog item gated on the "NVIDIA GPU detected" capability.
 
 Bootstrap then: updates pacman/yay → runs all setup scripts → configures GNOME (if present) → symlinks dotfiles.
 
@@ -183,7 +185,7 @@ On AC with the lid closed, the laptop stays awake; keyboard/mouse on a KVM can a
 
 ### NVIDIA
 
-Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap an already-installed driver flavor. See [NOTES.md](NOTES.md).
+Installed automatically only when NVIDIA hardware/packages are detected — no saved preference. Prefers **`nvidia-open-dkms`**; does not swap an already-installed driver flavor. Also available as an ordinary `dfa` catalog item, gated on the "NVIDIA GPU detected" capability. See [NOTES.md](NOTES.md).
 
 ---
 

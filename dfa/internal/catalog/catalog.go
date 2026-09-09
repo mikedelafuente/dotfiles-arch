@@ -117,6 +117,55 @@ func (m Manifest) dependents(id string) []string {
 	return out
 }
 
+// CapabilityStatus is a detected machine fact about one named Capability
+// (e.g. "nvidia-gpu"): whether it's currently met, and — when it isn't — the
+// plain-language reason to show the user in place of the gated item's
+// controls.
+type CapabilityStatus struct {
+	Met    bool
+	Reason string
+}
+
+// Capabilities maps a Capability name (as referenced by Item.Capabilities)
+// to its currently detected status on this machine. It is plain data — the
+// System Adapter does the actual detection (lspci/sysfs probes, cached
+// user-declared answers) and builds this map; the Catalog Engine only
+// evaluates against it.
+type Capabilities map[string]CapabilityStatus
+
+// CapabilityGap names one capability a Software Item requires that isn't
+// currently met, plus the plain-language reason to show the user.
+type CapabilityGap struct {
+	Name   string
+	Reason string
+}
+
+const unmetCapabilityDefaultReason = "not available on this machine"
+
+// Gaps returns the capabilities item requires that aren't met by caps, in
+// the item's declared order — nil if the item has no requirements or every
+// requirement is met.
+func Gaps(item Item, caps Capabilities) []CapabilityGap {
+	var out []CapabilityGap
+	for _, name := range item.Capabilities {
+		status, ok := caps[name]
+		if ok && status.Met {
+			continue
+		}
+		reason := unmetCapabilityDefaultReason
+		if ok {
+			reason = status.Reason
+		}
+		out = append(out, CapabilityGap{Name: name, Reason: reason})
+	}
+	return out
+}
+
+// Available reports whether every capability item requires is met.
+func Available(item Item, caps Capabilities) bool {
+	return len(Gaps(item, caps)) == 0
+}
+
 // Selection is the set of currently-selected item ids.
 type Selection map[string]bool
 
@@ -137,6 +186,11 @@ var ErrUnknownItem = errors.New("catalog: unknown item id")
 // Core item. The Catalog Engine refuses such plans outright.
 var ErrCoreItemUninstall = errors.New("catalog: cannot uninstall a core item")
 
+// ErrCapabilityNotMet is returned when a requested selection targets an item
+// (or, via dependency resolution, pulls in an item) whose Capability
+// requirements aren't met.
+var ErrCapabilityNotMet = errors.New("catalog: capability requirement not met")
+
 // Plan is the result of applying a selection change: the resulting
 // selection, plus the concrete install/uninstall work and any side effects
 // (auto-selected dependencies, cascade-deselected dependents) that
@@ -151,6 +205,10 @@ type Plan struct {
 	// selected rather than refusing the whole plan over, so callers can
 	// surface why not everything in the category came out.
 	CoreItemsSkipped []string
+	// CapabilityBlocked lists items a SelectCategory call left unselected
+	// because their Capability requirements aren't met, rather than
+	// refusing the whole plan over them.
+	CapabilityBlocked []string
 }
 
 func sortedKeys(m map[string]bool) []string {
@@ -189,8 +247,10 @@ func Diff(current, desired Selection) Plan {
 }
 
 // Select adds itemID to the selection, transitively auto-selecting any
-// declared dependencies that aren't already selected.
-func Select(manifest Manifest, current Selection, itemID string) (Plan, error) {
+// declared dependencies that aren't already selected. It refuses (returning
+// ErrCapabilityNotMet) if itemID — or any dependency the resolution would
+// also select — has an unmet Capability requirement.
+func Select(manifest Manifest, current Selection, itemID string, caps Capabilities) (Plan, error) {
 	if _, ok := manifest.Item(itemID); !ok {
 		return Plan{}, fmt.Errorf("%w: %s", ErrUnknownItem, itemID)
 	}
@@ -198,19 +258,27 @@ func Select(manifest Manifest, current Selection, itemID string) (Plan, error) {
 	desired := current.Clone()
 	var autoSelected []string
 
-	var visit func(id string, isRoot bool)
-	visit = func(id string, isRoot bool) {
+	var visit func(id string, isRoot bool) error
+	visit = func(id string, isRoot bool) error {
+		it := manifest.byID[id]
+		if !Available(it, caps) {
+			return fmt.Errorf("%w: %s", ErrCapabilityNotMet, id)
+		}
 		alreadySelected := desired[id]
 		desired[id] = true
 		if !alreadySelected && !isRoot {
 			autoSelected = append(autoSelected, id)
 		}
-		it := manifest.byID[id]
 		for _, dep := range it.Dependencies {
-			visit(dep, false)
+			if err := visit(dep, false); err != nil {
+				return err
+			}
 		}
+		return nil
 	}
-	visit(itemID, true)
+	if err := visit(itemID, true); err != nil {
+		return Plan{}, err
+	}
 
 	plan := Diff(current, desired)
 	plan.AutoSelected = autoSelected
@@ -263,21 +331,32 @@ func Deselect(manifest Manifest, current Selection, itemID string) (Plan, error)
 }
 
 // SelectCategory selects every item in the given category (plus their
-// transitive dependencies).
-func SelectCategory(manifest Manifest, current Selection, category string) (Plan, error) {
+// transitive dependencies). An item whose Capability requirements aren't met
+// is left unselected rather than failing the whole call — it's reported via
+// Plan.CapabilityBlocked instead.
+func SelectCategory(manifest Manifest, current Selection, category string, caps Capabilities) (Plan, error) {
 	desired := current.Clone()
 	var autoSelected []string
+	var capBlocked []string
 	seen := map[string]bool{}
+	seenBlocked := map[string]bool{}
 
 	var visit func(id string, isRoot bool)
 	visit = func(id string, isRoot bool) {
+		it := manifest.byID[id]
+		if !Available(it, caps) {
+			if isRoot && !seenBlocked[id] {
+				capBlocked = append(capBlocked, id)
+				seenBlocked[id] = true
+			}
+			return
+		}
 		alreadySelected := desired[id]
 		desired[id] = true
 		if !alreadySelected && !isRoot && !seen[id] {
 			autoSelected = append(autoSelected, id)
 			seen[id] = true
 		}
-		it := manifest.byID[id]
 		for _, dep := range it.Dependencies {
 			visit(dep, false)
 		}
@@ -293,6 +372,7 @@ func SelectCategory(manifest Manifest, current Selection, category string) (Plan
 
 	plan := Diff(current, desired)
 	plan.AutoSelected = autoSelected
+	plan.CapabilityBlocked = capBlocked
 	return plan, nil
 }
 

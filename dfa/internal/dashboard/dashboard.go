@@ -27,6 +27,24 @@ const installSoftwareTitle = "Install/Uninstall Software"
 // screen exposes so far — later tickets grow the rest of the taxonomy.
 const essentialsCategory = "essentials"
 
+// nvidiaGPUCapability is the Capability name the "nvidia" catalog item
+// (dfa/catalog/items/nvidia.toml) is gated on.
+const nvidiaGPUCapability = "nvidia-gpu"
+
+// detectCapabilities builds the machine facts the Catalog Engine evaluates
+// capability-gated items against (see catalog.Gaps/Available), probing
+// hardware through the System Adapter.
+func detectCapabilities() catalog.Capabilities {
+	met := system.HasNVIDIAHardware()
+	reason := ""
+	if !met {
+		reason = "No NVIDIA GPU detected on this machine"
+	}
+	return catalog.Capabilities{
+		nvidiaGPUCapability: {Met: met, Reason: reason},
+	}
+}
+
 // screenItem is one row in the dashboard list: a planned dfa screen.
 type screenItem struct {
 	title       string
@@ -193,7 +211,7 @@ func (m *Model) enterSoftwareScreen() {
 	}
 
 	runner := software.ScriptsDirRunner{ScriptsDir: filepath.Join(m.repoRoot, "scripts")}
-	sm := software.New(m.manifest, essentialsCategory, selection, runner)
+	sm := software.New(m.manifest, essentialsCategory, selection, runner, detectCapabilities())
 	m.software = &sm
 }
 

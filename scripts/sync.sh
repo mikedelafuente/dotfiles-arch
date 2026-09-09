@@ -107,11 +107,9 @@ done
 mkdir -p "$(bootstrap_config_dir)"
 
 SAVED_PROFILES=""
-SAVED_NVIDIA=""
 SAVED_MACHINE_TYPE=""
 if load_bootstrap_config; then
   SAVED_PROFILES="${SETUP_PROFILES:-}"
-  SAVED_NVIDIA="${INSTALL_NVIDIA:-}"
   SAVED_MACHINE_TYPE="${MACHINE_TYPE:-}"
 fi
 
@@ -165,13 +163,6 @@ SETUP_PROFILE="$(primary_setup_profile)"
 if ! validate_bootstrap_profile; then
   print_error_message "Profiles must be a non-empty subset of work|personal|devcontainer (got: ${SETUP_PROFILES:-})"
   exit 1
-fi
-
-INSTALL_NVIDIA="${SAVED_NVIDIA:-}"
-if [ -z "$INSTALL_NVIDIA" ] || [ "$FORCE_PROMPT" = true ]; then
-  resolve_nvidia_preference
-else
-  print_info_message "Using INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
 fi
 
 MACHINE_TYPE="${SAVED_MACHINE_TYPE:-}"

@@ -59,7 +59,7 @@ fi
 # in argv.json alone does not fix this). Forcing the Chromium/Electron ozone platform to
 # x11 (XWayland) works around it. Gated on actual PCI hardware (has_nvidia_hardware), not
 # installed driver packages — a machine can have nvidia-* packages left over from a prior
-# INSTALL_NVIDIA=true run with no NVIDIA GPU physically present. Skip entirely when NVIDIA
+# NVIDIA catalog-item install with no NVIDIA GPU physically present. Skip entirely when NVIDIA
 # hardware is present, where the default path is already exercised and known-good.
 CURSOR_SYSTEM_DESKTOP_FILE="/usr/share/applications/cursor.desktop"
 CURSOR_USER_APPLICATIONS_DIR="$USER_HOME_DIR/.local/share/applications"

@@ -168,7 +168,7 @@ skipped with a warning if Cursor isn't installed.
 
 | Package | Script | Purpose |
 |---------|--------|---------|
-| `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` | `setup-nvidia.sh` | NVIDIA drivers, installed only when `INSTALL_NVIDIA=true` |
+| `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` | `setup-nvidia.sh` | NVIDIA drivers — auto-installed when NVIDIA hardware/packages are detected; also a `dfa` catalog item gated on the "NVIDIA GPU detected" capability |
 
 ## Build / AUR plumbing
 

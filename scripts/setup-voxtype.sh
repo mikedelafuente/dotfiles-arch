@@ -96,7 +96,7 @@ fi
 # NVIDIA has a CUDA-accelerated Parakeet backend, which is faster and more
 # accurate than the default Whisper model. Check for a working driver
 # (nvidia-smi), not just NVIDIA PCI hardware — a card with no driver
-# installed (e.g. INSTALL_NVIDIA=false, or nouveau) has no CUDA to use.
+# installed (e.g. the nvidia catalog item was never selected, or nouveau) has no CUDA to use.
 if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
     print_info_message "NVIDIA driver detected — downloading and activating the Parakeet model"
     voxtype setup --download --model parakeet-tdt-0.6b-v3 --activate --no-post-install || print_warning_message "voxtype setup --download (parakeet) failed — run it manually to fetch the speech model"

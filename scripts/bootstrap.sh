@@ -145,7 +145,6 @@ if ! validate_bootstrap_profile; then
   exit 1
 fi
 
-resolve_nvidia_preference
 resolve_machine_type
 
 if [ "$ASSUME_YES" = false ]; then
@@ -154,7 +153,6 @@ if [ "$ASSUME_YES" = false ]; then
   echo "Full Name: $(fmt_choice "$FULL_NAME")"
   echo "Email Address: $(fmt_choice "$EMAIL_ADDRESS")"
   echo "Setup Profiles: $(fmt_choice "$(format_setup_profiles)")"
-  echo "Install NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
   echo "Machine Type: $(fmt_choice "$MACHINE_TYPE")"
   read -rp "Is this information correct? [y/n] (Enter = $(fmt_choice "no")): " CONFIRMATION
   if [[ ! "${CONFIRMATION:-}" =~ ^[Yy]$ ]]; then
@@ -168,7 +166,7 @@ write_bootstrap_config
 print_line_break "Starting bootstrap"
 print_info_message "Display server: ${XDG_SESSION_TYPE:-unknown}"
 print_info_message "User: $(whoami)  Home: $USER_HOME_DIR"
-print_info_message "Profiles: $(format_setup_profiles)  INSTALL_NVIDIA: $INSTALL_NVIDIA  MACHINE_TYPE: $MACHINE_TYPE"
+print_info_message "Profiles: $(format_setup_profiles)  MACHINE_TYPE: $MACHINE_TYPE"
 
 sudo -v
 start_sudo_keepalive

@@ -130,8 +130,7 @@ bootstrap_config_file() {
 KNOWN_SETUP_PROFILES=(work personal devcontainer)
 
 # Source saved bootstrap config if present
-# (FULL_NAME, EMAIL, SETUP_PROFILES, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE,
-# DEFAULT_AGENT).
+# (FULL_NAME, EMAIL, SETUP_PROFILES, SETUP_PROFILE, MACHINE_TYPE, DEFAULT_AGENT).
 load_bootstrap_config() {
   local f
   f="$(bootstrap_config_file)"
@@ -219,7 +218,7 @@ validate_bootstrap_profile() {
   return 0
 }
 
-# Write current identity/profile/NVIDIA/machine prefs (full rewrite of known keys).
+# Write current identity/profile/machine prefs (full rewrite of known keys).
 # Values are shell-escaped so a sourced config cannot inject code via quotes/$().
 # SETUP_PROFILES is canonical (space-separated multi-select); SETUP_PROFILE is primary (compat).
 write_bootstrap_config() {
@@ -239,7 +238,6 @@ write_bootstrap_config() {
     printf 'EMAIL_ADDRESS=%q\n' "${EMAIL_ADDRESS:-}"
     printf 'SETUP_PROFILES=%q\n' "${SETUP_PROFILES}"
     printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE}"
-    printf 'INSTALL_NVIDIA=%q\n' "${INSTALL_NVIDIA:-false}"
     printf 'MACHINE_TYPE=%q\n' "${MACHINE_TYPE:-}"
     printf 'DEFAULT_AGENT=%q\n' "${DEFAULT_AGENT:-}"
   } >"$f"
@@ -365,62 +363,6 @@ machine_is_laptop() {
     laptop) return 0 ;;
     desktop) return 1 ;;
     *) has_battery ;;
-  esac
-}
-
-# Resolve INSTALL_NVIDIA from saved value / hardware / prompts.
-# Uses ASSUME_YES=true|false (default false). Sets INSTALL_NVIDIA to true|false.
-resolve_nvidia_preference() {
-  local assume_yes="${ASSUME_YES:-false}"
-  local nvidia_default="false"
-  local default_label nvidia_input
-
-  if [[ "${INSTALL_NVIDIA:-}" == "true" || "${INSTALL_NVIDIA:-}" == "false" ]]; then
-    if [[ "$assume_yes" == "true" ]]; then
-      return 0
-    fi
-    echo ""
-    print_info_message "Current INSTALL_NVIDIA: $(fmt_choice "$INSTALL_NVIDIA")"
-    read -rp "Press Enter to keep INSTALL_NVIDIA=$(fmt_choice "$INSTALL_NVIDIA"), or type true/false: " nvidia_input
-    case "${nvidia_input,,}" in
-      "") ;; # Enter → keep
-      true|y|yes) INSTALL_NVIDIA="true" ;;
-      false|n|no|0) INSTALL_NVIDIA="false" ;;
-      *)
-        print_warning_message "Unrecognized input '$nvidia_input'; keeping INSTALL_NVIDIA=$INSTALL_NVIDIA"
-        ;;
-    esac
-    return 0
-  fi
-
-  if has_nvidia_packages || has_nvidia_hardware; then
-    nvidia_default="true"
-  fi
-
-  if [[ "$assume_yes" == "true" ]]; then
-    INSTALL_NVIDIA="$nvidia_default"
-    print_info_message "INSTALL_NVIDIA not saved — auto-set to $INSTALL_NVIDIA (packages/hardware detect)"
-    return 0
-  fi
-
-  echo ""
-  print_info_message "NVIDIA drivers are optional (skip on AMD/Intel-only machines)."
-  if has_nvidia_packages; then
-    print_info_message "Detected: NVIDIA packages already installed (likely from archinstall)"
-  fi
-  if has_nvidia_hardware; then
-    print_info_message "Detected: NVIDIA GPU on PCI bus"
-  fi
-  if [[ "$nvidia_default" == "true" ]]; then
-    default_label="yes"
-  else
-    default_label="no"
-  fi
-  read -rp "Install/keep NVIDIA drivers on this machine? [y/n] (Enter = $(fmt_choice "$default_label")): " nvidia_input
-  nvidia_input="${nvidia_input:-$nvidia_default}"
-  case "${nvidia_input,,}" in
-    y|yes|true) INSTALL_NVIDIA="true" ;;
-    *) INSTALL_NVIDIA="false" ;;
   esac
 }
 
@@ -848,7 +790,7 @@ start_sudo_keepalive() {
 run_profile_setup_scripts() {
   local assume_yes="${1:-false}" rc
 
-  export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS INSTALL_NVIDIA MACHINE_TYPE
+  export SETUP_PROFILES SETUP_PROFILE FULL_NAME EMAIL_ADDRESS MACHINE_TYPE
   export SETUP_CONTINUE_ON_ERROR=true
   if [[ "$assume_yes" == "true" ]]; then
     export DOTFILES_AUR_ASSUME_YES=true
