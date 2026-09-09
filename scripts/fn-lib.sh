@@ -559,6 +559,28 @@ has_intel_gpu_hardware() {
   _has_gpu_vendor '\bIntel\b'
 }
 
+# True when the system can actually enumerate a Vulkan device (loader + a
+# working ICD), not just "a GPU exists" — prefers `vulkaninfo` (vulkan-tools)
+# since it's the canonical tool for this and queries the real loader/ICD
+# stack, reporting zero devices or erroring out if nothing usable is
+# registered. Falls back to checking for an installed ICD JSON under
+# /usr/share/vulkan/icd.d/ when vulkaninfo isn't installed — a lighter-weight
+# signal that a driver package (mesa, nvidia-utils, etc.) registered a
+# loadable Vulkan driver, though unlike vulkaninfo it can't confirm the
+# device actually enumerates.
+has_vulkan_support() {
+  if command -v vulkaninfo &>/dev/null; then
+    vulkaninfo --summary 2>/dev/null | grep -q 'deviceName'
+    return $?
+  fi
+  local icd
+  for icd in /usr/share/vulkan/icd.d/*.json; do
+    [[ -r "$icd" ]] || continue
+    return 0
+  done
+  return 1
+}
+
 # --------------------------
 # JSON config helpers
 # --------------------------
