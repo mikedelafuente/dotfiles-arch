@@ -116,6 +116,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `spotify` (AUR) | `setup-spotify.sh` | Music |
 | `obsidian` (AUR) | `setup-obsidian.sh` | Notes |
 | `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
+| `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
 | `zed` | `setup-zed.sh` | Code editor |
 | `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
 

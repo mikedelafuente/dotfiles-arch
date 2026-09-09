@@ -111,7 +111,21 @@ fi
 # both cases.
 if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null || { [[ -d /usr/share/vulkan/icd.d ]] && find /usr/share/vulkan/icd.d -maxdepth 1 -name "*.json" -print -quit 2>/dev/null | grep -q .; }; then
     print_info_message "GPU detected — enabling GPU transcription"
-    voxtype setup gpu --enable || print_warning_message "voxtype setup gpu --enable failed — transcription will stay on CPU"
+
+    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        # Parakeet's ONNX Runtime CUDA execution provider needs the CUDA
+        # runtime + cuDNN shared libraries (libcublas/libcudart/libcudnn/
+        # libcufft/libcurand) — nvidia-open-dkms/nvidia-utils only ship the
+        # driver itself, so without these voxtype silently falls back to
+        # CPU. No lighter official-repo package ships just the runtime
+        # libs; `cuda` (~2.2GiB) pulls in `cudnn`'s dependency floor too.
+        print_info_message "Ensuring CUDA runtime libraries are installed (cuda, cudnn — large download)"
+        ensure_pacman_pkgs cuda cudnn
+    fi
+
+    # Swaps in the GPU-enabled /usr/bin/voxtype binary, which is
+    # root-owned (installed via pacman/yay) — needs sudo.
+    sudo voxtype setup gpu --enable || print_warning_message "voxtype setup gpu --enable failed — transcription will stay on CPU"
 fi
 
 # --------------------------
