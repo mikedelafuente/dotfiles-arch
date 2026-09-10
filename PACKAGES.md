@@ -97,6 +97,8 @@ directly-installed packages are listed; transitive dependencies are not.
 | `php`, `php-gd`, `php-intl`, `php-sqlite`, `php-pgsql`, `composer` | `setup-php.sh` | PHP development | `php`, `composer` |
 | NVM + Node LTS (not pacman) | `setup-node.sh` | Node via NVM at `~/.config/nvm` | `nvm`, `node`, `npm` |
 | Claude Code (user-level npm) | `setup-claude.sh` | Claude Code CLI | `claude` |
+| Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
+| `ollama` / `ollama-cuda` / `ollama-rocm` | `setup-ollama.sh` | Local model server (CUDA flavor on a working NVIDIA driver) | `ollama` |
 
 ## Containers and Kubernetes
 
@@ -125,12 +127,10 @@ directly-installed packages are listed; transitive dependencies are not.
 Profiles are **additive multi-select** — enable any combination on one machine
 (`SETUP_PROFILES`, e.g. `work devcontainer`). Shared stack always installs first.
 
-### work — `setup-cursor.sh`, `setup-zoom.sh`, `setup-slack.sh`, `setup-chrome.sh`
+### work — `setup-zoom.sh`, `setup-slack.sh`, `setup-chrome.sh`
 
 | Package | Purpose | Related commands |
 |---------|---------|-------------------|
-| `cursor-bin` (AUR) | Cursor IDE | `cursor` |
-| `cursor-cli` (AUR) | Cursor Agent CLI | `cursor-agent`, `agent` |
 | `zoom` (AUR) | Meetings | — |
 | `slack-desktop` (AUR) | Team chat | — |
 | `google-chrome` (AUR) | Work browser (Super+B when work is selected) | — |
@@ -149,9 +149,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 
 Host prerequisites for the platform / work devcontainer sandbox.
 Docker and GitHub CLI are already on the shared stack; this profile adds
-the rest of the host checklist (tools, DNS, watches, CA trust). The Cursor
-Dev Containers extension step below requires Cursor (work profile) — it's
-skipped with a warning if Cursor isn't installed.
+the rest of the host checklist (tools, DNS, watches, CA trust).
 
 | Package / config | Purpose | Related commands |
 |------------------|---------|------------------|
@@ -160,7 +158,6 @@ skipped with a warning if Cursor isn't installed.
 | `nss` | Firefox/trust-store support used by mkcert | — |
 | `bind` | `dig` for DNS smoke checks to port 5354 | `dig @127.0.0.1 -p 5354 …` |
 | `openvpn3` (AUR) | OpenVPN 3 Linux client (CloudConnexa / work VPN). Official docs only cover apt/dnf; AUR ships the same `openvpn3-linux` project. | `openvpn3 config-import`, `session-start`, `sessions-list`, `session-manage` |
-| Cursor extension `ms-vscode-remote.remote-containers` | “Reopen in Container” | — |
 | `/etc/systemd/resolved.conf.d/dotfiles-arch-test.conf` | Route `Domains=~test` to `127.0.0.1:5354` | restart `systemd-resolved` |
 | `/etc/sysctl.d/99-dotfiles-arch-inotify.conf` | Raise `fs.inotify.max_user_watches` to 524288 | — |
 

@@ -424,40 +424,40 @@ resolve_nvidia_preference() {
   esac
 }
 
-# Resolve DEFAULT_AGENT (cursor|claude) — the agent `code` starts when run
+# Resolve DEFAULT_AGENT (claude|codex) — the agent `code` starts when run
 # without --agent. Detects which agent CLIs are actually on PATH: auto-picks
 # the only one installed, asks when both are present (Enter keeps the saved
 # choice), and leaves DEFAULT_AGENT empty when neither is installed.
 # Uses ASSUME_YES=true|false (default false).
 resolve_default_agent() {
   local assume_yes="${ASSUME_YES:-false}"
-  local have_claude=false have_cursor=false
+  local have_claude=false have_codex=false
   local current_default agent_input
 
   command -v claude &>/dev/null && have_claude=true
-  { command -v cursor-agent &>/dev/null || command -v agent &>/dev/null; } && have_cursor=true
+  command -v codex &>/dev/null && have_codex=true
 
-  if [[ "$have_claude" != "true" && "$have_cursor" != "true" ]]; then
+  if [[ "$have_claude" != "true" && "$have_codex" != "true" ]]; then
     DEFAULT_AGENT=""
     return 0
   fi
 
-  if [[ "$have_claude" == "true" && "$have_cursor" != "true" ]]; then
+  if [[ "$have_claude" == "true" && "$have_codex" != "true" ]]; then
     DEFAULT_AGENT="claude"
-    print_info_message "DEFAULT_AGENT auto-set to claude (Cursor Agent CLI not installed)"
+    print_info_message "DEFAULT_AGENT auto-set to claude (Codex CLI not installed)"
     return 0
   fi
 
-  if [[ "$have_cursor" == "true" && "$have_claude" != "true" ]]; then
-    DEFAULT_AGENT="cursor"
-    print_info_message "DEFAULT_AGENT auto-set to cursor (Claude CLI not installed)"
+  if [[ "$have_codex" == "true" && "$have_claude" != "true" ]]; then
+    DEFAULT_AGENT="codex"
+    print_info_message "DEFAULT_AGENT auto-set to codex (Claude CLI not installed)"
     return 0
   fi
 
   # Both installed — ask which `code` should default to.
-  current_default="${DEFAULT_AGENT:-cursor}"
-  if [[ "$current_default" != "cursor" && "$current_default" != "claude" ]]; then
-    current_default="cursor"
+  current_default="${DEFAULT_AGENT:-claude}"
+  if [[ "$current_default" != "codex" && "$current_default" != "claude" ]]; then
+    current_default="claude"
   fi
 
   if [[ "$assume_yes" == "true" ]]; then
@@ -467,12 +467,12 @@ resolve_default_agent() {
   fi
 
   echo ""
-  print_info_message "Both Cursor Agent and Claude Code CLIs are installed."
-  read -rp "Which should 'code' use by default? [cursor/claude] (Enter = $(fmt_choice "$current_default")): " agent_input
+  print_info_message "Both Claude Code and Codex CLIs are installed."
+  read -rp "Which should 'code' use by default? [claude/codex] (Enter = $(fmt_choice "$current_default")): " agent_input
   agent_input="${agent_input:-$current_default}"
   case "${agent_input,,}" in
-    cursor) DEFAULT_AGENT="cursor" ;;
     claude) DEFAULT_AGENT="claude" ;;
+    codex) DEFAULT_AGENT="codex" ;;
     *)
       print_warning_message "Unrecognized input '$agent_input'; using $current_default"
       DEFAULT_AGENT="$current_default"

@@ -1,6 +1,6 @@
 # dotfiles-arch
 
-Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitty, tmux, Neovim, Cursor, Claude Code, and a modular bootstrap/sync system.
+Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitty, tmux, Neovim, Claude Code, Codex, and a modular bootstrap/sync system.
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
@@ -128,11 +128,11 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
-| **work** | Cursor IDE + Agent CLI, Zoom, Slack, Chrome | Chrome (when work is selected) |
+| **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
 | **personal** | Steam, Discord, Firefox, Mullvad VPN, opencode | Firefox (when personal is selected and work is not) |
-| **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches, Dev Containers extension | — (no browser change) |
+| **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches | — (no browser change) |
 
-Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup). Cursor is work-only — the devcontainer profile's Dev Containers extension step just warns and skips it if Cursor isn't installed.
+Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup, and both agent CLIs — Claude Code and Codex).
 
 ---
 
@@ -145,7 +145,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
 | **Multiplexer** | tmux |
-| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Cursor IDE + Agent CLI (`agent`, work profile only), Zed |
+| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Codex (`codex`), Ollama (local models), Zed |
 | **Git** | git, lazygit (`lzg`), GitHub CLI (`gh`) |
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
@@ -227,7 +227,7 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous window |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-code.sh` (auto-picked if only one CLI is installed, asked if both are). Cursor saved workspaces: `code <dir> --agent cursor --workspace day-to-day`. Either agent's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-cursor.sh`.
+Agents: `code <dir> --agent claude` or `--agent codex` starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_AGENT` — set during `setup-code.sh` (auto-picked if only one CLI is installed, asked if both are). Either agent's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-codex.sh`.
 
 **Zed:** a Terminal Thread (Agent Panel → "+" → Terminal, or `Ctrl+Alt+T` — see `config/zed/keymap.json`) runs `zed-agent-init`, which starts the same `DEFAULT_AGENT` CLI as `code` — no separate reveal hook is needed since the agent runs inside the same Zed window as the editor, so Zed's own file watcher picks up its edits.
 
@@ -235,7 +235,7 @@ Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the s
 
 | Command | What it does |
 |---------|----------------|
-| `code [dir]` | tmux session: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent cursor --workspace NAME` for Cursor CLI workspace) |
+| `code [dir]` | tmux session: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent claude\|codex` to pick the agent) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
@@ -250,8 +250,9 @@ Agents: `code <dir> --agent cursor` or `--agent claude` starts that CLI in the s
 | `welcome` | Shell cheat sheet |
 | `aliases` | Aliases + key bindings |
 | `packages` | What every installed package is for ([PACKAGES.md](PACKAGES.md)) |
-| `agent --mode ask "…"` | Ask Cursor Agent from the CLI |
 | `claude` | Claude Code CLI |
+| `codex` | Codex CLI |
+| `ollama run <model>` | Chat with a local model |
 | `reload` | Reload `~/.bashrc` |
 
 Readline (Tab menu-complete, history search, word jumps): see `welcome` or `~/.inputrc`.
@@ -266,7 +267,7 @@ Neovim: leader is **Space** — full map in `~/.nvim-cheatsheet.md` (`vimcheat`)
 ## Day-to-day workflow
 
 1. **Terminal** — Super+Return (Kitty).
-2. **Project** — `cd` / `z` into a repo, then `code` for tmux + Neovim, or open Cursor / Claude as needed.
+2. **Project** — `cd` / `z` into a repo, then `code` for tmux + Neovim, or run `claude` / `codex` as needed.
 3. **Git** — `gs` / `lzg`; GitHub with `gh`.
 4. **Docker** — `dps` / `lzd`.
 5. **Clipboard history** — Super+V.
@@ -283,7 +284,7 @@ dotfiles-arch/
 ├── PACKAGES.md            ← what each installed package is for (`packages`)
 ├── NOTES.md               ← WiFi, archinstall, NVIDIA, sync details
 ├── CLAUDE.md              ← architecture notes for AI agents
-├── AGENTS.md              ← pointer file for Cursor / other agents
+├── AGENTS.md              ← pointer file for Claude Code / Codex / other agents
 ├── .cursor/rules/         ← repo conventions for AI agents
 ├── prepare-archinstall.sh ← guided disk/hostname/gfx_driver prep, before archinstall
 ├── post_install.sh        ← minimal post-archinstall (chains into bootstrap.sh)

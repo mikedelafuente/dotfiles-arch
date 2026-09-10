@@ -32,10 +32,10 @@ resolve_dotfiles_arch() {
 }
 
 # Resolve the saved DEFAULT_AGENT (from setup-code.sh, see fn-lib.sh's
-# resolve_default_agent) to the actual CLI binary to run — echoes "claude",
-# "cursor-agent", or "agent" (cursor-cli's compat shim), or returns 1 if the
-# saved choice is unset/stale (its CLI no longer on PATH). Used by both
-# `code` (no --agent flag) and `zed-agent-init` so the two stay in sync.
+# resolve_default_agent) to the actual CLI binary to run — echoes "claude" or
+# "codex", or returns 1 if the saved choice is unset/stale (its CLI no longer
+# on PATH). Used by both `code` (no --agent flag) and `zed-agent-init` so the
+# two stay in sync.
 resolve_default_agent_command() {
   local bootstrap_config="$HOME/.config/dotfiles-arch/.dotfiles_bootstrap_config"
   local default_agent=""
@@ -46,12 +46,9 @@ resolve_default_agent_command() {
   fi
 
   case "$default_agent" in
-    cursor)
-      if command -v cursor-agent &>/dev/null; then
-        echo "cursor-agent"
-        return 0
-      elif command -v agent &>/dev/null; then
-        echo "agent"
+    codex)
+      if command -v codex &>/dev/null; then
+        echo "codex"
         return 0
       fi
       ;;

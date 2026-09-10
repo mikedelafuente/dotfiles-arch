@@ -65,19 +65,16 @@ tmux ls               # list sessions
 Open Neovim + an agent pane together:
 
 ```bash
-code <dir> --agent cursor
-code <dir> --agent cursor --workspace day-to-day
 code <dir> --agent claude
+code <dir> --agent codex
 ```
 
-### …ask Cursor from the terminal
+### …ask an agent from the terminal
 
 ```bash
-agent --mode ask "How does sync.sh decide the profile?"
-agent -p --mode ask "Summarize setup-gnome.sh shortcuts"
+claude
+codex
 ```
-
-IDE: just run `cursor`. Claude CLI: `claude`.
 
 ### …git / docker TUIs
 
@@ -177,10 +174,10 @@ KVM), and audio power saving. Re-ask any saved answer with
 ```bash
 packages         # what every installed package is for (PACKAGES.md)
 aliases          # aliases + key bindings
-command -v tmux kitty nvim agent claude
+command -v tmux kitty nvim claude codex ollama
 ```
 
-Shared highlights: Kitty, tmux, Neovim, Cursor + `agent`, Claude, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
+Shared highlights: Kitty, tmux, Neovim, Claude Code, Codex, Ollama, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
 
 ### …reload shell config after editing bashrc
 
