@@ -76,7 +76,9 @@ run_setup setup-bash.sh
 run_setup setup-kitty.sh
 run_setup setup-claude.sh
 run_setup setup-codex.sh
+run_setup setup-opencode.sh
 run_setup setup-ollama.sh
+run_setup setup-harness-agents.sh
 run_setup setup-python.sh
 run_setup setup-rust.sh
 run_setup setup-golang.sh
@@ -102,12 +104,11 @@ if has_setup_profile work; then
 fi
 
 if has_setup_profile personal; then
-  print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad + opencode"
+  print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad"
   run_setup setup-steam.sh
   run_setup setup-discord.sh
   run_setup setup-firefox.sh
   run_setup setup-mullvad.sh
-  run_setup setup-opencode.sh
 fi
 
 if has_setup_profile devcontainer; then

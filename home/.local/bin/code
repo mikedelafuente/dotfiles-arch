@@ -1,11 +1,14 @@
 #!/bin/bash
 
 # code - Open a tmux development session with Neovim (+ agent pane) for a git repo
-# Usage: code [--force|-f] [--agent claude|codex] [directory]
+# Usage: code [--force|-f] [--agent <harness>] [directory]
 #   directory:    Path to project directory (defaults to current directory)
 #   --force:      Open even when the directory is not a git repository
-#   --agent:      Start an agent (claude or codex) in the split pane; defaults to
-#                 DEFAULT_AGENT from setup-code.sh (a plain shell if neither is installed)
+#   --agent:      Start an agent harness (see KNOWN_HARNESSES in dotfiles-arch-lib.sh,
+#                 e.g. claude, codex, opencode) in the split pane; defaults to
+#                 DEFAULT_HARNESS from setup-code.sh, falling back to whichever
+#                 harness is actually installed if that saved choice is stale
+#                 (a plain shell if none are installed)
 #
 # - Always kills and recreates a session named after the target directory (fresh state).
 # - Window "code": Neovim (left, ~75%) + the default (or --agent) agent CLI / plain shell (right, ~25%)
@@ -33,18 +36,18 @@ while [[ $# -gt 0 ]]; do
         --agent)
             AGENT="${2:-}"
             if [[ -z "$AGENT" ]]; then
-                echo "Error: --agent requires a value (claude or codex)"
+                echo "Error: --agent requires a value (${KNOWN_HARNESSES[*]})"
                 exit 1
             fi
             shift 2
             ;;
         -h|--help)
-            cat <<'EOF'
-Usage: code [--force|-f] [--agent claude|codex] [directory]
+            cat <<EOF
+Usage: code [--force|-f] [--agent <harness>] [directory]
 
-  --agent claude|codex   Start that agent CLI in the split pane
-                          (default: DEFAULT_AGENT from setup-code.sh)
-  --force                 Allow a non-git directory
+  --agent <harness>   Start that agent CLI in the split pane (one of: ${KNOWN_HARNESSES[*]})
+                      (default: DEFAULT_HARNESS from setup-code.sh)
+  --force              Allow a non-git directory
 EOF
             exit 0
             ;;
@@ -55,15 +58,27 @@ EOF
     esac
 done
 
-if [[ -n "$AGENT" ]] && [[ "$AGENT" != "claude" ]] && [[ "$AGENT" != "codex" ]]; then
-    echo "Error: --agent must be 'claude' or 'codex' (got: $AGENT)"
-    exit 1
+if [[ -n "$AGENT" ]]; then
+    is_known=0
+    for known in "${KNOWN_HARNESSES[@]}"; do
+        [[ "$AGENT" == "$known" ]] && is_known=1 && break
+    done
+    if [[ "$is_known" -ne 1 ]]; then
+        echo "Error: --agent must be one of: ${KNOWN_HARNESSES[*]} (got: $AGENT)"
+        exit 1
+    fi
+    if ! command -v "$AGENT" &>/dev/null; then
+        echo "Error: $AGENT is not installed"
+        exit 1
+    fi
 fi
 
-# No --agent given: fall back to the DEFAULT_AGENT chosen during setup-code.sh
-# (whichever agent CLI is actually installed still wins if the saved choice is stale).
-if [[ -z "$AGENT" ]] && DEFAULT_AGENT_BIN="$(resolve_default_agent_command)"; then
-    AGENT="$DEFAULT_AGENT_BIN"
+# No --agent given: fall back to the DEFAULT_HARNESS chosen during
+# setup-code.sh. If that saved choice is stale/unset, resolve_or_prompt
+# picks the sole installed harness silently, asks when several are
+# installed, or returns 1 when none are (plain shell pane).
+if [[ -z "$AGENT" ]] && DEFAULT_HARNESS_BIN="$(resolve_or_prompt_default_harness)"; then
+    AGENT="$DEFAULT_HARNESS_BIN"
 fi
 
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
@@ -89,16 +104,10 @@ fi
 # to find this session's Neovim socket).
 SESSION_NAME="$(tmux_session_name_for "$TARGET_DIR")"
 
-# Resolve the command to start in the agent pane, if any.
+# Resolve the command to start in the agent pane, if any. Harness ids double
+# as their CLI binary name (see KNOWN_HARNESSES in dotfiles-arch-lib.sh).
 agent_command() {
-    case "$AGENT" in
-        claude)
-            printf 'claude'
-            ;;
-        codex)
-            printf 'codex'
-            ;;
-    esac
+    printf '%s' "$AGENT"
 }
 
 # Kill any existing session with the same name (always start fresh).

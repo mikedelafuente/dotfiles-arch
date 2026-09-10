@@ -98,6 +98,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | NVM + Node LTS (not pacman) | `setup-node.sh` | Node via NVM at `~/.config/nvm` | `nvm`, `node`, `npm` |
 | Claude Code (user-level npm) | `setup-claude.sh` | Claude Code CLI | `claude` |
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
+| `opencode` | `setup-opencode.sh` | AI coding agent CLI | `opencode` |
 | `ollama-cuda` / `ollama-vulkan` (GPU-gated) | `setup-ollama.sh` | Local model server — `ollama-cuda` on a working NVIDIA driver, else `ollama-vulkan` on a detected Vulkan ICD; skipped entirely (no CPU-only install) if neither is present | `ollama` |
 
 ## Containers and Kubernetes
@@ -135,7 +136,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `slack-desktop` (AUR) | Team chat | — |
 | `google-chrome` (AUR) | Work browser (Super+B when work is selected) | — |
 
-### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`, `setup-opencode.sh`
+### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`
 
 | Package | Purpose | Related commands |
 |---------|---------|------------------|
@@ -143,7 +144,6 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `discord` (AUR) | Chat | — |
 | `firefox` | Personal browser (Super+B when personal is selected and work is not) | — |
 | `mullvad-vpn-bin` (AUR) | VPN | `mvup`, `mvdown`, `mvst` |
-| `opencode` | AI coding agent CLI | `opencode` |
 
 ### devcontainer — `setup-devcontainer.sh`
 

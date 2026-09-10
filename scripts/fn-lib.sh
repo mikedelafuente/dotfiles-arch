@@ -129,9 +129,31 @@ bootstrap_config_file() {
 # Multiple profiles can be active on one machine (e.g. work + devcontainer).
 KNOWN_SETUP_PROFILES=(work personal devcontainer)
 
+# Known agent harnesses, in menu / display order. Each id is assumed to also
+# be its CLI binary name (true for all of these) — add new ones here as their
+# setup-*.sh script lands (e.g. a future pi.dev CLI) and give them a label
+# below. Kept in sync by hand with home/.local/bin/dotfiles-arch-lib.sh's
+# KNOWN_HARNESSES (that copy can't source this file — it must stay
+# sourceable standalone by runtime ~/.local/bin scripts without pulling in
+# dotheader.sh's `set -euo pipefail`/sudo-home resolution).
+KNOWN_HARNESSES=(claude codex opencode)
+declare -A KNOWN_HARNESS_LABELS=(
+  [claude]="Claude Code"
+  [codex]="Codex CLI"
+  [opencode]="opencode"
+)
+
+# Echo the installed subset of KNOWN_HARNESSES (one per line, in order).
+installed_harnesses() {
+  local h
+  for h in "${KNOWN_HARNESSES[@]}"; do
+    command -v "$h" &>/dev/null && echo "$h"
+  done
+}
+
 # Source saved bootstrap config if present
 # (FULL_NAME, EMAIL, SETUP_PROFILES, SETUP_PROFILE, INSTALL_NVIDIA, MACHINE_TYPE,
-# DEFAULT_AGENT).
+# DEFAULT_HARNESS).
 load_bootstrap_config() {
   local f
   f="$(bootstrap_config_file)"
@@ -143,6 +165,10 @@ load_bootstrap_config() {
       SETUP_PROFILE="work"
     fi
     migrate_setup_profiles_from_legacy
+    # Migrate legacy DEFAULT_AGENT (claude|codex only) → DEFAULT_HARNESS
+    if [[ -z "${DEFAULT_HARNESS:-}" && -n "${DEFAULT_AGENT:-}" ]]; then
+      DEFAULT_HARNESS="$DEFAULT_AGENT"
+    fi
     return 0
   fi
   return 1
@@ -241,7 +267,7 @@ write_bootstrap_config() {
     printf 'SETUP_PROFILE=%q\n' "${SETUP_PROFILE}"
     printf 'INSTALL_NVIDIA=%q\n' "${INSTALL_NVIDIA:-false}"
     printf 'MACHINE_TYPE=%q\n' "${MACHINE_TYPE:-}"
-    printf 'DEFAULT_AGENT=%q\n' "${DEFAULT_AGENT:-}"
+    printf 'DEFAULT_HARNESS=%q\n' "${DEFAULT_HARNESS:-}"
   } >"$f"
   chmod 600 "$f" 2>/dev/null || true
 }
@@ -424,60 +450,60 @@ resolve_nvidia_preference() {
   esac
 }
 
-# Resolve DEFAULT_AGENT (claude|codex) — the agent `code` starts when run
-# without --agent. Detects which agent CLIs are actually on PATH: auto-picks
-# the only one installed, asks when both are present (Enter keeps the saved
-# choice), and leaves DEFAULT_AGENT empty when neither is installed.
+# Resolve DEFAULT_HARNESS (see KNOWN_HARNESSES) — the agent `code`/Zed starts
+# when run without --agent. Detects which harness CLIs are actually on PATH:
+# auto-picks the only one installed, asks when 2+ are present (Enter keeps
+# the saved choice if it's still installed, else the first installed one),
+# and leaves DEFAULT_HARNESS empty when none are installed.
 # Uses ASSUME_YES=true|false (default false).
-resolve_default_agent() {
+resolve_default_harness() {
   local assume_yes="${ASSUME_YES:-false}"
-  local have_claude=false have_codex=false
-  local current_default agent_input
+  local -a installed=()
+  local current_default choice_input h i
 
-  command -v claude &>/dev/null && have_claude=true
-  command -v codex &>/dev/null && have_codex=true
+  mapfile -t installed < <(installed_harnesses)
 
-  if [[ "$have_claude" != "true" && "$have_codex" != "true" ]]; then
-    DEFAULT_AGENT=""
+  if ((${#installed[@]} == 0)); then
+    DEFAULT_HARNESS=""
+    print_info_message "No agent harness CLI installed (${KNOWN_HARNESSES[*]}) — DEFAULT_HARNESS left unset"
     return 0
   fi
 
-  if [[ "$have_claude" == "true" && "$have_codex" != "true" ]]; then
-    DEFAULT_AGENT="claude"
-    print_info_message "DEFAULT_AGENT auto-set to claude (Codex CLI not installed)"
+  if ((${#installed[@]} == 1)); then
+    DEFAULT_HARNESS="${installed[0]}"
+    print_info_message "DEFAULT_HARNESS auto-set to $DEFAULT_HARNESS (only harness installed)"
     return 0
   fi
 
-  if [[ "$have_codex" == "true" && "$have_claude" != "true" ]]; then
-    DEFAULT_AGENT="codex"
-    print_info_message "DEFAULT_AGENT auto-set to codex (Claude CLI not installed)"
-    return 0
-  fi
-
-  # Both installed — ask which `code` should default to.
-  current_default="${DEFAULT_AGENT:-claude}"
-  if [[ "$current_default" != "codex" && "$current_default" != "claude" ]]; then
-    current_default="claude"
+  # 2+ installed — ask which `code`/Zed should default to.
+  current_default="${DEFAULT_HARNESS:-}"
+  if ! printf '%s\n' "${installed[@]}" | grep -qxF "$current_default"; then
+    current_default="${installed[0]}"
   fi
 
   if [[ "$assume_yes" == "true" ]]; then
-    DEFAULT_AGENT="$current_default"
-    print_info_message "Both agent CLIs installed — DEFAULT_AGENT=$DEFAULT_AGENT (non-interactive)"
+    DEFAULT_HARNESS="$current_default"
+    print_info_message "Multiple harnesses installed — DEFAULT_HARNESS=$DEFAULT_HARNESS (non-interactive)"
     return 0
   fi
 
   echo ""
-  print_info_message "Both Claude Code and Codex CLIs are installed."
-  read -rp "Which should 'code' use by default? [claude/codex] (Enter = $(fmt_choice "$current_default")): " agent_input
-  agent_input="${agent_input:-$current_default}"
-  case "${agent_input,,}" in
-    claude) DEFAULT_AGENT="claude" ;;
-    codex) DEFAULT_AGENT="codex" ;;
-    *)
-      print_warning_message "Unrecognized input '$agent_input'; using $current_default"
-      DEFAULT_AGENT="$current_default"
-      ;;
-  esac
+  print_info_message "Multiple agent harnesses are installed:"
+  for i in "${!installed[@]}"; do
+    h="${installed[$i]}"
+    print_info_message "  $((i + 1))) $h — ${KNOWN_HARNESS_LABELS[$h]:-$h}"
+  done
+  read -rp "Which should 'code'/Zed use by default? (number or name, Enter = $(fmt_choice "$current_default")): " choice_input
+  choice_input="${choice_input:-$current_default}"
+
+  if [[ "$choice_input" =~ ^[0-9]+$ ]] && ((choice_input >= 1 && choice_input <= ${#installed[@]})); then
+    DEFAULT_HARNESS="${installed[$((choice_input - 1))]}"
+  elif printf '%s\n' "${installed[@]}" | grep -qxF "${choice_input,,}"; then
+    DEFAULT_HARNESS="${choice_input,,}"
+  else
+    print_warning_message "Unrecognized input '$choice_input'; using $current_default"
+    DEFAULT_HARNESS="$current_default"
+  fi
 }
 
 # Record pacman/yay cooldown stamps (call only after a successful safe_system_upgrade).
