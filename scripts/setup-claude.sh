@@ -25,6 +25,9 @@ fi
 if command -v claude &>/dev/null; then
   print_info_message "Claude Code is already installed: $(command -v claude)"
 else
+  # npm blocks lifecycle scripts by default; @anthropic-ai/claude-code needs
+  # its postinstall to run, so explicitly allowlist it (user-level npmrc).
+  npm config set allow-scripts=@anthropic-ai/claude-code --location=user
   print_action_message "Installing Claude Code via user npm (no sudo)"
   npm install -g @anthropic-ai/claude-code
 fi
