@@ -3,9 +3,11 @@
 # --------------------------
 # Setup Ollama (local model server) for Arch Linux
 # --------------------------
-# Installs the CPU-only ollama package by default, or ollama-cuda when a
-# working NVIDIA driver is present (nvidia-smi, not just PCI hardware — a
-# card with no driver installed has no CUDA to use). Never swaps an
+# GPU-only: Ollama's CPU-only inference is too slow to be worth installing
+# unconditionally, so this script skips entirely unless a working NVIDIA
+# driver (nvidia-smi, not just PCI hardware — a card with no driver
+# installed has no CUDA to use) or a Vulkan ICD is detected. Installs
+# ollama-cuda on NVIDIA, otherwise ollama-vulkan. Never swaps an
 # already-installed flavor; enables/starts the systemd service either way.
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
@@ -20,7 +22,7 @@ fi
 
 print_tool_setup_start "Ollama"
 
-OLLAMA_FLAVORS=(ollama ollama-cuda ollama-rocm)
+OLLAMA_FLAVORS=(ollama ollama-cuda ollama-rocm ollama-vulkan)
 INSTALLED_FLAVOR=""
 for flavor in "${OLLAMA_FLAVORS[@]}"; do
   if pacman -Q "$flavor" &>/dev/null; then
@@ -29,16 +31,29 @@ for flavor in "${OLLAMA_FLAVORS[@]}"; do
   fi
 done
 
+has_nvidia_driver() {
+  command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null
+}
+
+has_vulkan() {
+  [[ -d /usr/share/vulkan/icd.d ]] \
+    && find /usr/share/vulkan/icd.d -maxdepth 1 -name "*.json" -print -quit 2>/dev/null | grep -q .
+}
+
 if [ -n "$INSTALLED_FLAVOR" ]; then
   print_info_message "Ollama already installed ($INSTALLED_FLAVOR) — leaving flavor alone"
-elif command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+elif has_nvidia_driver; then
   print_info_message "Working NVIDIA driver detected — installing ollama-cuda"
   ensure_pacman_pkgs ollama-cuda
   INSTALLED_FLAVOR="ollama-cuda"
+elif has_vulkan; then
+  print_info_message "Vulkan ICD detected (no NVIDIA driver) — installing ollama-vulkan"
+  ensure_pacman_pkgs ollama-vulkan
+  INSTALLED_FLAVOR="ollama-vulkan"
 else
-  print_info_message "No working NVIDIA driver detected — installing CPU-only ollama"
-  ensure_pacman_pkgs ollama
-  INSTALLED_FLAVOR="ollama"
+  print_info_message "No NVIDIA driver or Vulkan ICD detected — skipping Ollama (CPU-only inference isn't worth installing unconditionally)"
+  print_tool_setup_complete "Ollama"
+  exit 0
 fi
 
 if command -v ollama &>/dev/null; then
