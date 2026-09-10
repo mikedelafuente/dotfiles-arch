@@ -18,6 +18,6 @@ if AGENT_BIN="$(resolve_default_agent_command)"; then
     exec "$AGENT_BIN"
 fi
 
-echo "No default agent CLI configured/installed (claude or cursor-agent)."
-echo "Run scripts/setup-claude.sh or scripts/setup-cursor.sh, then scripts/setup-code.sh to pick a default."
+echo "No default agent CLI configured/installed (claude or codex)."
+echo "Run scripts/setup-claude.sh or scripts/setup-codex.sh, then scripts/setup-code.sh to pick a default."
 exec "${SHELL:-bash}"

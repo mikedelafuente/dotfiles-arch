@@ -6,12 +6,11 @@
 #   - just, mkcert (+ nss for Firefox trust store)
 #   - dig (bind) for DNS smoke checks
 #   - OpenVPN 3 Linux client (AUR openvpn3 — CloudConnexa / work VPN)
-#   - Cursor Dev Containers extension
 #   - systemd-resolved: route ~test to 127.0.0.1:5354
 #   - fs.inotify max_user_watches (large monorepo watchers)
 #   - mkcert root CA trust (user-level; do not sudo mkcert -install)
 #
-# Shared stack already provides: Docker Engine/Compose/Buildx, GitHub CLI, Cursor IDE.
+# Shared stack already provides: Docker Engine/Compose/Buildx, GitHub CLI.
 # Cert generation under .devcontainer/services/traefik/certs is left to after clone.
 #
 # Safe to re-run (used by bootstrap + sync).
@@ -97,33 +96,6 @@ install_openvpn3_client() {
 }
 
 install_openvpn3_client || print_warning_message "OpenVPN 3 setup had errors (devcontainer VPN may be unavailable)"
-
-# --------------------------
-# Cursor: Dev Containers extension
-# --------------------------
-
-install_cursor_devcontainers_extension() {
-  if ! command -v cursor &>/dev/null; then
-    print_warning_message "cursor not on PATH — skip Dev Containers extension (install shared Cursor first)"
-    return 0
-  fi
-
-  # VS Code / Cursor marketplace ID for Dev Containers
-  local ext_id="ms-vscode-remote.remote-containers"
-  if cursor --list-extensions 2>/dev/null | grep -qxF "$ext_id"; then
-    print_info_message "Cursor extension already installed: $ext_id"
-    return 0
-  fi
-
-  print_action_message "Installing Cursor extension: $ext_id"
-  if cursor --install-extension "$ext_id" --force 2>/dev/null; then
-    print_success_message "Installed $ext_id"
-  else
-    print_warning_message "Could not install $ext_id automatically — open Cursor Extensions and install 'Dev Containers'"
-  fi
-}
-
-install_cursor_devcontainers_extension
 
 # --------------------------
 # Trust mkcert CA (user; never sudo on Linux)

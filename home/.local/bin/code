@@ -1,12 +1,11 @@
 #!/bin/bash
 
 # code - Open a tmux development session with Neovim (+ agent pane) for a git repo
-# Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
+# Usage: code [--force|-f] [--agent claude|codex] [directory]
 #   directory:    Path to project directory (defaults to current directory)
 #   --force:      Open even when the directory is not a git repository
-#   --agent:      Start an agent (cursor or claude) in the split pane; defaults to
+#   --agent:      Start an agent (claude or codex) in the split pane; defaults to
 #                 DEFAULT_AGENT from setup-code.sh (a plain shell if neither is installed)
-#   --workspace:  Cursor Agent saved workspace name or path (requires --agent cursor)
 #
 # - Always kills and recreates a session named after the target directory (fresh state).
 # - Window "code": Neovim (left, ~75%) + the default (or --agent) agent CLI / plain shell (right, ~25%)
@@ -23,7 +22,6 @@ source "$SCRIPT_DIR/dotfiles-arch-lib.sh"
 
 FORCE=0
 AGENT=""
-WORKSPACE=""
 TARGET_DIR="."
 
 while [[ $# -gt 0 ]]; do
@@ -35,26 +33,17 @@ while [[ $# -gt 0 ]]; do
         --agent)
             AGENT="${2:-}"
             if [[ -z "$AGENT" ]]; then
-                echo "Error: --agent requires a value (cursor or claude)"
-                exit 1
-            fi
-            shift 2
-            ;;
-        --workspace)
-            WORKSPACE="${2:-}"
-            if [[ -z "$WORKSPACE" ]]; then
-                echo "Error: --workspace requires a value (saved name or path)"
+                echo "Error: --agent requires a value (claude or codex)"
                 exit 1
             fi
             shift 2
             ;;
         -h|--help)
             cat <<'EOF'
-Usage: code [--force|-f] [--agent cursor|claude] [--workspace <name-or-path>] [directory]
+Usage: code [--force|-f] [--agent claude|codex] [directory]
 
-  --agent cursor|claude   Start that agent CLI in the split pane
+  --agent claude|codex   Start that agent CLI in the split pane
                           (default: DEFAULT_AGENT from setup-code.sh)
-  --workspace NAME|PATH   Cursor Agent workspace (requires --agent cursor)
   --force                 Allow a non-git directory
 EOF
             exit 0
@@ -66,29 +55,15 @@ EOF
     esac
 done
 
-if [[ -n "$AGENT" ]] && [[ "$AGENT" != "cursor" ]] && [[ "$AGENT" != "claude" ]]; then
-    echo "Error: --agent must be 'cursor' or 'claude' (got: $AGENT)"
+if [[ -n "$AGENT" ]] && [[ "$AGENT" != "claude" ]] && [[ "$AGENT" != "codex" ]]; then
+    echo "Error: --agent must be 'claude' or 'codex' (got: $AGENT)"
     exit 1
 fi
 
 # No --agent given: fall back to the DEFAULT_AGENT chosen during setup-code.sh
 # (whichever agent CLI is actually installed still wins if the saved choice is stale).
 if [[ -z "$AGENT" ]] && DEFAULT_AGENT_BIN="$(resolve_default_agent_command)"; then
-    case "$DEFAULT_AGENT_BIN" in
-        cursor-agent|agent) AGENT="cursor" ;;
-        claude) AGENT="claude" ;;
-    esac
-fi
-
-if [[ -n "$WORKSPACE" ]]; then
-    if [[ -z "$AGENT" ]]; then
-        echo "Error: --workspace requires --agent cursor"
-        exit 1
-    fi
-    if [[ "$AGENT" != "cursor" ]]; then
-        echo "Error: --workspace is only supported for Cursor Agent (Claude has no workspace flag)"
-        exit 1
-    fi
+    AGENT="$DEFAULT_AGENT_BIN"
 fi
 
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
@@ -117,17 +92,11 @@ SESSION_NAME="$(tmux_session_name_for "$TARGET_DIR")"
 # Resolve the command to start in the agent pane, if any.
 agent_command() {
     case "$AGENT" in
-        cursor)
-            local bin="cursor-agent"
-            command -v cursor-agent &>/dev/null || bin="agent"
-            if [[ -n "$WORKSPACE" ]]; then
-                printf '%s --workspace %q' "$bin" "$WORKSPACE"
-            else
-                printf '%s' "$bin"
-            fi
-            ;;
         claude)
             printf 'claude'
+            ;;
+        codex)
+            printf 'codex'
             ;;
     esac
 }
@@ -141,7 +110,7 @@ fi
 echo "Creating tmux session '$SESSION_NAME' for $TARGET_DIR"
 
 # Neovim listens on a socket named after SESSION_NAME so nvim-reveal-edit
-# (the Claude/Cursor PostToolUse/afterFileEdit hook) can find this pane.
+# (the Claude/Codex PostToolUse hook) can find this pane.
 NVIM_SOCKET="${XDG_RUNTIME_DIR:-/tmp}/dotfiles-arch-nvim-${SESSION_NAME}.sock"
 rm -f "$NVIM_SOCKET"
 

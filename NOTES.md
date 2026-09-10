@@ -133,7 +133,7 @@ Example for a work laptop that also runs the platform sandbox:
 bash scripts/bootstrap.sh --profile work,devcontainer
 ```
 
-Everything else (Kitty, Cursor, Claude, tmux, languages, containers, Spotify, Obsidian, etc.) is shared. Mullvad is personal-only; Super+B prefers Chrome when **work** is selected.
+Everything else (Kitty, Claude, Codex, Ollama, tmux, languages, containers, Spotify, Obsidian, etc.) is shared. Mullvad is personal-only; Super+B prefers Chrome when **work** is selected.
 
 ```shell
 bash scripts/bootstrap.sh
@@ -169,7 +169,7 @@ That will:
 1. Resolve profiles + NVIDIA (keeps saved values silently; use `--prompt` to re-ask)
 2. `git pull --ff-only` (if this is a git clone)
 3. Guarded system upgrade (`pacman` + AUR IoC scan + `yay`) **every run**
-4. Re-run the setup scripts (idempotent installs for Kitty, tmux, Cursor, Claude, …)
+4. Re-run the setup scripts (idempotent installs for Kitty, tmux, Claude, Codex, …)
 5. Relink dotfiles
 6. Optionally remove obsolete packages (`herdr-bin`, `ghostty`, `alacritty`, Hyprland stack, Copilot CLI) and stale configs
 

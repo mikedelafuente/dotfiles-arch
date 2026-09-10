@@ -8,7 +8,7 @@
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
   "agent_servers": {
-    "cursor": {
+    "codex": {
       "type": "registry"
     },
     "claude-acp": {
@@ -40,7 +40,7 @@
     // Runs when a new Terminal Thread starts (Agent Panel "+" -> Terminal),
     // giving Zed a `code`-style agent pane: it resolves the same DEFAULT_AGENT
     // as `code` (see home/.local/bin/zed-agent-init) instead of hardcoding
-    // `claude` or `cursor-agent`, so both stay in sync with the profile choice
+    // `claude` or `codex`, so both stay in sync with the profile choice
     // made in setup-code.sh.
     "terminal_init_command": "zed-agent-init"
   },
