@@ -31,36 +31,105 @@ resolve_dotfiles_arch() {
   return 1
 }
 
-# Resolve the saved DEFAULT_AGENT (from setup-code.sh, see fn-lib.sh's
-# resolve_default_agent) to the actual CLI binary to run — echoes "claude" or
-# "codex", or returns 1 if the saved choice is unset/stale (its CLI no longer
-# on PATH). Used by both `code` (no --agent flag) and `zed-agent-init` so the
-# two stay in sync.
-resolve_default_agent_command() {
+# Known agent harnesses, in menu / display order. Each id is assumed to also
+# be its CLI binary name. Keep in sync by hand with scripts/fn-lib.sh's
+# KNOWN_HARNESSES — this copy has to stay sourceable standalone (no
+# dotheader.sh/fn-lib.sh) by runtime ~/.local/bin scripts like `code` and
+# `zed-agent-init`.
+KNOWN_HARNESSES=(claude codex opencode)
+
+# Echo the installed subset of KNOWN_HARNESSES (one per line, in order).
+installed_harnesses() {
+  local h
+  for h in "${KNOWN_HARNESSES[@]}"; do
+    command -v "$h" &>/dev/null && echo "$h"
+  done
+}
+
+# Resolve the saved DEFAULT_HARNESS (from setup-code.sh, see fn-lib.sh's
+# resolve_default_harness) to the actual CLI binary to run — echoes the
+# harness id, or returns 1 if the saved choice is unset/stale (its CLI no
+# longer on PATH). Used by both `code` (no --agent flag) and `zed-agent-init`
+# so the two stay in sync. Reads the legacy DEFAULT_AGENT key too, for a
+# config saved before the DEFAULT_AGENT → DEFAULT_HARNESS rename.
+resolve_default_harness_command() {
   local bootstrap_config="$HOME/.config/dotfiles-arch/.dotfiles_bootstrap_config"
-  local default_agent=""
+  local default_harness="" h
 
   if [[ -r "$bootstrap_config" ]]; then
     # shellcheck source=/dev/null
-    default_agent="$(source "$bootstrap_config" && printf '%s' "${DEFAULT_AGENT:-}")" 2>/dev/null || default_agent=""
+    default_harness="$(source "$bootstrap_config" && printf '%s' "${DEFAULT_HARNESS:-${DEFAULT_AGENT:-}}")" 2>/dev/null || default_harness=""
   fi
 
-  case "$default_agent" in
-    codex)
-      if command -v codex &>/dev/null; then
-        echo "codex"
-        return 0
-      fi
-      ;;
-    claude)
-      if command -v claude &>/dev/null; then
-        echo "claude"
-        return 0
-      fi
-      ;;
-  esac
+  for h in "${KNOWN_HARNESSES[@]}"; do
+    if [[ "$h" == "$default_harness" ]] && command -v "$h" &>/dev/null; then
+      echo "$h"
+      return 0
+    fi
+  done
 
   return 1
+}
+
+# Resolve the default harness like resolve_default_harness_command, but with
+# a graceful runtime fallback when the saved choice is stale/unset: silently
+# use the sole installed harness, interactively ask when several are
+# installed (Enter keeps the first installed one), or return 1 when none are
+# installed at all. Session-only — never persists the choice; rerun
+# setup-code.sh to change the saved default. Meant to be called from a real
+# terminal (the `code` agent pane, a Zed Terminal Thread); falls back to the
+# first installed harness without asking when stdin isn't a TTY.
+resolve_or_prompt_default_harness() {
+  local h
+  if h="$(resolve_default_harness_command)"; then
+    echo "$h"
+    return 0
+  fi
+
+  local -a installed=()
+  while IFS= read -r h; do
+    [[ -n "$h" ]] && installed+=("$h")
+  done < <(installed_harnesses)
+
+  if ((${#installed[@]} == 0)); then
+    return 1
+  fi
+
+  if ((${#installed[@]} == 1)); then
+    echo "${installed[0]}"
+    return 0
+  fi
+
+  if [[ ! -t 0 ]]; then
+    echo "${installed[0]}"
+    return 0
+  fi
+
+  {
+    echo "The saved default agent harness isn't available. Installed harnesses:"
+    local i
+    for i in "${!installed[@]}"; do
+      printf '  %d) %s\n' "$((i + 1))" "${installed[$i]}"
+    done
+  } >&2
+
+  local choice
+  read -rp "Use which one for this session? (number or name, Enter = ${installed[0]}): " choice
+  choice="${choice:-${installed[0]}}"
+
+  if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#installed[@]})); then
+    echo "${installed[$((choice - 1))]}"
+    return 0
+  fi
+  for h in "${installed[@]}"; do
+    if [[ "$h" == "${choice,,}" ]]; then
+      echo "$h"
+      return 0
+    fi
+  done
+
+  echo "Unrecognized input '$choice'; using ${installed[0]}" >&2
+  echo "${installed[0]}"
 }
 
 # Find git repositories under a root directory (depth 3, so both

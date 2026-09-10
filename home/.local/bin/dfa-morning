@@ -6,7 +6,8 @@
 #
 # Default: dfa-update-repos, then dfa-update-system (day-to-day pacman + yay), then
 # dfa-sync-skills (relink personal skills from dotfiles-arch), then dfa-sync-rules
-# (relink personal Cursor rules from dotfiles-arch).
+# (relink personal Cursor rules from dotfiles-arch), then dfa-sync-harness-agents
+# (sync local Ollama models into Codex/opencode's model lists).
 # If dfa-update-repos pulls new dotfiles-arch commits, dfa-morning runs dfa-sync-dotfiles
 # itself (setup scripts + re-link) right away, then restarts the whole
 # routine from the top so the remaining steps run against the freshly-synced
@@ -29,6 +30,7 @@ MORNING_STEPS=(
   dfa-update-system
   dfa-sync-skills
   dfa-sync-rules
+  dfa-sync-harness-agents
 )
 
 usage() {
@@ -43,6 +45,7 @@ Default steps:
   dfa-update-system   guarded pacman + yay update
   dfa-sync-skills     relink skills from dotfiles-arch + dfa-sync-sources extras
   dfa-sync-rules      relink Cursor rules from dotfiles-arch + dfa-sync-sources extras
+  dfa-sync-harness-agents  sync local Ollama models into Codex/opencode's model lists
 
 If dfa-update-repos pulls new dotfiles-arch commits, dfa-sync-dotfiles runs
 automatically and the whole routine restarts from the top (capped at one
