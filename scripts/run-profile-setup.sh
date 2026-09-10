@@ -75,6 +75,10 @@ run_setup setup-fonts.sh
 run_setup setup-bash.sh
 run_setup setup-kitty.sh
 run_setup setup-claude.sh
+run_setup setup-codex.sh
+run_setup setup-opencode.sh
+run_setup setup-ollama.sh
+run_setup setup-harness-agents.sh
 run_setup setup-python.sh
 run_setup setup-rust.sh
 run_setup setup-golang.sh
@@ -88,24 +92,23 @@ run_setup setup-postman.sh
 run_setup setup-moonlander.sh
 run_setup setup-spotify.sh
 run_setup setup-obsidian.sh
+run_setup setup-voxtype.sh
 run_setup setup-zed.sh
 
 # Additive profile extras (multi-select — all selected profiles are installed)
 if has_setup_profile work; then
-  print_line_break "Work profile — Cursor + Zoom + Slack + Chrome"
-  run_setup setup-cursor.sh
+  print_line_break "Work profile — Zoom + Slack + Chrome"
   run_setup setup-zoom.sh
   run_setup setup-slack.sh
   run_setup setup-chrome.sh
 fi
 
 if has_setup_profile personal; then
-  print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad + opencode"
+  print_line_break "Personal profile — Steam + Discord + Firefox + Mullvad"
   run_setup setup-steam.sh
   run_setup setup-discord.sh
   run_setup setup-firefox.sh
   run_setup setup-mullvad.sh
-  run_setup setup-opencode.sh
 fi
 
 if has_setup_profile devcontainer; then
@@ -113,7 +116,6 @@ if has_setup_profile devcontainer; then
   run_setup setup-devcontainer.sh
 fi
 
-# Runs after profile extras so it can detect Cursor when the work profile just installed it.
 run_setup setup-code.sh
 
 if pacman -Q gnome-shell &>/dev/null; then

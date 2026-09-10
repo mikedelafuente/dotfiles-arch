@@ -67,23 +67,23 @@ else
     print_error_message "Code script not found at $CODE_SCRIPT"
 fi
 
-# DEFAULT_AGENT drives which agent `code` (no --agent flag) starts by default.
-# Runs after profile extras (see run-profile-setup.sh) so Cursor is already
-# on PATH if the work profile just installed it.
+# DEFAULT_HARNESS drives which agent harness `code` (no --agent flag) starts by
+# default. Runs after profile extras (see run-profile-setup.sh) so any
+# profile-installed tools are already on PATH.
 load_bootstrap_config || true
 export ASSUME_YES="${DOTFILES_AUR_ASSUME_YES:-false}"
-resolve_default_agent
-if [[ -n "$DEFAULT_AGENT" ]]; then
-    print_info_message "code's default agent: $DEFAULT_AGENT (override per-run with --agent cursor|claude)"
+resolve_default_harness
+HARNESS_LIST="$(IFS='|'; echo "${KNOWN_HARNESSES[*]}")"
+if [[ -n "$DEFAULT_HARNESS" ]]; then
+    print_info_message "code's default harness: $DEFAULT_HARNESS (override per-run with --agent $HARNESS_LIST)"
 else
-    print_info_message "No agent CLI installed yet — 'code' will open a plain shell pane until one is"
+    print_info_message "No agent harness CLI installed yet — 'code' will open a plain shell pane until one is"
 fi
 write_bootstrap_config
 
 print_line_break "Setup Complete"
 print_info_message "The 'code' command opens a tmux session with Neovim + an agent pane"
 print_info_message "Usage: code [directory]"
-print_info_message "Agents: code <dir> --agent cursor   (or --agent claude)"
-print_info_message "Cursor IDE is available as: cursor"
+print_info_message "Agents: code <dir> --agent <harness>   (one of: $HARNESS_LIST)"
 
 print_tool_setup_complete "Code Command"
