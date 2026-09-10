@@ -1,0 +1,142 @@
+#!/bin/bash
+# Command picker for the dfa-* helpers — pick one with fzf, see what it does,
+# and run it. Ordered by roughly how often you'd reach for it, most common
+# first, so the picker itself builds the habit of using the right one.
+#
+# Usage:
+#   dfa              interactive fzf picker, runs the selected command
+#   dfa list         print the same table, no fzf, no execution
+#   dfa <name> [args…]  skip the picker, run dfa-<name> (or the alias) directly
+#
+# Extra args after the command name (or typed at the fzf prompt as a query)
+# are forwarded to the picked command, e.g.: dfa sync-dotfiles --yes
+
+set -uo pipefail
+
+_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+# shellcheck source=/dev/null
+[[ -r "$_LIB_DIR/dotfiles-arch-lib.sh" ]] && source "$_LIB_DIR/dotfiles-arch-lib.sh"
+
+# name | how-often | one-line summary | longer explanation (used in fzf preview)
+#
+# Ordered most-to-least frequent. "How often" is a rough habit guide, not a
+# hard rule — edit freely as your own routine settles.
+DFA_COMMANDS=(
+  "morning|Daily|Your one command each morning: pull repos, update packages, resync skills/rules/agents|Runs dfa-update-repos, dfa-update-system, dfa-sync-skills, dfa-sync-rules, dfa-sync-harness-agents in order (edit MORNING_STEPS in ~/.local/bin/dfa-morning to change the list). If dfa-update-repos pulls new dotfiles-arch commits, it automatically runs dfa-sync-dotfiles for you and restarts once so the remaining steps see the freshly-synced scripts. This is the everyday driver — you almost never need to reach for the individual steps below by hand."
+  "sync-dotfiles|After editing dotfiles-arch, or if morning's auto-resync fails|Apply THIS repo's setup scripts + symlinks to your machine|Re-runs the setup-*.sh scripts for your saved profile and re-links home/ + config/ into \$HOME (scripts/sync.sh). dfa-morning already calls this automatically whenever it notices dotfiles-arch itself moved forward. Run it directly only when you want that applied right now without also updating packages/repos — e.g. you just committed a setup-script change on this machine, or dfa-morning's auto-resync step failed and you want to retry it alone."
+  "update-repos|Daily (via morning)|git pull --ff-only every repo under ~/repos, in parallel|Skips any repo with a dirty working tree; MAX_PARALLEL (default 8) controls concurrency. This is the step in dfa-morning that notices when dotfiles-arch itself has new commits."
+  "update-system|Daily (via morning)|Guarded pacman + yay update, with an AUR IoC scan|Rate-limited day-to-day system package updater. dfa-morning always runs this; run it alone if you just want packages current without touching repos or skills/rules."
+  "sync-skills|Daily (via morning)|Relink personal Claude/Cursor skills from dotfiles-arch|Symlinks skills/* from dotfiles-arch plus any extra sources (dfa-sync-sources) into ~/.claude/skills and ~/.cursor/skills, pruning stale links. Part of dfa-morning; run alone after editing a skill locally if you don't want a full morning run."
+  "sync-rules|Daily (via morning)|Relink personal Cursor rules from dotfiles-arch|Symlinks rules/* from dotfiles-arch plus extra sources into ~/.cursor/rules (and, for alwaysApply rules, a ~/.claude/dfa-rules-*.md import), pruning stale links. Part of dfa-morning; run alone after editing a rule locally."
+  "sync-harness-agents|Daily (via morning)|Sync locally-pulled Ollama models into Codex + opencode's model lists|Regenerates the managed ollama-* profile/provider blocks in ~/.codex/config.toml and ~/.config/opencode/opencode.jsonc from 'ollama list'. Part of dfa-morning; run alone right after an 'ollama pull'/'ollama rm' if you don't want to wait for the next morning run."
+  "repos|Whenever you're jumping between projects|Pick a repo under ~/repos with fzf and cd into it|Prints the picked path — use as: cd \"\$(dfa-repos)\" (the r alias does this for you). Two levels deep, .git-aware; also lists non-git folders as browse targets."
+  "refresh-audio|After docking/undocking or resuming from suspend|Restart the PipeWire/WirePlumber stack to clear duplicate audio devices|Restarts wireplumber, pipewire, and pipewire-pulse (user services) — fixes duplicate sink/source entries in wpctl status and GNOME's speaker/mic quick-settings menus. --status just prints wpctl status without restarting anything."
+  "remove-orphans|Occasionally, after removing packages|Remove orphaned pacman packages (pacman -Qtdq)|Aliased as: orphans."
+  "check-dotfiles|Before committing a script change|Syntax-check + shellcheck the dotfiles-arch scripts|Runs scripts/check.sh (bash -n + shellcheck -x) over the repo. Aliased as: check."
+  "sync-sources|Rare — one-time setup per extra source repo|List, add, or remove extra rules/skills source repos|Manages ~/.config/dotfiles-arch/sync-sources, the list of non-dotfiles-arch repos that dfa-sync-skills / dfa-sync-rules also pull from."
+)
+
+usage() {
+  cat <<'EOF'
+Usage: dfa [list | <name> [args…]]
+
+With no arguments, opens an fzf picker over the dfa-* helper commands —
+ordered by how often you'd typically reach for each one — with a preview
+pane explaining what each does and when to prefer it. Selecting one runs it.
+
+  dfa list             print the same table without fzf or execution
+  dfa <name> [args…]   run dfa-<name> (or its short alias) directly, e.g.
+                        dfa sync-dotfiles --yes
+  dfa -h | --help       this message
+EOF
+}
+
+resolve_command() {
+  # Accept both "morning" and "dfa-morning", plus the two documented aliases.
+  local name="$1"
+  case "$name" in
+    check) echo "dfa-check-dotfiles" ;;
+    orphans) echo "dfa-remove-orphans" ;;
+    dfa-*) echo "$name" ;;
+    *) echo "dfa-$name" ;;
+  esac
+}
+
+print_table() {
+  local entry name freq short
+  for entry in "${DFA_COMMANDS[@]}"; do
+    IFS='|' read -r name freq short _ <<<"$entry"
+    printf '%-22s %-30s %s\n' "dfa-$name" "$freq" "$short"
+  done
+}
+
+preview_for() {
+  local target="$1" entry name freq short long width="${FZF_PREVIEW_COLUMNS:-76}"
+  for entry in "${DFA_COMMANDS[@]}"; do
+    IFS='|' read -r name freq short long <<<"$entry"
+    if [[ "$name" == "$target" ]]; then
+      printf 'dfa-%s\n\nHow often: %s\n\n%s\n' "$name" "$freq" "$long" | fold -s -w "$width"
+      return 0
+    fi
+  done
+  printf 'No description for %s\n' "$target"
+}
+
+run_picker() {
+  if ! command -v fzf &>/dev/null; then
+    echo "fzf is not installed. Available commands:" >&2
+    print_table >&2
+    exit 1
+  fi
+  if [[ ! -t 0 ]] || [[ ! -t 2 ]]; then
+    echo "dfa needs an interactive terminal to pick — pass a name directly (dfa <name>) or use 'dfa list'." >&2
+    exit 1
+  fi
+
+  local entry name freq short lines=()
+  for entry in "${DFA_COMMANDS[@]}"; do
+    IFS='|' read -r name freq short _ <<<"$entry"
+    lines+=("$(printf '%-22s %-30s %s' "dfa-$name" "$freq" "$short")")
+  done
+
+  clear >/dev/tty
+
+  local selected
+  selected="$(printf '%s\n' "${lines[@]}" \
+    | fzf --height=70% --layout=reverse --border \
+          --prompt='dfa> ' \
+          --header='pick a command — preview explains what it does and when to use it' \
+          --preview="echo {1} | sed 's/^dfa-//' | xargs -I{} \"$0\" __preview__ {}" \
+          --preview-window=right:60%)"
+
+  [[ -z "$selected" ]] && exit 0
+  awk '{print $1}' <<<"$selected"
+}
+
+main() {
+  case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    list) print_table; exit 0 ;;
+    __preview__) preview_for "$2"; exit 0 ;;
+  esac
+
+  local chosen cmd
+  if [[ $# -gt 0 ]]; then
+    chosen="$1"
+    shift
+    cmd="$(resolve_command "$chosen")"
+  else
+    chosen="$(run_picker)"
+    [[ -z "$chosen" ]] && exit 0
+    cmd="$chosen"
+  fi
+
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "dfa: $cmd not found on PATH" >&2
+    exit 1
+  fi
+
+  exec "$cmd" "$@"
+}
+
+main "$@"
