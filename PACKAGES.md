@@ -98,7 +98,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | NVM + Node LTS (not pacman) | `setup-node.sh` | Node via NVM at `~/.config/nvm` | `nvm`, `node`, `npm` |
 | Claude Code (user-level npm) | `setup-claude.sh` | Claude Code CLI | `claude` |
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
-| `ollama` / `ollama-cuda` / `ollama-rocm` | `setup-ollama.sh` | Local model server (CUDA flavor on a working NVIDIA driver) | `ollama` |
+| `ollama-cuda` / `ollama-vulkan` (GPU-gated) | `setup-ollama.sh` | Local model server — `ollama-cuda` on a working NVIDIA driver, else `ollama-vulkan` on a detected Vulkan ICD; skipped entirely (no CPU-only install) if neither is present | `ollama` |
 
 ## Containers and Kubernetes
 
