@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Claude Code Bridge (Neovim <-> Claude Code CLI)
 -- ============================================================================
--- `provider = "none"`: the `code` command already launches `claude` in its own
+-- `provider = "none"`: the `dev --tmux` command already launches `claude` in its own
 -- tmux pane, so this plugin only runs the WebSocket/MCP server + lock-file
 -- discovery (~/.claude/ide/*.lock) that the CLI auto-connects to by matching
 -- cwd. It does not manage a terminal itself.
@@ -9,7 +9,7 @@
 -- `lazy = false`: the server has to be up (and the lock file written) before
 -- `claude` starts in the adjacent pane, or auto-discovery has nothing to find.
 -- Lazy-loading on `cmd`/`keys` would only start it after the first
--- `:ClaudeCode*` command — too late for the `code` script's "both panes launch
+-- `:ClaudeCode*` command — too late for the `dev --tmux` script's "both panes launch
 -- together" flow. Run `/ide` inside the Claude pane as a manual fallback if a
 -- session ever starts before Neovim finishes loading.
 
@@ -38,7 +38,7 @@ return {
 
     -- `focus_after_send` has no effect with provider = "none" (Claude runs
     -- outside Neovim). This is the documented workaround: jump tmux focus to
-    -- the agent pane whenever a send is accepted. Matches the `code` command's
+    -- the agent pane whenever a send is accepted. Matches the `dev --tmux` command's
     -- fixed layout (nvim pane left, agent pane immediately to its right).
     vim.api.nvim_create_autocmd("User", {
       pattern = "ClaudeCodeSendComplete",

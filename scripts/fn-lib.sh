@@ -450,7 +450,7 @@ resolve_nvidia_preference() {
   esac
 }
 
-# Resolve DEFAULT_HARNESS (see KNOWN_HARNESSES) — the agent `code`/Zed starts
+# Resolve DEFAULT_HARNESS (see KNOWN_HARNESSES) — the agent `dev --tmux`/Zed starts
 # when run without --agent. Detects which harness CLIs are actually on PATH:
 # auto-picks the only one installed, asks when 2+ are present (Enter keeps
 # the saved choice if it's still installed, else the first installed one),
@@ -475,7 +475,7 @@ resolve_default_harness() {
     return 0
   fi
 
-  # 2+ installed — ask which `code`/Zed should default to.
+  # 2+ installed — ask which `dev --tmux`/Zed should default to.
   current_default="${DEFAULT_HARNESS:-}"
   if ! printf '%s\n' "${installed[@]}" | grep -qxF "$current_default"; then
     current_default="${installed[0]}"
@@ -493,7 +493,7 @@ resolve_default_harness() {
     h="${installed[$i]}"
     print_info_message "  $((i + 1))) $h — ${KNOWN_HARNESS_LABELS[$h]:-$h}"
   done
-  read -rp "Which should 'code'/Zed use by default? (number or name, Enter = $(fmt_choice "$current_default")): " choice_input
+  read -rp "Which should 'dev'/Zed use by default? (number or name, Enter = $(fmt_choice "$current_default")): " choice_input
   choice_input="${choice_input:-$current_default}"
 
   if [[ "$choice_input" =~ ^[0-9]+$ ]] && ((choice_input >= 1 && choice_input <= ${#installed[@]})); then

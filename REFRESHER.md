@@ -44,8 +44,9 @@ If packages need installing, sync will ask for sudo.
 
 ```bash
 cd /path/to/git-repo
-code            # tmux: nvim + agent (focus), console shell, lazygit if git repo
-code --force    # same, for a directory without .git
+dev             # open the project in Zed
+dev --tmux      # tmux instead: nvim + agent (focus), console shell, lazygit if git repo
+dev --force     # same, for a directory without .git
 # or
 v .             # plain Neovim in current Kitty window
 ```
@@ -65,8 +66,8 @@ tmux ls               # list sessions
 Open Neovim + an agent pane together:
 
 ```bash
-code <dir> --agent claude
-code <dir> --agent codex
+dev --tmux <dir> --agent claude
+dev --tmux <dir> --agent codex
 ```
 
 ### …ask an agent from the terminal
@@ -196,7 +197,7 @@ Dotfiles are **symlinks** into this repo — edit in the repo, changes apply imm
 ```
 Super+Return     terminal          Ctrl+B …     tmux prefix
 Super+E          files             Ctrl+B d     detach tmux
-                                   code         tmux + nvim
+                                   dev          Zed (--tmux: nvim)
 Super+B          browser           lzg / lzd    git / docker TUI
 Super+V          clipboard hist    z / zi / r   smart cd / repo pick
 Super+.          emoji             Ctrl+R       fuzzy history

@@ -49,13 +49,13 @@ directly-installed packages are listed; transitive dependencies are not.
 |---------|--------|---------|------------------|
 | `bash` | `setup-bash.sh` | Login shell | `~/.bashrc`, `~/.inputrc` |
 | `kitty` | `setup-kitty.sh` | GPU terminal (Catppuccin Mocha) | Super+Return, Ctrl+Shift+F scrollback, Ctrl+Shift+E URL hints |
-| `tmux` | `setup-code.sh` | Terminal multiplexer | `tmux`, `code` |
-| `neovim` | `setup-neovim.sh` | Editor | `v`, `vim`, `nvim`, `code` |
+| `tmux` | `setup-dev.sh` | Terminal multiplexer | `tmux`, `dev --tmux` |
+| `neovim` | `setup-neovim.sh` | Editor | `v`, `vim`, `nvim`, `dev --tmux` |
 | `gcc`, `make` | `setup-neovim.sh` | Build Treesitter parsers / native plugins | — |
 | `python-pynvim` | `setup-neovim.sh` | Neovim Python provider | — |
 | `tree-sitter-cli` | `setup-neovim.sh` | Treesitter grammars | `:TSUpdate` |
 | `lazygit` | `setup-git.sh` | Git TUI | `lzg` |
-| `lazydocker` (AUR) | `setup-docker.sh` / `setup-code.sh` | Docker TUI | `lzd` |
+| `lazydocker` (AUR) | `setup-docker.sh` / `setup-dev.sh` | Docker TUI | `lzd` |
 
 ## Fonts — `setup-fonts.sh`
 

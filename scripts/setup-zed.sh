@@ -102,4 +102,85 @@ else
     fi
 fi
 
+# --------------------------
+# Make Zed the default handler for text-like files
+# --------------------------
+# The packaged desktop entry only claims text/plain, application/x-zerosize and
+# x-scheme-handler/zed. Everything else a developer opens — JSON, YAML, shell,
+# PHP, source files — falls to whatever else registered for it. These xdg-mime
+# calls write ~/.config/mimeapps.list, which outranks any desktop entry's own
+# MimeType field and survives a pacman upgrade of the zed package.
+
+ZED_DESKTOP_ID="dev.zed.Zed.desktop"
+
+if ! command -v xdg-mime &>/dev/null; then
+    print_warning_message "xdg-mime not found — skipping default-application setup"
+elif [ ! -r "/usr/share/applications/$ZED_DESKTOP_ID" ]; then
+    print_warning_message "No $ZED_DESKTOP_ID in /usr/share/applications — skipping default-application setup"
+else
+    # Types owned by an app that does the job better than an editor would.
+    # text/html belongs to the browser; a double-clicked .html should render.
+    MIME_EXCLUDE=(
+        text/calendar
+        text/html
+        text/vcard
+        text/x-vcard
+    )
+
+    # Every text/* the shared-mime-info database knows about, so a new language
+    # picks up Zed without this list being edited.
+    ZED_MIME_TYPES=()
+    while IFS= read -r mime_xml; do
+        mime_type="text/$(basename "$mime_xml" .xml)"
+        skip=0
+        for excluded in "${MIME_EXCLUDE[@]}"; do
+            [ "$mime_type" = "$excluded" ] && skip=1 && break
+        done
+        [ "$skip" -eq 0 ] && ZED_MIME_TYPES+=("$mime_type")
+    done < <(find /usr/share/mime/text -maxdepth 1 -name '*.xml' 2>/dev/null | sort)
+
+    # Text formats the database files under application/* rather than text/*.
+    ZED_MIME_TYPES+=(
+        application/javascript
+        application/json
+        application/sql
+        application/toml
+        application/x-perl
+        application/x-php
+        application/x-ruby
+        application/x-shellscript
+        application/x-yaml
+        application/xml
+        application/yaml
+    )
+
+    print_action_message "Setting Zed as the default for ${#ZED_MIME_TYPES[@]} MIME types (text/*, common source formats)"
+
+    if xdg-mime default "$ZED_DESKTOP_ID" "${ZED_MIME_TYPES[@]}" 2>/dev/null; then
+        print_success_message "Zed registered as the default text and source-file handler"
+    else
+        print_warning_message "xdg-mime rejected one or more types — check ~/.config/mimeapps.list"
+    fi
+
+    # Folders belong to the file manager. An earlier version of this script
+    # claimed inode/directory for Zed, which also captured `xdg-open <dir>`
+    # and "Open Folder With". Hand it back, but only from Zed — a different
+    # file manager set here is the user's own choice.
+    FILE_MANAGER_DESKTOP_ID="org.gnome.Nautilus.desktop"
+
+    if [ "$(xdg-mime query default inode/directory 2>/dev/null)" = "$ZED_DESKTOP_ID" ]; then
+        if [ -r "/usr/share/applications/$FILE_MANAGER_DESKTOP_ID" ]; then
+            print_action_message "Returning inode/directory to $FILE_MANAGER_DESKTOP_ID (folders open in the file manager, not Zed)"
+            xdg-mime default "$FILE_MANAGER_DESKTOP_ID" inode/directory 2>/dev/null \
+                || print_warning_message "Could not reset the inode/directory default — check ~/.config/mimeapps.list"
+        else
+            print_warning_message "Zed owns inode/directory but $FILE_MANAGER_DESKTOP_ID is not installed — leaving it alone"
+        fi
+    fi
+
+    if command -v update-desktop-database &>/dev/null; then
+        update-desktop-database "$USER_APPLICATIONS_DIR" &>/dev/null || true
+    fi
+fi
+
 print_tool_setup_complete "Zed"

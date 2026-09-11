@@ -228,15 +228,16 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous window |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `code <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) starts that CLI in the split pane. Without `--agent`, `code` uses `DEFAULT_HARNESS` — set during `setup-code.sh` (auto-picked if only one harness CLI is installed, asked with a numbered list if several are) — and falls back gracefully at runtime if that saved default's CLI has gone stale (silently to the sole installed harness, an interactive prompt if several remain, a plain shell if none are installed). Claude's and Codex's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-codex.sh`.
+Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) starts that CLI in the split pane. Without `--agent`, `dev --tmux` uses `DEFAULT_HARNESS` — set during `setup-dev.sh` (auto-picked if only one harness CLI is installed, asked with a numbered list if several are) — and falls back gracefully at runtime if that saved default's CLI has gone stale (silently to the sole installed harness, an interactive prompt if several remain, a plain shell if none are installed). Claude's and Codex's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-codex.sh`.
 
-**Zed:** a Terminal Thread (Agent Panel → "+" → Terminal, or `Ctrl+Alt+T` — see `config/zed/keymap.json`) runs `zed-agent-init`, which starts the same `DEFAULT_HARNESS` CLI as `code` (with the same stale-default fallback) — no separate reveal hook is needed since the agent runs inside the same Zed window as the editor, so Zed's own file watcher picks up its edits.
+**Zed:** a Terminal Thread (Agent Panel → "+" → Terminal, or `Ctrl+Alt+T` — see `config/zed/keymap.json`) runs `zed-agent-init`, which starts the same `DEFAULT_HARNESS` CLI as `dev --tmux` (with the same stale-default fallback) — no separate reveal hook is needed since the agent runs inside the same Zed window as the editor, so Zed's own file watcher picks up its edits.
 
 ### Shell (highlights)
 
 | Command | What it does |
 |---------|----------------|
-| `code [dir]` | tmux session: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent claude\|codex` to pick the agent) |
+| `dev [dir]` | Open the project in Zed |
+| `dev --tmux [dir]` | tmux session instead: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent claude\|codex` to pick the agent) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
@@ -268,7 +269,7 @@ Neovim: leader is **Space** — full map in `~/.nvim-cheatsheet.md` (`vimcheat`)
 ## Day-to-day workflow
 
 1. **Terminal** — Super+Return (Kitty).
-2. **Project** — `cd` / `z` into a repo, then `code` for tmux + Neovim, or run `claude` / `codex` as needed.
+2. **Project** — `cd` / `z` into a repo, then `dev` for Zed (`dev --tmux` for tmux + Neovim), or run `claude` / `codex` as needed.
 3. **Git** — `gs` / `lzg`; GitHub with `gh`.
 4. **Docker** — `dps` / `lzd`.
 5. **Clipboard history** — Super+V.

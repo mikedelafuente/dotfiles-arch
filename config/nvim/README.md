@@ -90,7 +90,7 @@ On first launch:
 
 | Plugin | Purpose | Keybindings |
 |--------|---------|-------------|
-| **claudecode.nvim** | Bidirectional bridge to the Claude Code CLI (`provider = "none"`: Claude runs in its own tmux pane via the `code` command, not inside Neovim) | `<leader>as`, `<leader>ab` |
+| **claudecode.nvim** | Bidirectional bridge to the Claude Code CLI (`provider = "none"`: Claude runs in its own tmux pane via `dev --tmux`, not inside Neovim) | `<leader>as`, `<leader>ab` |
 
 ### UI Enhancements
 
@@ -144,7 +144,7 @@ On first launch:
 | `<leader>as` | Add file to Claude | File-explorer buffers (NvimTree, oil, ...); adds the file under cursor |
 | `<leader>ab` | Add current buffer to Claude | Sends the whole file as context |
 
-Requires a `claude` CLI running in the same working directory — the `code` command's agent pane does this automatically (`code --agent claude`). Neovim starts the bridge's WebSocket server on startup and writes a lock file that `claude` auto-discovers by matching cwd; no manual connection step needed. If a session ever starts before Neovim finishes loading, run `/ide` inside the Claude pane to connect manually. Sending anything jumps tmux focus to the pane to the right (the fixed layout the `code` command creates).
+Requires a `claude` CLI running in the same working directory — the `dev --tmux` agent pane does this automatically (`dev --tmux --agent claude`). Neovim starts the bridge's WebSocket server on startup and writes a lock file that `claude` auto-discovers by matching cwd; no manual connection step needed. If a session ever starts before Neovim finishes loading, run `/ide` inside the Claude pane to connect manually. Sending anything jumps tmux focus to the pane to the right (the fixed layout `dev --tmux` creates).
 
 ### Markdown
 
