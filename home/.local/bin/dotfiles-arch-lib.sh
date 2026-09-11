@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared helpers for ~/.local/bin wrappers (dfa-sync-dotfiles, dfa-update-system, code, zed-agent-init).
+# Shared helpers for ~/.local/bin wrappers (dfa-sync-dotfiles, dfa-update-system, dev, zed-agent-init).
 # Sourced by those scripts — not meant to be executed directly.
 
 # Resolve the dotfiles-arch repo root. Prefers symlink walk-up, then DOTFILES_ARCH, then candidates.
@@ -34,7 +34,7 @@ resolve_dotfiles_arch() {
 # Known agent harnesses, in menu / display order. Each id is assumed to also
 # be its CLI binary name. Keep in sync by hand with scripts/fn-lib.sh's
 # KNOWN_HARNESSES — this copy has to stay sourceable standalone (no
-# dotheader.sh/fn-lib.sh) by runtime ~/.local/bin scripts like `code` and
+# dotheader.sh/fn-lib.sh) by runtime ~/.local/bin scripts like `dev` and
 # `zed-agent-init`.
 KNOWN_HARNESSES=(claude codex opencode)
 
@@ -46,10 +46,10 @@ installed_harnesses() {
   done
 }
 
-# Resolve the saved DEFAULT_HARNESS (from setup-code.sh, see fn-lib.sh's
+# Resolve the saved DEFAULT_HARNESS (from setup-dev.sh, see fn-lib.sh's
 # resolve_default_harness) to the actual CLI binary to run — echoes the
 # harness id, or returns 1 if the saved choice is unset/stale (its CLI no
-# longer on PATH). Used by both `code` (no --agent flag) and `zed-agent-init`
+# longer on PATH). Used by both `dev --tmux` and `zed-agent-init`
 # so the two stay in sync. Reads the legacy DEFAULT_AGENT key too, for a
 # config saved before the DEFAULT_AGENT → DEFAULT_HARNESS rename.
 resolve_default_harness_command() {
@@ -76,8 +76,8 @@ resolve_default_harness_command() {
 # use the sole installed harness, interactively ask when several are
 # installed (Enter keeps the first installed one), or return 1 when none are
 # installed at all. Session-only — never persists the choice; rerun
-# setup-code.sh to change the saved default. Meant to be called from a real
-# terminal (the `code` agent pane, a Zed Terminal Thread); falls back to the
+# setup-dev.sh to change the saved default. Meant to be called from a real
+# terminal (the `dev --tmux` agent pane, a Zed Terminal Thread); falls back to the
 # first installed harness without asking when stdin isn't a TTY.
 resolve_or_prompt_default_harness() {
   local h
@@ -144,7 +144,7 @@ list_git_repos_under() {
 # Derive the tmux session name (and, by extension, the Neovim --listen socket
 # name) for a project directory: translate '.', ' ', ':' in the basename to
 # '_', falling back to a hash-based name when that leaves nothing usable.
-# Shared by `code` (session creation) and `nvim-reveal-edit` (socket lookup
+# Shared by `dev --tmux` (session creation) and `nvim-reveal-edit` (socket lookup
 # during its upward directory walk) so the mapping can't silently diverge.
 tmux_session_name_for() {
   local dir="$1" name

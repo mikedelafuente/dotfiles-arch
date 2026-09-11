@@ -8,6 +8,11 @@
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
   "cli_default_open_behavior": "existing_window",
+  // Claude Code ships no Zed extension, so its `/ide` command can never bind
+  // to Zed. These registry agents are the supported bridge: the same CLIs
+  // reached over ACP, with file context, diffs and edits inside this window.
+  // Zed 1.18 has no settings key for which agent the Agent Panel preselects.
+  // Pick one from the panel's new-thread menu.
   "agent_servers": {
     "codex": {
       "type": "registry"
@@ -39,10 +44,10 @@
     },
     "model_parameters": [],
     // Runs when a new Terminal Thread starts (Agent Panel "+" -> Terminal),
-    // giving Zed a `code`-style agent pane: it resolves the same DEFAULT_AGENT
-    // as `code` (see home/.local/bin/zed-agent-init) instead of hardcoding
-    // `claude` or `codex`, so both stay in sync with the profile choice
-    // made in setup-code.sh.
+    // giving Zed a `dev --tmux`-style agent pane: it resolves the same
+    // DEFAULT_HARNESS (see home/.local/bin/zed-agent-init) instead of
+    // hardcoding `claude` or `codex`, so both stay in sync with the choice
+    // made in setup-dev.sh.
     "terminal_init_command": "zed-agent-init"
   },
   "telemetry": {

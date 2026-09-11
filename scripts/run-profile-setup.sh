@@ -116,7 +116,7 @@ if has_setup_profile devcontainer; then
   run_setup setup-devcontainer.sh
 fi
 
-run_setup setup-code.sh
+run_setup setup-dev.sh
 
 if pacman -Q gnome-shell &>/dev/null; then
   print_info_message "GNOME is installed — running GNOME setup"

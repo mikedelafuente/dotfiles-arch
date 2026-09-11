@@ -1,6 +1,6 @@
 #!/bin/bash
 # -------------------------
-# Setup Code Command - tmux-based Development Environment Launcher
+# Setup dev Command - Zed-first Development Environment Launcher
 # -------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
@@ -13,7 +13,7 @@ else
   exit 1
 fi
 
-print_tool_setup_start "Code Command (tmux Development Launcher)"
+print_tool_setup_start "dev Command (Development Launcher)"
 
 DEPENDENCIES=(tmux lazygit lazydocker)
 MISSING_DEPS=()
@@ -58,32 +58,34 @@ else
 fi
 
 DOTFILES_DIR="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
-CODE_SCRIPT="$DOTFILES_DIR/home/.local/bin/code"
+DEV_SCRIPT="$DOTFILES_DIR/home/.local/bin/dev"
 
-if [ -f "$CODE_SCRIPT" ]; then
-    chmod +x "$CODE_SCRIPT"
-    print_success_message "Made code script executable"
+if [ -f "$DEV_SCRIPT" ]; then
+    chmod +x "$DEV_SCRIPT"
+    print_success_message "Made dev script executable"
 else
-    print_error_message "Code script not found at $CODE_SCRIPT"
+    print_error_message "dev script not found at $DEV_SCRIPT"
 fi
 
-# DEFAULT_HARNESS drives which agent harness `code` (no --agent flag) starts by
-# default. Runs after profile extras (see run-profile-setup.sh) so any
-# profile-installed tools are already on PATH.
+# DEFAULT_HARNESS drives which agent harness `dev --tmux` starts in its agent
+# pane, and which one zed-agent-init execs in a Zed Terminal Thread. Runs after
+# profile extras (see run-profile-setup.sh) so any profile-installed tools are
+# already on PATH.
 load_bootstrap_config || true
 export ASSUME_YES="${DOTFILES_AUR_ASSUME_YES:-false}"
 resolve_default_harness
 HARNESS_LIST="$(IFS='|'; echo "${KNOWN_HARNESSES[*]}")"
 if [[ -n "$DEFAULT_HARNESS" ]]; then
-    print_info_message "code's default harness: $DEFAULT_HARNESS (override per-run with --agent $HARNESS_LIST)"
+    print_info_message "Default agent harness: $DEFAULT_HARNESS (override per-run with: dev --agent $HARNESS_LIST)"
 else
-    print_info_message "No agent harness CLI installed yet — 'code' will open a plain shell pane until one is"
+    print_info_message "No agent harness CLI installed yet — 'dev --tmux' will open a plain shell pane until one is"
 fi
 write_bootstrap_config
 
 print_line_break "Setup Complete"
-print_info_message "The 'code' command opens a tmux session with Neovim + an agent pane"
-print_info_message "Usage: code [directory]"
-print_info_message "Agents: code <dir> --agent <harness>   (one of: $HARNESS_LIST)"
+print_info_message "The 'dev' command opens a project in Zed"
+print_info_message "Usage: dev [directory]"
+print_info_message "tmux + Neovim session instead: dev --tmux [directory]"
+print_info_message "Agents: dev --tmux <dir> --agent <harness>   (one of: $HARNESS_LIST)"
 
-print_tool_setup_complete "Code Command"
+print_tool_setup_complete "dev Command"

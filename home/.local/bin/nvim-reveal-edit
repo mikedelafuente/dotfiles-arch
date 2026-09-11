@@ -2,8 +2,8 @@
 
 # nvim-reveal-edit - PostToolUse (Claude Code) / afterFileEdit (Cursor Agent CLI) hook.
 #
-# Reads a hook JSON payload on stdin and, if a `code`-launched Neovim
-# (home/.local/bin/code, --listen socket) is running for the edited file's
+# Reads a hook JSON payload on stdin and, if a `dev --tmux`-launched Neovim
+# (home/.local/bin/dev, --listen socket) is running for the edited file's
 # project, reveals it there: if the file is already open in a window in the
 # current tab, just focuses that window (reloading it if unmodified);
 # otherwise loads the file into the first non-nvim-tree window of the
@@ -33,7 +33,7 @@ FILE_PATH="$(jq -r '.file_path // .tool_input.file_path // .tool_input.notebook_
 FILE_PATH="$(realpath -m "$FILE_PATH")"
 
 # Walk up from the file looking for a live socket, deriving each ancestor's
-# session name via the same tmux_session_name_for `code` uses to name it.
+# session name via the same tmux_session_name_for `dev --tmux` uses to name it.
 SOCKET=""
 dir="$(dirname "$FILE_PATH")"
 while [[ -n "$dir" && "$dir" != "/" ]]; do
