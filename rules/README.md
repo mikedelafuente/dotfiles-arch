@@ -18,7 +18,7 @@ Frontmatter fields: `description`, optional `globs` (comma-separated glob string
 `alwaysApply: true|false`. A `README.md` here is never treated as a rule.
 
 `scripts/sync-rules.sh` (run automatically by `dfa-sync-dotfiles`/`bootstrap.sh`, and daily
-via `dfa-morning`) builds a normalized copy of each source's rules into
+via `dfa-daily`) builds a normalized copy of each source's rules into
 `~/.config/dotfiles-arch/rules-build/<slug>/`, then symlinks each `.mdc` from there into
 `~/.cursor/rules/<name>.mdc`. Rules marked `alwaysApply: true` are also concatenated (body
 only) into a per-source file symlinked to `~/.claude/dfa-rules-<slug>.md`, with a matching

@@ -1,0 +1,113 @@
+#!/bin/bash
+# Weekly routine — dfa-daily, plus heavier maintenance that doesn't need to
+# run every day: a forced package-update pass (bypasses dfa-update-system's
+# 24h cooldown) and orphaned-package cleanup (needs sudo).
+#
+# Edit WEEKLY_STEPS below to add or reorder the maintenance-only tasks. Each
+# name must be on PATH (~/.local/bin). Missing commands are skipped with a
+# message. dfa-daily's own dotfiles-arch-update auto-resync/restart special
+# case is inherited for free since it's run as the first step here — it is
+# not duplicated in this script.
+#
+# Usage: dfa-weekly [args…]
+#   Args are forwarded to dfa-daily and to every weekly step.
+
+set -uo pipefail
+
+_WEEKLY_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+if [[ -r "$_WEEKLY_LIB_DIR/dotfiles-arch-lib.sh" ]]; then
+  # shellcheck source=/dev/null
+  source "$_WEEKLY_LIB_DIR/dotfiles-arch-lib.sh"
+fi
+
+WEEKLY_STEPS=(
+  dfa-update-system
+  dfa-remove-orphans
+)
+
+usage() {
+  cat <<'EOF'
+Usage: dfa-weekly [args…]
+
+Run dfa-daily, then the weekly-only maintenance steps. Edit WEEKLY_STEPS in
+this script to customize. Steps not on PATH are skipped.
+
+Steps:
+  dfa-daily                 the full daily routine (see dfa-daily --help)
+  dfa-update-system --force guarded pacman + yay update, bypassing the 24h
+                             cooldown so a real upgrade attempt happens at
+                             least once a week
+  dfa-remove-orphans        remove orphaned pacman packages (needs sudo)
+
+Example:
+  dfa-weekly --yes   non-interactive (forwarded to dfa-daily and dfa-update-system)
+EOF
+}
+
+main() {
+  local step step_status daily_status
+  local -a failures=() skipped=()
+
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help)
+        usage
+        exit 0
+        ;;
+    esac
+  done
+
+  if ! command -v dfa-daily &>/dev/null; then
+    printf 'dfa-weekly: dfa-daily not on PATH — aborting\n' >&2
+    exit 1
+  fi
+
+  printf '\n==> dfa-daily\n'
+  if dfa-daily "$@"; then
+    daily_status=0
+  else
+    daily_status=$?
+    printf 'dfa-weekly: dfa-daily failed (exit %s) — continuing with weekly-only steps\n' "$daily_status" >&2
+    failures+=("dfa-daily")
+  fi
+
+  for step in "${WEEKLY_STEPS[@]}"; do
+    if ! command -v "$step" &>/dev/null; then
+      printf 'dfa-weekly: skip %s (not on PATH)\n' "$step" >&2
+      skipped+=("$step")
+      continue
+    fi
+
+    printf '\n==> %s\n' "$step"
+    if [[ "$step" == "dfa-update-system" ]]; then
+      if "$step" --force "$@"; then
+        step_status=0
+      else
+        step_status=$?
+      fi
+    else
+      if "$step" "$@"; then
+        step_status=0
+      else
+        step_status=$?
+      fi
+    fi
+
+    if [[ "$step_status" -ne 0 ]]; then
+      printf 'dfa-weekly: %s failed (exit %s)\n' "$step" "$step_status" >&2
+      failures+=("$step")
+    fi
+  done
+
+  printf '\n'
+  if ((${#skipped[@]})); then
+    printf 'dfa-weekly: skipped (not on PATH): %s\n' "${skipped[*]}"
+  fi
+  if ((${#failures[@]})); then
+    printf 'dfa-weekly: finished with failures: %s\n' "${failures[*]}" >&2
+    exit 1
+  fi
+  printf 'dfa-weekly: done\n'
+}
+
+main "$@"
