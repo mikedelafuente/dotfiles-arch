@@ -38,6 +38,7 @@ dotfiles-arch/
 │   ├── bat/config
 │   ├── starship.toml
 │   └── ...
+├── pi-dev/                       # Working area for a custom pi.dev build (see setup-pi.sh)
 ├── skills/                       # Personal Claude/Cursor skills (SKILL.md folders)
 ├── rules/                        # Personal Cursor rules (flat .mdc files)
 ├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
@@ -105,7 +106,7 @@ These scripts (`dev`, `zed-agent-init`, `dfa-sync-dotfiles`, `dfa-sync-skills`, 
 - AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
 - NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
 - Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`, `resolve_default_harness`
-- Agent harnesses: `KNOWN_HARNESSES` array + `KNOWN_HARNESS_LABELS` (`claude`, `codex`, `opencode` today — add a new id/label pair here, and to the matching array in `home/.local/bin/dotfiles-arch-lib.sh`, as each new harness's `setup-*.sh` lands, e.g. a future pi.dev CLI), `installed_harnesses` (which of those are actually on PATH)
+- Agent harnesses: `KNOWN_HARNESSES` array + `KNOWN_HARNESS_LABELS` (`claude`, `codex`, `opencode`, `pi` today — add a new id/label pair here, and to the matching array in `home/.local/bin/dotfiles-arch-lib.sh`, as each new harness's `setup-*.sh` lands), `installed_harnesses` (which of those are actually on PATH)
 - Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
 - Fonts: `refresh_font_cache`
 
@@ -126,7 +127,7 @@ Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
 
 - `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
   `SETUP_PROFILE` (primary for older readers), `INSTALL_NVIDIA`, `MACHINE_TYPE`,
-  `DEFAULT_HARNESS` (one of `KNOWN_HARNESSES` — `claude`, `codex`, `opencode` today —
+  `DEFAULT_HARNESS` (one of `KNOWN_HARNESSES` — `claude`, `codex`, `opencode`, `pi` today —
   resolved by `setup-dev.sh` — see below; migrated from a config's legacy `DEFAULT_AGENT`
   key by `load_bootstrap_config` on first read after the rename)
 
@@ -142,7 +143,7 @@ Profiles are **additive** — select any combination (e.g. `work,devcontainer`).
 | personal | Steam, Discord, Firefox, Mullvad |
 | devcontainer | just, mkcert, bind/`dig`, OpenVPN 3 (`openvpn3` AUR), Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
 
-Shared: Kitty, tmux, Claude Code, Codex, opencode, Ollama, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc. `run-profile-setup.sh` runs `setup-dev.sh` last, after all profile extras, so any profile-installed tools are already on PATH.
+Shared: Kitty, tmux, Claude Code, Codex, opencode, pi, Ollama, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc. `run-profile-setup.sh` runs `setup-dev.sh` last, after all profile extras, so any profile-installed tools are already on PATH.
 
 ### Special cases
 
@@ -154,6 +155,7 @@ Shared: Kitty, tmux, Claude Code, Codex, opencode, Ollama, Neovim, languages, Do
 - **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
 - **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
 - **setup-codex.sh**: Shared stack (see below `setup-claude.sh`); Codex CLI via user-level npm (`@openai/codex`, never `sudo npm`), same as Claude. Codex's hook system is experimental and off by default — the script idempotently sets `[features] codex_hooks = true` in `~/.codex/config.toml` (plain sed edit, not a TOML rewrite tool) and merges the `nvim-reveal-edit` `PostToolUse` hook into `~/.codex/hooks.json` (jq, matcher `apply_patch` — Codex's canonical tool_name for every file edit, covering the `Edit`/`Write` matcher aliases too)
+- **setup-pi.sh**: Shared stack; installs the stock `pi` coding agent via user-level npm (`@earendil-works/pi-coding-agent --ignore-scripts`, per https://pi.dev/docs/latest — pi needs no npm lifecycle scripts, unlike Claude Code). `pi-dev/` at the repo root is the working area for a future custom fork/build; nothing there is wired in yet — see `pi-dev/README.md`
 - **setup-ollama.sh**: Shared stack, but GPU-gated — CPU-only inference isn't worth installing unconditionally, so it skips entirely unless a working NVIDIA driver (`nvidia-smi`, not just PCI hardware — same pattern as `setup-voxtype.sh`'s Parakeet gate) or a Vulkan ICD (`/usr/share/vulkan/icd.d/*.json`) is detected. Installs `ollama-cuda` on NVIDIA, else `ollama-vulkan`; never swaps an already-installed flavor; enables/starts `ollama.service`
 - **setup-harness-agents.sh**: Runs after `setup-codex.sh`, `setup-opencode.sh`, and `setup-ollama.sh` in `run-profile-setup.sh` so it can wire whatever's locally pulled in Ollama (`ollama list`) into both agent CLIs' model lists — idempotent and fully regenerates its managed sections each run (so `ollama pull`/`rm` is reflected, additions and removals both), skipping quietly if `ollama`/`codex`/`opencode` aren't installed or the Ollama service isn't responding. Codex already ships a built-in `ollama` model_provider (`localhost:11434`), so this only appends one `[profiles."ollama-<model>"]` per local model inside a marker-delimited block in `~/.codex/config.toml` (`codex --profile ollama-<model>`). opencode has no built-in local provider, so this sets a custom `provider.ollama` entry (`@ai-sdk/openai-compatible`, `baseURL` `http://localhost:11434/v1`) in `~/.config/opencode/opencode.jsonc` via jq, listing every local model — note this assumes the file is comment-free JSON, since jq can't parse real `.jsonc` comments. Also runnable directly as `dfa-sync-harness-agents`, and included as a step in `dfa-daily` so newly pulled/removed Ollama models get synced daily without a full `sync.sh` pass.
 - **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh` already shared)
@@ -193,6 +195,7 @@ Shared: Kitty, tmux, Claude Code, Codex, opencode, Ollama, Neovim, languages, Do
 - `scripts/fn-lib.sh` — package/nvm/hardware/config/AUR-scan helpers
 - `scripts/setup-gnome.sh` — theme, Pop Shell, Dash to Panel, keybindings, GPaste, AppIndicator, No Overview
 - `scripts/setup-dev.sh` — `dev` launcher deps + `DEFAULT_HARNESS` resolution
+- `scripts/setup-pi.sh` / `pi-dev/README.md` — installs the stock `pi` CLI; working area for a future custom build
 - `prepare-archinstall.sh` — guided disk/hostname/`gfx_driver` prep for `user_configuration.json`, run before archinstall
 - `user_configuration.json` — disk device, hostname, and `gfx_driver` per machine (set by `prepare-archinstall.sh` or by hand)
 - `NOTES.md` — WiFi, USB config, NVIDIA, sync

@@ -131,16 +131,17 @@ KNOWN_SETUP_PROFILES=(work personal devcontainer)
 
 # Known agent harnesses, in menu / display order. Each id is assumed to also
 # be its CLI binary name (true for all of these) — add new ones here as their
-# setup-*.sh script lands (e.g. a future pi.dev CLI) and give them a label
-# below. Kept in sync by hand with home/.local/bin/dotfiles-arch-lib.sh's
+# setup-*.sh script lands and give them a label below. Kept in sync by hand
+# with home/.local/bin/dotfiles-arch-lib.sh's
 # KNOWN_HARNESSES (that copy can't source this file — it must stay
 # sourceable standalone by runtime ~/.local/bin scripts without pulling in
 # dotheader.sh's `set -euo pipefail`/sudo-home resolution).
-KNOWN_HARNESSES=(claude codex opencode)
+KNOWN_HARNESSES=(claude codex opencode pi)
 declare -A KNOWN_HARNESS_LABELS=(
   [claude]="Claude Code"
   [codex]="Codex CLI"
   [opencode]="opencode"
+  [pi]="pi"
 )
 
 # Echo the installed subset of KNOWN_HARNESSES (one per line, in order).
