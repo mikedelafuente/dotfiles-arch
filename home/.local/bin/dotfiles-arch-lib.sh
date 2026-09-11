@@ -36,7 +36,7 @@ resolve_dotfiles_arch() {
 # KNOWN_HARNESSES — this copy has to stay sourceable standalone (no
 # dotheader.sh/fn-lib.sh) by runtime ~/.local/bin scripts like `dev` and
 # `zed-agent-init`.
-KNOWN_HARNESSES=(claude codex opencode)
+KNOWN_HARNESSES=(claude codex opencode pi)
 
 # Echo the installed subset of KNOWN_HARNESSES (one per line, in order).
 installed_harnesses() {
