@@ -532,6 +532,101 @@ system_upgrade_cooldown_expired() {
 }
 
 # --------------------------
+# Schema version / migrations
+# --------------------------
+# A machine records which dotfiles-arch schema version it has been migrated to.
+# Renames in home/.local/bin leave dangling symlinks that link-dotfiles.sh never
+# prunes, so each bump ships a migrations/vN-to-vM-migration.sh that cleans up.
+
+schema_version_file() {
+  echo "$(bootstrap_config_dir)/.dotfiles_schema_version"
+}
+
+# Highest M across migrations/v*-to-vM-migration.sh — the version a fully
+# migrated machine is at. Derived from the directory so adding a migration
+# bumps the target with no constant to keep in sync. Prints 1 when none exist.
+repo_schema_version() {
+  local repo_root migration base to highest=1
+  repo_root="$(cd -- "$DF_SCRIPT_DIR/.." &>/dev/null && pwd)"
+  for migration in "$repo_root"/migrations/v*-to-v*-migration.sh; do
+    [ -r "$migration" ] || continue
+    base="$(basename "$migration")"
+    to="${base#v*-to-v}"
+    to="${to%-migration.sh}"
+    [[ "$to" =~ ^[0-9]+$ ]] || continue
+    ((to > highest)) && highest="$to"
+  done
+  echo "$highest"
+}
+
+# The recorded version, or empty when this machine has never been stamped.
+stored_schema_version() {
+  local f
+  f="$(schema_version_file)"
+  [ -r "$f" ] || return 0
+  local v
+  v="$(tr -dc '0-9' <"$f")"
+  [ -n "$v" ] && echo "$v"
+}
+
+write_schema_version() {
+  local dir
+  dir="$(bootstrap_config_dir)"
+  mkdir -p "$dir"
+  echo "$1" >"$(schema_version_file)"
+}
+
+# True when ~/.local/bin/$1 is a symlink whose target no longer exists.
+# Each rename leaves exactly this, which is what the migrations clean up.
+_has_dangling_bin_symlink() {
+  local target="${USER_HOME_DIR:-$HOME}/.local/bin/$1"
+  [ -L "$target" ] && [ ! -e "$target" ]
+}
+
+# Infer the version of a machine stamped before versions were recorded, by
+# looking for the dangling symlink each rename left behind. Checked oldest
+# first: a v1 machine predates dfa-morning, so its landmarks must win.
+detect_schema_version_by_landmark() {
+  local name
+
+  # v1 -> v2 renamed ten commands under a dfa- prefix.
+  for name in morning sync-dotfiles repos update-repos update-system \
+              check-dotfiles remove-orphans sync-skills sync-rules sync-sources; do
+    if _has_dangling_bin_symlink "$name"; then
+      echo 1
+      return 0
+    fi
+  done
+
+  # v2 -> v3 renamed dfa-morning to dfa-daily.
+  if _has_dangling_bin_symlink dfa-morning; then
+    echo 2
+    return 0
+  fi
+
+  # v3 -> v4 renamed code to dev.
+  if _has_dangling_bin_symlink code; then
+    echo 3
+    return 0
+  fi
+
+  # No landmark: either freshly bootstrapped or already current.
+  repo_schema_version
+}
+
+# The version this machine is at. The stamp is authoritative once written;
+# landmarks are only consulted for machines that predate it.
+current_schema_version() {
+  local stored
+  stored="$(stored_schema_version)"
+  if [ -n "$stored" ]; then
+    echo "$stored"
+  else
+    detect_schema_version_by_landmark
+  fi
+}
+
+# --------------------------
 # Hardware helpers
 # --------------------------
 

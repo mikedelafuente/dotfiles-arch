@@ -21,7 +21,7 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ### Day-to-day updates (preferred)
 
 ```bash
-dfa-daily                         # dfa-update-repos + dfa-update-system + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
+dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
 dfa-weekly                        # dfa-daily + a forced dfa-update-system + dfa-remove-orphans — reach for this ~weekly
 dfa-sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then dfa-sync-skills && dfa-sync-rules
@@ -31,6 +31,7 @@ bash scripts/update-system.sh --yes        # non-interactive after clean AUR sca
 bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
 bash scripts/update-system.sh --force      # bypass the 1-day cooldown
 dfa-update-repos                  # parallel git pull --ff-only under ~/repos (MAX_PARALLEL=8)
+dfa-migrate                       # apply pending schema migrations (--dry-run to preview)
 ```
 
 This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Sync always runs the same upgrade path; bootstrap uses it behind a 1-day cooldown. Both use the same scan before any `--noconfirm` AUR install.
@@ -302,7 +303,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # dfa-daily, dfa-weekly, dfa-update-repos, dfa-sync-dotfiles, dfa-sync-skills, dfa-sync-rules, dfa-sync-sources, dfa-sync-harness-agents, dfa-update-system, dfa-refresh-audio, …
+│   └── .local/bin/        # dfa-daily, dfa-weekly, dfa-migrate, dfa-update-repos, dfa-sync-dotfiles, dfa-sync-skills, dfa-sync-rules, dfa-sync-sources, dfa-sync-harness-agents, dfa-update-system, dfa-refresh-audio, …
 └── config/                # → ~/.config
 ```
 
