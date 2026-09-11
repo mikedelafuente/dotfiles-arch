@@ -21,8 +21,9 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ### Day-to-day updates (preferred)
 
 ```bash
-dfa-morning                       # dfa-update-repos + dfa-update-system + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-morning)
+dfa-daily                         # dfa-update-repos + dfa-update-system + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
+dfa-weekly                        # dfa-daily + a forced dfa-update-system + dfa-remove-orphans — reach for this ~weekly
 dfa-sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then dfa-sync-skills && dfa-sync-rules
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
@@ -300,7 +301,7 @@ dotfiles-arch/
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
 ├── home/                  # → ~
-│   └── .local/bin/        # dfa-morning, dfa-update-repos, dfa-sync-dotfiles, dfa-sync-skills, dfa-sync-rules, dfa-sync-sources, dfa-sync-harness-agents, dfa-update-system, dfa-refresh-audio, …
+│   └── .local/bin/        # dfa-daily, dfa-weekly, dfa-update-repos, dfa-sync-dotfiles, dfa-sync-skills, dfa-sync-rules, dfa-sync-sources, dfa-sync-harness-agents, dfa-update-system, dfa-refresh-audio, …
 └── config/                # → ~/.config
 ```
 
