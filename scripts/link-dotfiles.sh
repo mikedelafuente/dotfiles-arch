@@ -71,7 +71,11 @@ link_path() {
 
 print_info_message "Linking home directory dotfiles..."
 
-for file in .bashrc .inputrc .profile .gitconfig .gitignore_global .nvim-cheatsheet.md .welcome.md .packages.md .tmux.conf; do
+# ~/.gitconfig is machine-local, not linked; shared git settings are
+# config/git/config (linked below with the rest of config/).
+ensure_local_gitconfig
+
+for file in .bashrc .inputrc .profile .gitignore_global .nvim-cheatsheet.md .welcome.md .packages.md .tmux.conf; do
   link_path "$DOTFILES_HOME_DIR/$file" "$USER_HOME_DIR/$file"
   print_info_message "Linked: $file"
 done

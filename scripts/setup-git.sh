@@ -77,27 +77,21 @@ fi
 # --------------------------
 # Configure Git Identity (machine-local)
 # --------------------------
-# Name/email are per-machine and must not live in the symlinked ~/.gitconfig.
-# Shared settings (editor, defaultBranch, credentials) come from home/.gitconfig.
-# Identity is written here and included via: [include] path = ~/.config/git/identity
+# Name/email are per-machine and live in the real (unlinked) ~/.gitconfig.
+# Shared settings (editor, defaultBranch, credentials) come from
+# config/git/config, linked to ~/.config/git/config by link-dotfiles.
 
 print_info_message "Writing machine-local Git identity"
 
-GIT_CONFIG_DIR="$USER_HOME_DIR/.config/git"
-IDENTITY_FILE="$GIT_CONFIG_DIR/identity"
+ensure_local_gitconfig
+LOCAL_GITCONFIG="$USER_HOME_DIR/.gitconfig"
+git config --file "$LOCAL_GITCONFIG" user.name "$USERNAME_ARG"
+git config --file "$LOCAL_GITCONFIG" user.email "$EMAIL_ARG"
 
-mkdir -p "$GIT_CONFIG_DIR"
-cat > "$IDENTITY_FILE" <<EOF
-[user]
-	name = $USERNAME_ARG
-	email = $EMAIL_ARG
-EOF
-
-print_info_message "Git identity written to $IDENTITY_FILE:"
+print_info_message "Git identity written to $LOCAL_GITCONFIG:"
 print_info_message "  Name: $USERNAME_ARG"
 print_info_message "  Email: $EMAIL_ARG"
-print_info_message "Shared settings (editor, defaultBranch) come from ~/.gitconfig after link-dotfiles"
-chmod 600 "$IDENTITY_FILE"
+print_info_message "Shared settings (editor, defaultBranch) come from ~/.config/git/config after link-dotfiles"
 
 # --------------------------
 # Setup SSH Keys
