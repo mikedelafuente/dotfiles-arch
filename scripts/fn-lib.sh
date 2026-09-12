@@ -875,6 +875,50 @@ load_nvm() {
 }
 
 # --------------------------
+# Git
+# --------------------------
+
+# Shared settings are linked to ~/.config/git/config; ~/.gitconfig must be a
+# real machine-local file so identity and `git config --global` writes never
+# land in the repo. Converts the legacy layout (~/.gitconfig symlinked into the
+# repo + ~/.config/git/identity) in place. Idempotent.
+ensure_local_gitconfig() {
+  local target="$USER_HOME_DIR/.gitconfig"
+  local legacy_identity="$USER_HOME_DIR/.config/git/identity"
+  local key value
+
+  if [ -L "$target" ]; then
+    case "$(readlink "$target")" in
+      */home/.gitconfig)
+        print_action_message "Replacing legacy ~/.gitconfig symlink with a machine-local file"
+        rm -f "$target"
+        ;;
+      *)
+        print_warning_message "$target is a symlink not managed by dotfiles-arch — leaving it alone"
+        return 0
+        ;;
+    esac
+  fi
+
+  if [ ! -e "$target" ]; then
+    printf '%s\n' \
+      "# Machine-local Git config (not in dotfiles-arch). Shared settings come from" \
+      "# ~/.config/git/config; values here override them." > "$target"
+  fi
+
+  if [ -f "$legacy_identity" ]; then
+    for key in user.name user.email; do
+      if ! git config --file "$target" --get "$key" >/dev/null 2>&1 \
+        && value="$(git config --file "$legacy_identity" --get "$key" 2>/dev/null)"; then
+        git config --file "$target" "$key" "$value"
+      fi
+    done
+    rm -f "$legacy_identity"
+    print_info_message "Migrated $legacy_identity into $target"
+  fi
+}
+
+# --------------------------
 # Fonts
 # --------------------------
 

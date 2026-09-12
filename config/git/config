@@ -1,7 +1,8 @@
-# Shared Git config (symlinked). Per-machine identity lives in
-# ~/.config/git/identity — written by scripts/setup-git.sh.
-[include]
-	path = ~/.config/git/identity
+# Shared Git config — symlinked to ~/.config/git/config (git's XDG global file).
+# Machine-local settings (user.name/email, anything `git config --global` or
+# `gh auth setup-git` writes) live in the real ~/.gitconfig, which git reads
+# after this file, so local values win. See ensure_local_gitconfig (fn-lib.sh).
+# Never put identity here.
 [core]
 	editor = nvim
 	# Quoted so the semicolons are not read as git-config comments.
@@ -19,12 +20,11 @@
 	conflictStyle = zdiff3
 [diff]
 	colorMoved = default
+[fetch]
+	prune = true
 [init]
 	defaultBranch = main
 [credential "https://github.com"]
-    helper = !/usr/bin/gh auth git-credential
+	helper = !/usr/bin/gh auth git-credential
 [credential "https://gist.github.com"]
-    helper = !/usr/bin/gh auth git-credential
-[user]
-	name = Mike de la Fuente
-	email = mdelafuente@revolutionparts.com
+	helper = !/usr/bin/gh auth git-credential

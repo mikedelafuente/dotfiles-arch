@@ -28,10 +28,10 @@ dotfiles-arch/
 │   └── setup-*.sh                # Individual tool setup scripts
 ├── home/                         # Dotfiles for ~/
 │   ├── .bashrc
-│   ├── .gitconfig                # Shared only; includes ~/.config/git/identity
 │   ├── .packages.md              # → ../PACKAGES.md (shown by `packages`)
 │   └── .local/bin/               # Helpers (code, zed-agent-init, dfa — fzf picker over the dfa-* commands, dfa-repos, dfa-check-dotfiles, dfa-remove-orphans, dfa-sync-dotfiles, dfa-update-system, dfa-refresh-audio, …)
 ├── config/                       # ~/.config application configs
+│   ├── git/config                # Shared git settings (~/.gitconfig stays machine-local)
 │   ├── fontconfig/fonts.conf
 │   ├── nvim/
 │   ├── kitty/
@@ -148,7 +148,7 @@ Shared: Kitty, tmux, Claude Code, Codex, opencode, pi, Ollama, Neovim, languages
 ### Special cases
 
 - **prepare-archinstall.sh**: Run from the live ISO before archinstall, not from an installed system. Lists block devices via `lsblk` (excluding loop/optical, and `zram` specifically since it reports `TYPE=disk` too but isn't a real wipeable target), prompts for a hostname, and detects the GPU vendor via `has_nvidia_hardware`/`has_amd_gpu_hardware`/`has_intel_gpu_hardware` (`fn-lib.sh`, sourced defensively like `post_install.sh`) to propose one of the six canonical `gfx_driver` values (`archinstall/lib/hardware.py`'s `GfxDriver` enum, tag 4.4 — see `docs/research/archinstall-config-schema.md`), letting the user confirm or override. Requires typing the disk path a second time to confirm before it's willing to select it (the layout wipes the disk). Patches `disk_config.device_modifications[0].device`, `hostname`, and `profile_config.gfx_driver` into `user_configuration.json` via `python3 -c` (present on the ISO because archinstall itself needs it), preserving key order and the rest of the file untouched. `--dry-run` prints the same planned changes without writing. Never reads, writes, or references `user_credentials.json` — the LUKS/user password stays a manual step by deliberate choice.
-- **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes `~/.config/git/identity` (not the shared `.gitconfig`)
+- **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes identity into the real, machine-local `~/.gitconfig` (never symlinked). Shared settings live in `config/git/config` → `~/.config/git/config`, which git reads first so local values win; `git config --global`/`gh auth setup-git` also land in `~/.gitconfig`. `ensure_local_gitconfig` (`fn-lib.sh`, also called by `link-dotfiles.sh`) converts the legacy layout — replaces a `~/.gitconfig` symlink into the repo and folds `~/.config/git/identity` into it
 - **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` (checksummed install.sh, never `curl|bash`); Claude uses user-level `npm` (never `sudo npm`). `setup-claude.sh` also idempotently merges the `nvim-reveal-edit` `PostToolUse` hook into `~/.claude/settings.json` (jq, touching only `.hooks.PostToolUse`)
 - **setup-dev.sh**: Installs `tmux`, `lazygit`, `lazydocker` (the `dev --tmux` path; Zed itself comes from `setup-zed.sh`); runs last in `run-profile-setup.sh` (after profile extras) so all harness CLIs are already on PATH; resolves `DEFAULT_HARNESS` via `resolve_default_harness` — auto-picks the one harness CLI installed, prompts with a numbered list (Enter keeps the saved choice if it's still installed, else the first installed one) when 2+ are, leaves it empty when none are — and persists it with `write_bootstrap_config`
 - **setup-gnome.sh**: Only when `gnome-shell` is installed; power policy from `MACHINE_TYPE` (`power-profiles-daemon` profile, `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` — laptop suspends on battery lid-close but ignores lid on AC/docked, `90-dotfiles-arch-usb-wakeup.rules` for KVM HID wake, audio powersave), falling back to `has_battery`; installs/configures Dash to Panel (always-visible full-width top bar, small centered icons, every monitor); Pop Shell auto-tiling off by default
