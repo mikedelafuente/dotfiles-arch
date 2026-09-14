@@ -21,6 +21,14 @@ print_line_break "Post-link hooks"
 refresh_font_cache
 
 # --------------------------
+# Apply pending schema migrations
+# --------------------------
+# Renames leave dangling ~/.local/bin symlinks that the linking above cannot
+# prune. Running here means bootstrap and sync also stamp the version, matching
+# how sync-skills/sync-rules are wired into both this and dfa-daily.
+bash "$DF_SCRIPT_DIR/migrate.sh"
+
+# --------------------------
 # Sync personal skills (Claude Code / Cursor)
 # --------------------------
 bash "$DF_SCRIPT_DIR/sync-skills.sh"

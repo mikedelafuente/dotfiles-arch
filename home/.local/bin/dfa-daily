@@ -4,7 +4,8 @@
 # Edit DAILY_STEPS below to add or reorder tasks. Each name must be on PATH
 # (~/.local/bin). Missing commands are skipped with a message.
 #
-# Default: dfa-update-repos, then dfa-update-system (day-to-day pacman + yay), then
+# Default: dfa-update-repos, then dfa-migrate (apply any pending schema migrations the
+# pull brought in), then dfa-update-system (day-to-day pacman + yay), then
 # dfa-update-npm-clis (npm update -g for claude/codex/pi — opencode is pacman-managed
 # and already covered by dfa-update-system), then dfa-sync-skills (relink personal
 # skills from dotfiles-arch), then dfa-sync-rules (relink personal Cursor rules from
@@ -32,6 +33,7 @@ fi
 
 DAILY_STEPS=(
   dfa-update-repos
+  dfa-migrate
   dfa-update-system
   dfa-update-npm-clis
   dfa-sync-skills
@@ -48,6 +50,7 @@ customize. Steps not on PATH are skipped.
 
 Default steps:
   dfa-update-repos    git pull under ~/repos
+  dfa-migrate         run pending dotfiles-arch schema migrations
   dfa-update-system   guarded pacman + yay update
   dfa-update-npm-clis npm update -g for claude/codex/pi (opencode is pacman-managed)
   dfa-sync-skills     relink skills from dotfiles-arch + dfa-sync-sources extras
