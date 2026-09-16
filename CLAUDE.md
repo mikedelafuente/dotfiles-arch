@@ -24,7 +24,7 @@ dotfiles-arch/
 │   ├── post-link-hooks.sh        # After link-dotfiles (fc-cache, GNOME checklist)
 │   ├── dotheader.sh              # Common header (SCRIPT_DIR, USER_HOME_DIR)
 │   ├── fn-lib.sh                 # Shared helpers (print, packages, nvm, hardware)
-│   ├── link-dotfiles.sh          # Symlink home/ + config/ into $HOME
+│   ├── link-dotfiles.sh          # Symlink home/ + config/ + pi/ into $HOME / ~/.pi/agent
 │   ├── migrate.sh                # Run pending migrations/ up to the repo's schema version
 │   └── setup-*.sh                # Individual tool setup scripts
 ├── home/                         # Dotfiles for ~/
@@ -39,6 +39,7 @@ dotfiles-arch/
 │   ├── bat/config
 │   ├── starship.toml
 │   └── ...
+├── pi/                          # Shared pi config, symlinked into ~/.pi/agent (models.json; single files only — never auth.json)
 ├── pi-dev/                       # Working area for a custom pi.dev build (see setup-pi.sh)
 ├── skills/                       # Personal Claude/Cursor skills (SKILL.md folders)
 ├── rules/                        # Personal rules for AI agents (flat .md/.mdc files; e.g. git-merge-shorthand.md, style-brief.md)
@@ -211,6 +212,7 @@ A rename under `home/.local/bin/` leaves a dangling `~/.local/bin` symlink: `lin
 - `scripts/setup-gnome.sh` — theme, Pop Shell, Dash to Panel, keybindings, GPaste, AppIndicator, No Overview
 - `scripts/setup-dev.sh` — `dev` launcher deps + `DEFAULT_HARNESS` resolution
 - `scripts/setup-pi.sh` / `pi-dev/README.md` — installs the stock `pi` CLI; working area for a future custom build
+- `scripts/link-dotfiles.sh` — symlinks `home/`→`$HOME`, `config/`→`~/.config`, and `pi/`→`~/.pi/agent` (shared single files like `models.json`; never `auth.json`, which stays machine-local)
 - `prepare-archinstall.sh` — guided disk/hostname/`gfx_driver` prep for `user_configuration.json`, run before archinstall
 - `user_configuration.json` — disk device, hostname, and `gfx_driver` per machine (set by `prepare-archinstall.sh` or by hand)
 - `NOTES.md` — WiFi, USB config, NVIDIA, sync
