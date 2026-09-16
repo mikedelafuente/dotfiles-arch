@@ -41,7 +41,7 @@ dotfiles-arch/
 │   └── ...
 ├── pi-dev/                       # Working area for a custom pi.dev build (see setup-pi.sh)
 ├── skills/                       # Personal Claude/Cursor skills (SKILL.md folders)
-├── rules/                        # Personal Cursor rules (flat .mdc files)
+├── rules/                        # Personal rules for AI agents (flat .md/.mdc files; e.g. git-merge-shorthand.md, style-brief.md)
 ├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
 ├── AGENTS.md                     # Short pointer file for agents
 ├── PACKAGES.md                   # Why each installed package exists
