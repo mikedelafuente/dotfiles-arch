@@ -191,7 +191,69 @@ Do this on each machine that should match the repo. Fresh installs still use `bo
 
 Paths use `$HOME` / `$USER_HOME_DIR` so different usernames on other machines work without edits.
 
-### One-time: v1 -> v2 command rename cleanup
+### Open-weight models for Matt Pocock skills
+
+**Skill exists:** `.pi/agent/skills/evaluate-models/SKILL.md` - query leaderboards and match models to skills.
+
+Short version: skills are model-agnostic, but reasoning-heavy ones benefit from top-tier coders. See full SKILL.md for methodology. Current state on this machine (Sept 2026):
+
+| Skill | Best overall model | Best budget model | **Best available** |
+|-------|------------------|-------------------|-------------------|
+| ask-matt | Claude Sonnet 5 | Qwen3-Coder-30B | **DeepSeek V4 Flash** (current Pi model) |
+| grill-me | Kimi K2.5 | DeepSeek V3.2-Reasoner | DeepSeek V4 Flash |
+| grill-with-docs | Qwen3-Coder-480B | GLM 5 | DeepSeek V4 Flash |
+| wayfinder | Qwen3-Coder-480B | Kimi K2.5 | DeepSeek V4 Flash |
+| to-spec | Qwen3-Coder-480B | DeepSeek V3.2 | DeepSeek V4 Flash |
+| to-tickets | GLM 5 | DeepSeek V3.2 | DeepSeek V4 Flash |
+| implement | Qwen3-Coder-480B | Qwen3-Coder-30B | dolphin3 (ollama) |
+| tdd | Qwen3-Coder-30B | DeepSeek V3.2 | **dolphin3** (ollama - local) |
+| diagnosing-bugs | DeepSeek V3.2-Reasoner | GLM 5 | DeepSeek V4 Flash |
+| code-review | GLM 5 | Kimi K2.5 | DeepSeek V4 Flash |
+| codebase-design | Qwen3-Coder-480B | GLM 5 | DeepSeek V4 Flash |
+| domain-modeling | Qwen3-Coder-480B | Qwen3-Coder-30B | dolphin3 |
+| research | DeepSeek V3.2-Reasoner | Qwen3-Coder-30B | DeepSeek V4 Flash |
+| prototype | Qwen3-Coder-30B | Gemma 3 27B | dolphin3 |
+| wizard | Any 30B+ | Gemma 3 12B | dolphin3 |
+
+**General work (non-coding tasks):**
+
+| Task | Best model | Budget | What's available |
+|------|------------|--------|----------------|
+| General chat | **Kimi K2.5** | GLM 5 | **DeepSeek V4 Flash** (fast) |
+| Writing emails | GPT-4o / Claude Sonnet | GLM 5 | DeepSeek V4 Flash |
+| Research / reading | **DeepSeek V3.2-Reasoner** | Qwen3-Coder-30B | DeepSeek V4 Flash |
+| Summarization | Gemini 2.0 Flash | Llama 3.3 70B | DeepSeek V4 Flash |
+| Translation | Qwen3 / GLM 5 | Nous Hermes 3 | DeepSeek V4 Flash |
+| Data analysis | Qwen3-Coder-480B | DeepSeek V3.2 | dolphin3 |
+| Image understanding | GPT-4o / Kimi 2.5 | Llama 3.2 Vision | (none local) |
+| Creative writing | Claude Sonnet | Gemma 2 27B | dolphin3 |
+| Brainstorming | Kimi K2.5 | DeepSeek V3.2 | DeepSeek V4 Flash |
+
+**Current availability:**
+- **Pi**: DeepSeek V4 Flash (via OpenRouter)
+- **Ollama local**: dolphin3:latest
+- **Claude Code**: Sonnet/Opus via Anthropic API
+- **Codex**: GPT-4.1-mini or full-family via GitHub Models
+
+**Leaderboard sources:** [swe-bench.github.io](https://swe-bench.github.io/) (Verified Open), [livebench.ai](https://livebench.ai/), [lmarena.ai](https://lmarena.ai/)
+
+**Provider cost matrix (per 1M tokens):**
+
+| Model | Claude Code | OpenAI | OpenRouter | GitHub/Codex |
+|-------|-------------|--------|------------|--------------|
+| Claude 3.5 Sonnet 5 | $3/$15 | — | $3/$15 | — |
+| GPT-4o | — | $2.50/$10 | $2.50/$10 | $0* |
+| GPT-4o-mini | — | $0.15/$0.60 | $0.15/$0.60 | $0* |
+| DeepSeek V3.2 | — | — | **$0.09/$0.35** | — |
+| DeepSeek V3.2-R | — | — | **$0.14/$0.55** | — |
+| Qwen3-Coder-480B | — | — | ~$1.20/$3.60 | — |
+| Qwen3-Coder-30B | — | — | **$0.10/$0.30** | — |
+| Kimi K2.5 | — | — | ~$2/$8 | — |
+| GLM 5 | — | — | ~$0.50/$1.50 | — |
+
+*GitHub Models free tier has rate limits (~150/min, ~50/day for GPT-4o)
+
+## One-time: v1 -> v2 command rename cleanup
 
 The day-to-day commands (`morning`, `sync-dotfiles`, `repos`, etc.) were renamed under a
 `dfa-` prefix. `link-dotfiles.sh` only creates symlinks for files currently in the repo —
