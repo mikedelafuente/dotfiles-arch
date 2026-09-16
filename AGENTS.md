@@ -23,6 +23,11 @@ Bash scripts plus symlinked configs — no build system, no test suite.
 4. Scripts must be safe to re-run — `sync.sh` runs all of them every time.
 5. Document new user-facing commands in `home/.welcome.md`, `aliases()`, and `PACKAGES.md`.
 
+## Style
+
+- Agents (Claude Code, Pi, Cursor) answer briefly: lead with the answer, no narration or
+  recap, inline code for commands/paths, no filler or pleasantries (`rules/style-brief.md`).
+
 ## Verify
 
 ```bash
