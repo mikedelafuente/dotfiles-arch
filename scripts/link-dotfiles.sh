@@ -121,4 +121,25 @@ while IFS= read -r -d '' file; do
   print_info_message "Linked: .config/$relative_path"
 done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
 
+# --------------------------
+# Link Pi (coding agent) config files into ~/.pi/agent
+# --------------------------
+# Single shared files only (e.g. models.json). Never link machine-local files
+# like auth.json (OAuth credentials) — those stay per-machine.
+
+PI_SOURCE_DIR="$REPO_ROOT/pi"
+PI_TARGET_DIR="$USER_HOME_DIR/.pi/agent"
+
+if [ -d "$PI_SOURCE_DIR" ]; then
+  mkdir -p "$PI_TARGET_DIR" 2>/dev/null \
+    || sudo mkdir -p "$PI_TARGET_DIR"
+  print_info_message "Linking pi config files..."
+
+  while IFS= read -r -d '' file; do
+    filename="$(basename "$file")"
+    link_path "$file" "$PI_TARGET_DIR/$filename"
+    print_info_message "Linked: .pi/agent/$filename"
+  done < <(find "$PI_SOURCE_DIR" -type f -print0)
+fi
+
 print_tool_setup_complete "Linking dotfiles"
