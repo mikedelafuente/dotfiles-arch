@@ -1,14 +1,17 @@
 #!/bin/bash
 # --------------------------
-# Sync personal Claude/Cursor skills
+# Sync personal Claude/Cursor/Pi skills
 # --------------------------
 # Symlinks each skill folder from dotfiles-arch and any extra repos registered
-# via dfa-sync-sources into ~/.claude/skills/<name> and ~/.cursor/skills/<name>, and
-# prunes managed symlinks when the source is removed or the repo is unlisted.
-# Standard-type sources contribute their skills/ subfolder; skills-root sources
-# contribute their own folder directly (see dfa-sync-sources --type). Only ever
-# touches symlinks whose target is a configured source's effective skills dir —
-# real directories elsewhere are left alone. Safe to re-run.
+# via dfa-sync-sources into ~/.claude/skills/<name>, ~/.cursor/skills/<name>,
+# and ~/.pi/agent/skills/<name>, and prunes managed symlinks when the source
+# is removed or the repo is unlisted. Standard-type sources contribute their
+# skills/ subfolder; skills-root sources contribute their own folder directly
+# (see dfa-sync-sources --type). Only ever touches symlinks whose target is a
+# configured source's effective skills dir — real directories elsewhere are
+# left alone. Also prunes the legacy ~/.claude/skills / ~/.codex/skills
+# entries from ~/.pi/agent/settings.json so Pi (which now discovers these
+# skills natively in its own dir) doesn't load each one twice. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -24,7 +27,7 @@ fi
 source "$DF_SCRIPT_DIR/sync-sources-lib.sh"
 
 REPO_ROOT="$(cd "$DF_SCRIPT_DIR/.." && pwd)"
-TARGET_DIRS=("$USER_HOME_DIR/.claude/skills" "$USER_HOME_DIR/.cursor/skills")
+TARGET_DIRS=("$USER_HOME_DIR/.claude/skills" "$USER_HOME_DIR/.cursor/skills" "$(pi_agent_dir)/skills")
 
 print_line_break "Syncing skills"
 
@@ -57,5 +60,8 @@ for target_dir in "${TARGET_DIRS[@]}"; do
 
   prune_managed_symlinks "$target_dir" skills
 done
+
+print_line_break "Syncing Pi skill paths"
+prune_pi_settings_skill_paths
 
 print_success_message "Skills synced: $SYNC_SKILLS_LINKED_COUNT linked, $SYNC_SKILLS_PRUNED_COUNT pruned"

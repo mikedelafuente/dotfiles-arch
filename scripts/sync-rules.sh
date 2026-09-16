@@ -1,6 +1,6 @@
 #!/bin/bash
 # --------------------------
-# Sync personal Cursor + Claude rules
+# Sync personal Cursor + Claude + Pi rules
 # --------------------------
 # For each source registered via dfa-sync-sources (plus dotfiles-arch itself),
 # builds a normalized rules-build/<slug>/ staging dir (build_sync_source_rules
@@ -13,7 +13,10 @@
 # From that staging dir: symlinks each *.mdc into ~/.cursor/rules/<name>.mdc,
 # and (when a source produced one) symlinks its Claude file to
 # ~/.claude/dfa-rules-<slug>.md with a matching @import line appended once to
-# ~/.claude/CLAUDE.md. Any pre-existing real (non-symlinked) file at a target
+# ~/.claude/CLAUDE.md. Pi has no @import mechanism, so the alwaysApply bodies
+# of every source are concatenated into a single generated file
+# (rules-build/pi-agents.md) symlinked to ~/.pi/agent/AGENTS.md — Pi's global
+# agent file. Any pre-existing real (non-symlinked) file at a target
 # name — e.g. a leftover copy from another tool's installer — is deleted and
 # replaced by the symlink. Prunes managed symlinks/import lines when a source
 # is removed, unlisted, or no longer produces that output. Only ever touches
@@ -72,5 +75,9 @@ for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
 done
 prune_claude_rule_imports
 prune_orphaned_rules_build_dirs
+
+print_line_break "Syncing Pi agent rules"
+build_pi_agents_file
+sync_pi_agents_file
 
 print_success_message "Rules synced: $SYNC_RULES_LINKED_COUNT linked, $SYNC_RULES_PRUNED_COUNT pruned"
