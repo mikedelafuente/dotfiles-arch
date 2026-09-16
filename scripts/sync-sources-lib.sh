@@ -24,7 +24,18 @@
 # own, only CLAUDE.md @imports. Build output lives under
 # rules-build/<slug>/ in the bootstrap config dir and is fully rebuilt on
 # every sync, so it can never drift from the source. Skills need no such
-# build step — SKILL.md already works unchanged for both tools.
+# build step — SKILL.md already works unchanged for all three tools.
+#
+# Pi (pi-coding-agent) is wired in alongside Claude and Cursor:
+#   - skills: ~/.pi/agent/skills/<name> (Pi discovers its own global skills dir
+#     natively — no settings needed). A legacy Pi settings `skills` array that
+#     pointed at ~/.claude/skills / ~/.codex/skills is pruned so Pi never
+#     discovers the same skill twice (see prune_pi_settings_skill_paths).
+#   - rules: ~/.pi/agent/AGENTS.md — the single raw global agent file Pi reads
+#     at startup. Pi has no @import mechanism, so the alwaysApply bodies of
+#     every active source are concatenated into one regenerated file
+#     (rules-build/pi-agents.md) and symlinked there (see
+#     build_pi_agents_file / sync_pi_agents_file).
 
 SYNC_SOURCE_KNOWN_TYPES=(standard skills-root rules-root)
 
@@ -640,6 +651,195 @@ prune_claude_rule_imports() {
     esac
   done <"$claude_md"
   mv "$kept_tmp" "$claude_md"
+}
+
+# Pi (pi-coding-agent) parity helpers.
+#
+# Pi discovers global skills natively under its agent dir (~/.pi/agent by
+# default; honor PI_CODING_AGENT_DIR when set, so a relocated agent dir keeps
+# working) and reads its global rules from a single raw AGENTS.md there — no
+# @import support, so the alwaysApply bodies of every active source must be
+# concatenated into one file rather than referenced.
+
+# Pi's global agent dir (stdout). Defaults to ~/.pi/agent; respects
+# PI_CODING_AGENT_DIR so sync targets the same dir pi actually reads.
+pi_agent_dir() {
+  echo "${PI_CODING_AGENT_DIR:-$USER_HOME_DIR/.pi/agent}"
+}
+
+# ~/.pi/agent/settings.json path (stdout).
+pi_settings_file() {
+  echo "$(pi_agent_dir)/settings.json"
+}
+
+# Remove dfa-managed harness skill dirs from Pi settings' `skills` array.
+# Before Pi gained its own global skills dir, this was wired manually to
+# ~/.claude/skills and ~/.codex/skills; dfa-sync-skills now mirrors the same
+# sources into ~/.pi/agent/skills natively, so leaving those entries would make
+# Pi discover every skill twice and warn about name collisions at each startup.
+# Only ever removes those two exact entries (tilde and $HOME-expanded forms);
+# any other skills entries and all other settings are preserved byte-for-byte
+# apart from re-serialization.
+prune_pi_settings_skill_paths() {
+  local file removed
+  file="$(pi_settings_file)"
+  [[ -f "$file" ]] || return 0
+  if ! command -v python3 &>/dev/null; then
+    print_warning_message "python3 not found — cannot prune Pi settings.json (remove its skills array manually)"
+    return 1
+  fi
+  removed="$(python3 - "$file" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+managed = {"~/.claude/skills", "~/.codex/skills"}
+managed_expanded = {os.path.normpath(os.path.expandvars(os.path.expanduser(p))) for p in managed}
+
+
+def is_managed(value):
+    return (
+        isinstance(value, str)
+        and os.path.normpath(os.path.expandvars(os.path.expanduser(value))) in managed_expanded
+    )
+
+try:
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+except (OSError, ValueError):
+    sys.exit(0)
+
+skills = data.get("skills")
+if not isinstance(skills, list):
+    sys.exit(0)
+
+removed = sorted({s for s in skills if is_managed(s)})
+if not removed:
+    sys.exit(0)
+
+kept = [s for s in skills if not is_managed(s)]
+if kept:
+    data["skills"] = kept
+else:
+    data.pop("skills", None)
+
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+
+print(", ".join(removed))
+PY
+)"
+  if [[ -n "$removed" ]]; then
+    print_info_message "Pruned dfa-managed skill dirs from Pi settings: $removed"
+  fi
+}
+
+# Staging file that becomes Pi's global AGENTS.md (stdout): the alwaysApply
+# bodies of every active rules-capable source, concatenated. Lives at the root
+# of rules-build/ so prune_orphaned_rules_build_dirs (which only scans
+# rules-build/<slug>/) never mistakes it for a source's build dir.
+pi_agents_build_file() {
+  echo "$(bootstrap_config_dir)/rules-build/pi-agents.md"
+}
+
+# Regenerate pi_agents_build_file from every active rules-capable source's
+# generated claude-rules.md (frontmatter-stripped alwaysApply bodies only, with
+# each source's own managed header included). Omitted entirely when no source
+# produced alwaysApply rules. Expects SYNC_SOURCE_REPOS_ALL /
+# SYNC_SOURCE_REPOS_ALL_TYPES to already be populated (via
+# collect_sync_source_repos).
+build_pi_agents_file() {
+  local out tmp src_count=0 i repo_root repo_type f
+  out="$(pi_agents_build_file)"
+  tmp="$(mktemp)"
+
+  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+    repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
+    repo_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
+    case "$repo_type" in
+      standard | rules-root) ;;
+      *) continue ;;
+    esac
+    f="$(sync_source_rules_build_dir "$repo_root")/claude-rules.md"
+    [[ -f "$f" ]] || continue
+    if ((src_count > 0)); then
+      printf '\n---\n\n' >>"$tmp"
+    fi
+    printf '<!-- source: %s -->\n\n' "$repo_root" >>"$tmp"
+    cat "$f" >>"$tmp"
+    src_count=$((src_count + 1))
+  done
+
+  if ((src_count == 0)); then
+    rm -f "$tmp" "$out"
+    return 0
+  fi
+
+  {
+    echo "<!-- managed-by: dotfiles-arch dfa-sync-rules — do not edit; regenerated from source rules -->"
+    echo ""
+    cat "$tmp"
+  } >"$out"
+  rm -f "$tmp"
+}
+
+# Symlink Pi's global agent file ~/.pi/agent/AGENTS.md to the regenerated
+# pi-agents.md; when no source produced alwaysApply rules, remove it instead.
+# Only ever manages a file that is ours — a symlink resolving into
+# rules-build/, or a real file carrying the dfa-sync-rules marker. A
+# user-written AGENTS.md is left untouched with a warning.
+sync_pi_agents_file() {
+  local dir dest out resolved marker
+  dir="$(pi_agent_dir)"
+  dest="$dir/AGENTS.md"
+  out="$(pi_agents_build_file)"
+
+  if [[ -f "$out" ]]; then
+    mkdir -p "$dir"
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+      marker="$(head -n1 "$dest" 2>/dev/null || true)"
+      if [[ "$marker" != *'managed-by: dotfiles-arch dfa-sync-rules'* ]]; then
+        print_warning_message "Leaving user-written Pi agent file (no dfa-sync-rules marker): $dest"
+        return 0
+      fi
+      print_action_message "Removing local (non-symlinked) Pi agent file, superseded by source: $dest"
+      rm -rf "$dest"
+    fi
+    ln -sfn "$out" "$dest"
+    print_info_message "Linked: $dest"
+    return 0
+  fi
+
+  # No alwaysApply rules anywhere — remove ours if present, leave user files.
+  if [[ ! -e "$dest" && ! -L "$dest" ]]; then
+    return 0
+  fi
+  if [[ -L "$dest" ]]; then
+    resolved="$(_sync_sources_abs_symlink_target "$dest")"
+    if [[ "$resolved" == "$(bootstrap_config_dir)/rules-build/"* ]]; then
+      print_action_message "Removing stale Pi agent file: $dest"
+      rm -f "$dest"
+    fi
+    return 0
+  fi
+  marker="$(head -n1 "$dest" 2>/dev/null || true)"
+  if [[ "$marker" == *'managed-by: dotfiles-arch dfa-sync-rules'* ]]; then
+    print_action_message "Removing stale Pi agent file: $dest"
+    rm -f "$dest"
+  fi
+}
+
+# Rebuild + re-link Pi's global AGENTS.md from the currently configured sources
+# (primary + extras still listed). Used by `dfa-sync-sources remove` so a
+# removed source's alwaysApply rules disappear from Pi immediately rather than
+# at the next dfa-sync-rules run.
+refresh_pi_agent_rules() {
+  local primary="${1:-}"
+  collect_sync_source_repos "$primary"
+  build_pi_agents_file
+  sync_pi_agents_file
 }
 
 # Remove any rules-build/<slug>/ dir that doesn't belong to a currently
