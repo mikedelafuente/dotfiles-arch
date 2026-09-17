@@ -14,10 +14,20 @@
   // Zed 1.18 has no settings key for which agent the Agent Panel preselects.
   // Pick one from the panel's new-thread menu.
   "agent_servers": {
+    "codex-acp": {
+      "default_config_options": {
+        "reasoning_effort": "medium",
+        "model": "gpt-5.6-luna"
+      },
+      "type": "registry"
+    },
     "codex": {
       "type": "registry"
     },
     "claude-acp": {
+      "default_config_options": {
+        "mode": "auto"
+      },
       "type": "registry"
     }
   },
