@@ -1,6 +1,33 @@
-# CLAUDE.md
+# Repository agent guidance
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI agents working with code in this repository. `AGENTS.md`
+is a symlink to this file so Claude Code, Codex, Pi, Cursor, and other agents share one
+source of truth.
+
+## Before you change anything
+
+- Architecture and script behavior: this file
+- Why a package is installed: [PACKAGES.md](PACKAGES.md)
+- User-facing flows and shortcuts: [README.md](README.md) · [REFRESHER.md](REFRESHER.md)
+- Enforced conventions: [.cursor/rules/](.cursor/rules/)
+  - `dotfiles-arch.mdc` — stack, orchestration, bootstrap config keys, AUR safety
+  - `docs-and-commands.mdc` — where every new command/alias/shortcut/package gets documented
+  - `setup-scripts.mdc` — script header, idempotency, package helpers
+
+## Non-negotiables
+
+1. Read/write saved settings only via `load_bootstrap_config` / `write_bootstrap_config`
+   (`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` multi-select, `SETUP_PROFILE` primary,
+   `INSTALL_NVIDIA`, `MACHINE_TYPE`).
+2. Use `USER_HOME_DIR`; machines have different usernames.
+3. AUR installs go through the IoC-scanning helpers. Do not add `curl | bash` installers.
+4. Scripts must be safe to re-run — `sync.sh` runs all of them every time.
+5. Document new user-facing commands in `home/.welcome.md`, `aliases()`, and `PACKAGES.md`.
+
+## Style
+
+Answer briefly: lead with the answer, with no narration or recap. Use inline code for
+commands and paths; omit pleasantries and filler. See `rules/style-brief.md`.
 
 ## Project Overview
 
@@ -44,7 +71,7 @@ dotfiles-arch/
 ├── skills/                       # Personal Claude/Cursor/Codex/Pi skills (SKILL.md folders)
 ├── rules/                        # Personal rules for AI agents (flat .md/.mdc files; e.g. git-merge-shorthand.md, style-brief.md)
 ├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
-├── AGENTS.md                     # Short pointer file for agents
+├── AGENTS.md                     # Symlink to this file
 ├── PACKAGES.md                   # Why each installed package exists
 ├── prepare-archinstall.sh        # Guided disk/hostname/gfx_driver prep, before archinstall
 ├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty); chains into bootstrap.sh
@@ -199,7 +226,7 @@ A rename under `home/.local/bin/` leaves a dangling `~/.local/bin` symlink: `lin
 
 - `README.md` / `REFRESHER.md` — human starting point and short memory jogger
 - `PACKAGES.md` — why each installed package exists; linked to `~/.packages.md` and shown by `packages`
-- `AGENTS.md` + `.cursor/rules/*.mdc` — conventions for AI agents (docs, packages, scripts)
+- `AGENTS.md` + `.cursor/rules/*.mdc` — shared conventions for AI agents (docs, packages, scripts)
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
 - `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
 - `scripts/sync-skills.sh` — symlinks `skills/*` from dotfiles-arch + extra repos into Claude, Cursor, detected Codex (`$CODEX_HOME/skills`, default `~/.codex/skills`), and Pi, pruning stale links
@@ -227,6 +254,14 @@ A rename under `home/.local/bin/` leaves a dangling `~/.local/bin` symlink: `lin
 - Overview at login: `no-overview@fthx` plus optional `hide-gnome-overview` autostart fallback
 - Always do work on a branch, never commit directly to `main`
 - Once a PR is merged, delete both the local and remote branch and check out `main`
+
+## Verify
+
+After shell changes, run:
+
+```bash
+bash scripts/check.sh   # bash -n + shellcheck -x (same as CI)
+```
 
 ## Agent skills
 
