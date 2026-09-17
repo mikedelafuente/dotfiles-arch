@@ -38,6 +38,23 @@ else
 fi
 
 # --------------------------
+# ChatGPT desktop app (AUR — repackaged official binary)
+# --------------------------
+if command -v chatgpt &>/dev/null; then
+  print_info_message "ChatGPT desktop app is already installed: $(command -v chatgpt)"
+else
+  print_action_message "Installing ChatGPT desktop app from AUR (chatgpt-desktop)"
+  ensure_yay_pkgs chatgpt-desktop
+
+  if command -v chatgpt &>/dev/null; then
+    print_success_message "ChatGPT desktop app installed successfully"
+  else
+    print_error_message "ChatGPT desktop app installation failed"
+    print_info_message "You can manually install with: yay -S chatgpt-desktop"
+  fi
+fi
+
+# --------------------------
 # PostToolUse hook: reveal edited files in the paired Neovim pane
 # --------------------------
 # Codex's hook system is experimental and disabled by default — enable it,
