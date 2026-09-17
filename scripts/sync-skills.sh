@@ -1,10 +1,10 @@
 #!/bin/bash
 # --------------------------
-# Sync personal Claude/Cursor/Pi skills
+# Sync personal Claude/Cursor/Codex/Pi skills
 # --------------------------
 # Symlinks each skill folder from dotfiles-arch and any extra repos registered
-# via dfa-sync-sources into ~/.claude/skills/<name>, ~/.cursor/skills/<name>,
-# and ~/.pi/agent/skills/<name>, and prunes managed symlinks when the source
+# via dfa-sync-sources into the native skills directories for Claude, Cursor,
+# detected Codex, and Pi, and prunes managed symlinks when the source
 # is removed or the repo is unlisted. Standard-type sources contribute their
 # skills/ subfolder; skills-root sources contribute their own folder directly
 # (see dfa-sync-sources --type). Only ever touches symlinks whose target is a
@@ -27,7 +27,11 @@ fi
 source "$DF_SCRIPT_DIR/sync-sources-lib.sh"
 
 REPO_ROOT="$(cd "$DF_SCRIPT_DIR/.." && pwd)"
-TARGET_DIRS=("$USER_HOME_DIR/.claude/skills" "$USER_HOME_DIR/.cursor/skills" "$(pi_agent_dir)/skills")
+TARGET_DIRS=("$USER_HOME_DIR/.claude/skills" "$USER_HOME_DIR/.cursor/skills")
+if command -v codex &>/dev/null; then
+  TARGET_DIRS+=("$(codex_home_dir)/skills")
+fi
+TARGET_DIRS+=("$(pi_agent_dir)/skills")
 
 print_line_break "Syncing skills"
 

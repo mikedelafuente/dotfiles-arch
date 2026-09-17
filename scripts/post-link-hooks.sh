@@ -29,12 +29,12 @@ refresh_font_cache
 bash "$DF_SCRIPT_DIR/migrate.sh"
 
 # --------------------------
-# Sync personal skills (Claude Code / Cursor)
+# Sync personal skills (Claude Code / Cursor / Codex / Pi)
 # --------------------------
 bash "$DF_SCRIPT_DIR/sync-skills.sh"
 
 # --------------------------
-# Sync personal rules (Cursor)
+# Sync personal rules (Cursor / Claude / Codex / Pi)
 # --------------------------
 bash "$DF_SCRIPT_DIR/sync-rules.sh"
 

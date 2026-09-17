@@ -26,7 +26,9 @@
 # every sync, so it can never drift from the source. Skills need no such
 # build step — SKILL.md already works unchanged for all three tools.
 #
-# Pi (pi-coding-agent) is wired in alongside Claude and Cursor:
+# Codex and Pi are wired in alongside Claude and Cursor:
+#   - Codex: ~/.codex/skills and ~/.codex/AGENTS.md (or CODEX_HOME), when the
+#     `codex` CLI is detected.
 #   - skills: ~/.pi/agent/skills/<name> (Pi discovers its own global skills dir
 #     natively — no settings needed). A legacy Pi settings `skills` array that
 #     pointed at ~/.claude/skills / ~/.codex/skills is pruned so Pi never
@@ -667,6 +669,12 @@ pi_agent_dir() {
   echo "${PI_CODING_AGENT_DIR:-$USER_HOME_DIR/.pi/agent}"
 }
 
+# Codex's global agent dir (stdout). Defaults to ~/.codex; respect CODEX_HOME
+# so the sync follows the directory used by the installed Codex CLI.
+codex_home_dir() {
+  echo "${CODEX_HOME:-$USER_HOME_DIR/.codex}"
+}
+
 # ~/.pi/agent/settings.json path (stdout).
 pi_settings_file() {
   echo "$(pi_agent_dir)/settings.json"
@@ -831,6 +839,46 @@ sync_pi_agents_file() {
   fi
 }
 
+# Symlink the generated global AGENTS.md into Codex's home when the Codex CLI
+# is installed. Preserve a user-written file unless it carries our marker.
+sync_codex_agents_file() {
+  local dir dest out resolved marker
+  command -v codex &>/dev/null || return 0
+  dir="$(codex_home_dir)"
+  dest="$dir/AGENTS.md"
+  out="$(pi_agents_build_file)"
+
+  if [[ -f "$out" ]]; then
+    mkdir -p "$dir"
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+      marker="$(head -n1 "$dest" 2>/dev/null || true)"
+      if [[ "$marker" != *'managed-by: dotfiles-arch dfa-sync-rules'* ]]; then
+        print_warning_message "Leaving user-written Codex agent file (no dfa-sync-rules marker): $dest"
+        return 0
+      fi
+      rm -f "$dest"
+    fi
+    ln -sfn "$out" "$dest"
+    print_info_message "Linked: $dest"
+    return 0
+  fi
+
+  [[ -e "$dest" || -L "$dest" ]] || return 0
+  if [[ -L "$dest" ]]; then
+    resolved="$(_sync_sources_abs_symlink_target "$dest")"
+    if [[ "$resolved" == "$(bootstrap_config_dir)/rules-build/"* ]]; then
+      print_action_message "Removing stale Codex agent file: $dest"
+      rm -f "$dest"
+    fi
+    return 0
+  fi
+  marker="$(head -n1 "$dest" 2>/dev/null || true)"
+  if [[ "$marker" == *'managed-by: dotfiles-arch dfa-sync-rules'* ]]; then
+    print_action_message "Removing stale Codex agent file: $dest"
+    rm -f "$dest"
+  fi
+}
+
 # Rebuild + re-link Pi's global AGENTS.md from the currently configured sources
 # (primary + extras still listed). Used by `dfa-sync-sources remove` so a
 # removed source's alwaysApply rules disappear from Pi immediately rather than
@@ -840,6 +888,7 @@ refresh_pi_agent_rules() {
   collect_sync_source_repos "$primary"
   build_pi_agents_file
   sync_pi_agents_file
+  sync_codex_agents_file
 }
 
 # Remove any rules-build/<slug>/ dir that doesn't belong to a currently
