@@ -286,8 +286,8 @@ dotfiles-arch/
 ├── REFRESHER.md           ← short memory jogger
 ├── PACKAGES.md            ← what each installed package is for (`packages`)
 ├── NOTES.md               ← WiFi, archinstall, NVIDIA, sync details
-├── CLAUDE.md              ← architecture notes for AI agents
-├── AGENTS.md              ← pointer file for Claude Code / Codex / other agents
+├── CLAUDE.md              ← shared architecture and agent guidance
+├── AGENTS.md              ← symlink to CLAUDE.md for other agents
 ├── .cursor/rules/         ← repo conventions for AI agents
 ├── prepare-archinstall.sh ← guided disk/hostname/gfx_driver prep, before archinstall
 ├── post_install.sh        ← minimal post-archinstall (chains into bootstrap.sh)
@@ -317,6 +317,6 @@ dotfiles-arch/
 | [PACKAGES.md](PACKAGES.md) | You want to know why a package is installed (`packages`) |
 | [NOTES.md](NOTES.md) | Installing Arch or debugging GPU/sync |
 | [CLAUDE.md](CLAUDE.md) | Changing scripts / understanding design |
-| [AGENTS.md](AGENTS.md) | An AI agent needs the short version of the conventions |
+| [AGENTS.md](AGENTS.md) | Shared agent guidance (symlink to `CLAUDE.md`) |
 | `welcome` (in shell) | Alias and tmux quick reference |
 | `vimcheat` | Neovim keybindings |
