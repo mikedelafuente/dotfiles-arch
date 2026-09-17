@@ -31,6 +31,7 @@ CURSOR_RULES_DIR="$USER_HOME_DIR/.cursor/rules"
 CLAUDE_SKILLS_DIR="$USER_HOME_DIR/.claude/skills"
 CURSOR_SKILLS_DIR="$USER_HOME_DIR/.cursor/skills"
 PI_SKILLS_DIR="$(pi_agent_dir)/skills"
+CODEX_SKILLS_DIR="$(codex_home_dir)/skills"
 
 SYNC_SOURCES_HINT="Run dfa-sync-skills && dfa-sync-rules to apply changes."
 
@@ -138,7 +139,7 @@ cmd_remove() {
     local t
     for t in "${removed_types[@]}"; do
       prune_sync_source_repo_symlinks "$normalized" "$t" \
-        "$CURSOR_RULES_DIR" "$CLAUDE_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$PI_SKILLS_DIR"
+        "$CURSOR_RULES_DIR" "$CLAUDE_SKILLS_DIR" "$CURSOR_SKILLS_DIR" "$PI_SKILLS_DIR" "$CODEX_SKILLS_DIR"
     done
     refresh_pi_agent_rules "$REPO_ROOT"
     print_info_message "$SYNC_SOURCES_HINT"

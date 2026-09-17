@@ -1,6 +1,6 @@
 #!/bin/bash
-# Symlink personal Cursor rules from dotfiles-arch into ~/.cursor/rules
-# (pruning stale ones). Usage: dfa-sync-rules
+# Sync personal rules from dotfiles-arch into Cursor, Claude, detected Codex,
+# and Pi (pruning stale ones). Usage: dfa-sync-rules
 
 set -euo pipefail
 

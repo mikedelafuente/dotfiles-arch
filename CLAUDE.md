@@ -41,7 +41,7 @@ dotfiles-arch/
 │   └── ...
 ├── pi/                          # Shared pi config, symlinked into ~/.pi/agent (models.json; single files only — never auth.json)
 ├── pi-dev/                       # Working area for a custom pi.dev build (see setup-pi.sh)
-├── skills/                       # Personal Claude/Cursor skills (SKILL.md folders)
+├── skills/                       # Personal Claude/Cursor/Codex/Pi skills (SKILL.md folders)
 ├── rules/                        # Personal rules for AI agents (flat .md/.mdc files; e.g. git-merge-shorthand.md, style-brief.md)
 ├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
 ├── AGENTS.md                     # Short pointer file for agents
@@ -202,8 +202,8 @@ A rename under `home/.local/bin/` leaves a dangling `~/.local/bin` symlink: `lin
 - `AGENTS.md` + `.cursor/rules/*.mdc` — conventions for AI agents (docs, packages, scripts)
 - `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
 - `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
-- `scripts/sync-skills.sh` — symlinks `skills/*` from dotfiles-arch + extra repos into `~/.claude/skills` + `~/.cursor/skills` + `~/.pi/agent/skills` (and prunes legacy skill dirs from `~/.pi/agent/settings.json`), prunes stale links
-- `scripts/sync-rules.sh` — builds/converts `rules/*` from dotfiles-arch + extra repos into `~/.config/dotfiles-arch/rules-build/`, symlinks into `~/.cursor/rules` and (for `alwaysApply` rules) `~/.claude/dfa-rules-*.md` + a `CLAUDE.md` import, plus a concatenated `~/.pi/agent/AGENTS.md`, prunes stale links
+- `scripts/sync-skills.sh` — symlinks `skills/*` from dotfiles-arch + extra repos into Claude, Cursor, detected Codex (`$CODEX_HOME/skills`, default `~/.codex/skills`), and Pi, pruning stale links
+- `scripts/sync-rules.sh` — builds/converts `rules/*` from dotfiles-arch + extra repos into `~/.config/dotfiles-arch/rules-build/`, symlinks into `~/.cursor/rules` and (for `alwaysApply` rules) Claude imports plus global `AGENTS.md` files for detected Codex and Pi, pruning stale links
 - `scripts/sync-sources.sh` — manage extra rules/skills source repos (`~/.config/dotfiles-arch/sync-sources`)
 - `scripts/setup-harness-agents.sh` — syncs local Ollama models into Codex's `~/.codex/config.toml` profiles and opencode's `~/.config/opencode/opencode.jsonc` `ollama` provider
 - `scripts/migrate.sh` — runs pending `migrations/` up to the repo's schema version; stamps `~/.config/dotfiles-arch/.dotfiles_schema_version`
