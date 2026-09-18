@@ -1,5 +1,62 @@
 # Remote Agent Control
 
+## Commands
+
+| Command | Effect |
+|---------|--------|
+| `/rc` or `/rc start` | Start the remote bridge inside this Pi process |
+| `/rc stop` | Stop accepting Telegram messages; Pi sessions are untouched |
+| `/rc status` | Show login and bridge state |
+| `/rc login` | Link a BotFather token, the owner, and a private forum group |
+| `/rc logout` | Stop the bridge and delete local credentials |
+
+### Login
+
+`/rc login` runs only in the local Pi UI, so credentials never pass through an
+unauthenticated remote channel.
+
+1. Create a bot with @BotFather and paste its token when prompted. The token is
+   checked with `getMe` before anything else happens.
+2. Create a private Telegram group, enable Topics, and add the bot as an
+   administrator with the Manage Topics right.
+3. Send `/rc_login <code>` in that group, using the one-time code Pi shows. The
+   code expires after five minutes.
+
+The sender of the code becomes the only allowlisted user, and the group becomes
+the approved forum group. Login rejects direct messages, groups without Topics,
+public groups, senders who are not group administrators, and bots without
+administrator/Manage Topics rights. It then creates a control topic (reused on
+re-login to the same group) to prove the bot can create topics and post.
+
+The token, owner, and group are written to
+`${XDG_CONFIG_HOME:-~/.config}/pi-remote-control/credentials.json` (`0600`),
+outside the synced `~/.pi/agent` tree. `/rc logout` deletes that file; revoke the
+token in @BotFather to disable the bot itself.
+
+### Bridge lifecycle
+
+The bridge is a long-polling task inside the running Pi process, not a daemon.
+It stops on `/rc stop`, `/rc logout`, or `session_shutdown` (quit, reload, and
+session switches), so nothing outlives the Pi process. `/rc start` re-validates
+the token and group permissions and discards updates that arrived while it was
+stopped. While it runs:
+
+- Messages from anyone but the owner get one "not authorized" reply per user.
+- Owner messages outside the approved group get one rejection reply per chat.
+- Telegram or network failures are retried with backoff; the bridge keeps running.
+
+Owner messages in the group are currently shown as local notifications; routing
+them into Pi sessions is not implemented yet.
+
+### Tests
+
+```bash
+node --test pi/extensions/remote-control/*.test.ts
+```
+
+Sources use only erasable TypeScript and `.ts` import specifiers, so Node's
+built-in type stripping runs them directly.
+
 ## Coordinator foundation
 
 `coordinator.ts` is the high-level seam for remote control. It owns the approved
@@ -17,8 +74,13 @@ Session creation is serialized and checks workspace ownership both before and af
 workspace preparation. If Pi, Telegram, or persistence fails, already-created
 resources are rolled back where their adapter supports removal.
 
-The adapter-backed tests are in `coordinator.test.ts`. They cover repository
-approval, durable relationships, grouping/attach, and duplicate workspace rejection.
+The coordinator also owns the login handshake and bridge lifecycle, using an
+injected `TelegramBotApi` (`telegram.ts` is the fetch-based implementation).
+
+Adapter-backed tests: `coordinator.test.ts` covers repository approval, durable
+relationships, grouping/attach, and duplicate workspace rejection;
+`lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
+and logout against a fake Bot API.
 
 
 This context defines the concepts used to control persistent Pi agent sessions remotely through Telegram while preserving repository and workspace safety.

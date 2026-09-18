@@ -5,7 +5,7 @@
  * concerns are adapters so coordinator behavior can be tested with fakes.
  */
 
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 export type Repository = {
 	id: string;
@@ -76,6 +76,69 @@ export interface CredentialStore {
 	clear(): Promise<void>;
 }
 
+export type TelegramUser = { id: number; isBot: boolean; username?: string };
+
+export type TelegramChat = {
+	id: number;
+	type: "private" | "group" | "supergroup" | "channel";
+	title?: string;
+	/** Present only for public chats. */
+	username?: string;
+	isForum?: boolean;
+};
+
+export type TelegramMessage = { messageId: number; chat: TelegramChat; from?: TelegramUser; threadId?: number; text?: string };
+
+export type TelegramUpdate = { updateId: number; message?: TelegramMessage };
+
+export type TelegramChatMember = {
+	status: "creator" | "administrator" | "member" | "restricted" | "left" | "kicked";
+	canManageTopics?: boolean;
+};
+
+/** The subset of the Telegram Bot API remote control uses, bound to one bot token. */
+export interface TelegramBotApi {
+	getMe(): Promise<TelegramUser>;
+	/** Long-polls for updates. `offset: -1` returns only the newest pending update. */
+	getUpdates(input: { offset?: number; timeoutSeconds: number; signal?: AbortSignal }): Promise<TelegramUpdate[]>;
+	getChat(chatId: number): Promise<TelegramChat>;
+	getChatMember(chatId: number, userId: number): Promise<TelegramChatMember>;
+	createForumTopic(chatId: number, name: string): Promise<{ threadId: number }>;
+	sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<void>;
+}
+
+/** Machine-local remote-control credentials: never synchronized or committed. */
+export type RemoteControlCredentials = {
+	version: 1;
+	botToken: string;
+	bot: { id: number; username?: string };
+	owner: { id: number; username?: string };
+	group: { id: number; title?: string; controlTopicId: number };
+	authenticatedAt: string;
+};
+
+/** An owner message from the approved forum group, delivered by the running bridge. */
+export type AuthorizedMessage = { messageId: number; threadId?: number; text: string };
+
+export type LoginOptions = {
+	token: string;
+	/** Shows the one-time code the owner must send in the forum group. */
+	onHandshakeCode(code: string, bot: TelegramUser): void | Promise<void>;
+	timeoutMs?: number;
+	signal?: AbortSignal;
+};
+
+export type StartOptions = {
+	onMessage?(message: AuthorizedMessage): Promise<void>;
+	onError?(error: unknown): void;
+};
+
+export type RemoteControlStatus = {
+	running: boolean;
+	bot?: string;
+	group?: string;
+};
+
 export type RemoteControlAdapters = {
 	repositories: RepositoryRegistry;
 	sessions: AgentSessionStore;
@@ -83,6 +146,7 @@ export type RemoteControlAdapters = {
 	pi: PiSessionAdapter;
 	telegram: TelegramTransport;
 	credentials: CredentialStore;
+	telegramBot(token: string): TelegramBotApi;
 };
 
 export class RemoteControlError extends Error {
@@ -90,7 +154,11 @@ export class RemoteControlError extends Error {
 		| "repository-not-approved"
 		| "duplicate-workspace"
 		| "session-not-found"
-		| "invalid-session-name";
+		| "invalid-session-name"
+		| "invalid-token"
+		| "invalid-group"
+		| "login-timeout"
+		| "not-logged-in";
 
 	constructor(code: RemoteControlError["code"], message: string) {
 		super(message);
@@ -103,6 +171,59 @@ function id(prefix: string): string {
 	return `${prefix}-${randomUUID()}`;
 }
 
+const LOGIN_TIMEOUT_MS = 5 * 60_000;
+const POLL_TIMEOUT_SECONDS = 25;
+const MAX_RETRY_DELAY_MS = 30_000;
+const CONTROL_TOPIC_NAME = "Pi remote control";
+const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function isCredentials(value: unknown): value is RemoteControlCredentials {
+	const candidate = value as RemoteControlCredentials | undefined;
+	return candidate?.version === 1 && typeof candidate.botToken === "string"
+		&& typeof candidate.owner?.id === "number" && typeof candidate.group?.id === "number"
+		&& typeof candidate.group.controlTopicId === "number";
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		const timer = setTimeout(resolve, ms);
+		signal.addEventListener("abort", () => { clearTimeout(timer); resolve(); }, { once: true });
+	});
+}
+
+async function verifyToken(api: TelegramBotApi): Promise<TelegramUser> {
+	let bot: TelegramUser;
+	try {
+		bot = await api.getMe();
+	} catch (error) {
+		throw new RemoteControlError("invalid-token", `Telegram rejected the bot token: ${errorMessage(error)}`);
+	}
+	if (!bot.isBot) throw new RemoteControlError("invalid-token", "The token does not belong to a Telegram bot.");
+	return bot;
+}
+
+/** Rejects anything other than a private forum group the owner administers and the bot can post topics in. */
+async function verifyGroup(api: TelegramBotApi, chat: TelegramChat, botId: number, ownerId: number): Promise<void> {
+	const reject = (reason: string) => { throw new RemoteControlError("invalid-group", `Invalid remote-control group: ${reason}`); };
+	if (chat.type !== "supergroup" || !chat.isForum) reject("use a group with Topics enabled, not a direct message or plain group.");
+	if (chat.username) reject(`@${chat.username} is public; use a private group.`);
+	const owner = await api.getChatMember(chat.id, ownerId);
+	if (owner.status !== "creator" && owner.status !== "administrator") reject("you must be an administrator of the group.");
+	const bot = await api.getChatMember(chat.id, botId);
+	if (bot.status !== "administrator") reject("make the bot a group administrator.");
+	if (!bot.canManageTopics) reject("grant the bot the Manage Topics administrator right.");
+}
+
+/** Acknowledges pending updates so messages sent while remote control was inactive are never acted on. */
+async function drainUpdates(api: TelegramBotApi): Promise<number | undefined> {
+	const [latest] = await api.getUpdates({ offset: -1, timeoutSeconds: 0 });
+	return latest ? latest.updateId + 1 : undefined;
+}
+
 function topicName(repository: Repository, sessionName: string, branch: string): string {
 	return `${repository.name} / ${sessionName} / ${branch}`;
 }
@@ -110,8 +231,16 @@ function topicName(repository: Repository, sessionName: string, branch: string):
 /** The single authority for repository and agent-session invariants. */
 export class RemoteControlCoordinator {
 	private creationTail: Promise<void> = Promise.resolve();
+	private bridge?: { abort: AbortController; done: Promise<void>; credentials: RemoteControlCredentials; api: TelegramBotApi };
+	private lifecycleTail: Promise<void> = Promise.resolve();
 
-	constructor(private readonly adapters: RemoteControlAdapters, private readonly now = () => new Date()) {}
+	private readonly adapters: RemoteControlAdapters;
+	private readonly now: () => Date;
+
+	constructor(adapters: RemoteControlAdapters, now = () => new Date()) {
+		this.adapters = adapters;
+		this.now = now;
+	}
 
 	private withCreationLock<T>(operation: () => Promise<T>): Promise<T> {
 		const previous = this.creationTail;
@@ -203,5 +332,210 @@ export class RemoteControlCoordinator {
 
 	credentials(): CredentialStore {
 		return this.adapters.credentials;
+	}
+
+	/** Serializes login, logout, start, and stop so the bridge is never started twice. */
+	private withLifecycleLock<T>(operation: () => Promise<T>): Promise<T> {
+		const previous = this.lifecycleTail;
+		let release!: () => void;
+		this.lifecycleTail = new Promise<void>((resolve) => { release = resolve; });
+		return previous.then(operation).finally(release);
+	}
+
+	private async readCredentials(): Promise<RemoteControlCredentials | undefined> {
+		const stored = await this.adapters.credentials.read();
+		return isCredentials(stored) ? stored : undefined;
+	}
+
+	/**
+	 * Local-only login: validates the BotFather token, then waits for the owner to
+	 * send a one-time code in the private forum group. The sender becomes the only
+	 * allowlisted user and the chat becomes the approved group.
+	 */
+	login(options: LoginOptions): Promise<RemoteControlCredentials> {
+		return this.withLifecycleLock(async () => {
+			await this.stopLocked();
+			const token = options.token.trim();
+			if (!TOKEN_PATTERN.test(token)) throw new RemoteControlError("invalid-token", "That does not look like a BotFather token.");
+			const api = this.adapters.telegramBot(token);
+			const bot = await verifyToken(api);
+			const previous = await this.readCredentials();
+
+			const code = `rc-${randomBytes(4).toString("hex")}`;
+			const deadline = AbortSignal.timeout(options.timeoutMs ?? LOGIN_TIMEOUT_MS);
+			const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+			let offset = await drainUpdates(api);
+			await options.onHandshakeCode(code, bot);
+
+			let handshake: TelegramMessage | undefined;
+			while (!handshake) {
+				let updates: TelegramUpdate[];
+				try {
+					updates = await api.getUpdates({ offset, timeoutSeconds: POLL_TIMEOUT_SECONDS, signal });
+				} catch (error) {
+					if (deadline.aborted) throw new RemoteControlError("login-timeout", "No login code arrived from Telegram in time.");
+					throw error;
+				}
+				for (const update of updates) {
+					offset = update.updateId + 1;
+					const words = update.message?.text?.trim().split(/\s+/) ?? [];
+					if (words.includes(code) && update.message?.from && !update.message.from.isBot) handshake = update.message;
+				}
+			}
+			// Acknowledge the handshake so the bridge never replays it.
+			await api.getUpdates({ offset, timeoutSeconds: 0 });
+
+			const owner = handshake.from!;
+			const chat = handshake.chat.type === "private" ? handshake.chat : await api.getChat(handshake.chat.id);
+			await verifyGroup(api, chat, bot.id, owner.id);
+
+			const confirmation = `Remote control linked to @${owner.username ?? owner.id}. Start it locally with /rc.`;
+			let controlTopicId = previous?.group.id === chat.id ? previous.group.controlTopicId : undefined;
+			if (controlTopicId !== undefined) {
+				// The previous control topic may have been deleted; fall back to a new one.
+				await api.sendMessage({ chatId: chat.id, threadId: controlTopicId, text: confirmation }).catch(() => { controlTopicId = undefined; });
+			}
+			if (controlTopicId === undefined) {
+				try {
+					controlTopicId = (await api.createForumTopic(chat.id, CONTROL_TOPIC_NAME)).threadId;
+					await api.sendMessage({ chatId: chat.id, threadId: controlTopicId, text: confirmation });
+				} catch (error) {
+					throw new RemoteControlError("invalid-group", `The bot could not create or post in a topic: ${errorMessage(error)}`);
+				}
+			}
+
+			const credentials: RemoteControlCredentials = {
+				version: 1,
+				botToken: token,
+				bot: { id: bot.id, username: bot.username },
+				owner: { id: owner.id, username: owner.username },
+				group: { id: chat.id, title: chat.title, controlTopicId },
+				authenticatedAt: this.now().toISOString(),
+			};
+			await this.adapters.credentials.write(credentials);
+			return credentials;
+		});
+	}
+
+	/** Stops the bridge and removes local credentials. Revoking the token itself is a BotFather operation. */
+	logout(): Promise<{ wasRunning: boolean; hadCredentials: boolean }> {
+		return this.withLifecycleLock(async () => {
+			const wasRunning = await this.stopLocked();
+			const hadCredentials = (await this.adapters.credentials.read()) !== undefined;
+			await this.adapters.credentials.clear();
+			return { wasRunning, hadCredentials };
+		});
+	}
+
+	/**
+	 * Starts the remote bridge as a long-polling task inside the current process.
+	 * It runs until stop(), logout(), or process shutdown; nothing outlives Pi.
+	 */
+	start(options: StartOptions = {}): Promise<{ alreadyRunning: boolean; credentials: RemoteControlCredentials }> {
+		return this.withLifecycleLock(async () => {
+			if (this.bridge) return { alreadyRunning: true, credentials: this.bridge.credentials };
+			const credentials = await this.readCredentials();
+			if (!credentials) throw new RemoteControlError("not-logged-in", "Remote control is not logged in; run /rc login locally.");
+
+			const api = this.adapters.telegramBot(credentials.botToken);
+			const bot = await verifyToken(api);
+			let chat: TelegramChat;
+			try {
+				chat = await api.getChat(credentials.group.id);
+			} catch (error) {
+				throw new RemoteControlError("invalid-group", `The bot can no longer access the approved group: ${errorMessage(error)}`);
+			}
+			await verifyGroup(api, chat, bot.id, credentials.owner.id);
+			const offset = await drainUpdates(api);
+
+			const abort = new AbortController();
+			const done = this.poll(api, credentials, offset, abort.signal, options);
+			this.bridge = { abort, done, credentials, api };
+			await api.sendMessage({ chatId: credentials.group.id, threadId: credentials.group.controlTopicId, text: "Remote control started." })
+				.catch((error) => options.onError?.(error));
+			return { alreadyRunning: false, credentials };
+		});
+	}
+
+	/** Stops accepting remote messages. Returns whether the bridge was running. */
+	stop(): Promise<boolean> {
+		return this.withLifecycleLock(() => this.stopLocked());
+	}
+
+	private async stopLocked(): Promise<boolean> {
+		const bridge = this.bridge;
+		if (!bridge) return false;
+		this.bridge = undefined;
+		bridge.abort.abort();
+		await bridge.done;
+		await bridge.api
+			.sendMessage({ chatId: bridge.credentials.group.id, threadId: bridge.credentials.group.controlTopicId, text: "Remote control stopped." })
+			.catch(() => undefined);
+		return true;
+	}
+
+	status(): RemoteControlStatus {
+		const credentials = this.bridge?.credentials;
+		return {
+			running: this.bridge !== undefined,
+			bot: credentials?.bot.username && `@${credentials.bot.username}`,
+			group: credentials?.group.title,
+		};
+	}
+
+	/** Reads the stored login without contacting Telegram. */
+	async loginStatus(): Promise<{ loggedIn: boolean; bot?: string; group?: string }> {
+		const credentials = await this.readCredentials();
+		if (!credentials) return { loggedIn: false };
+		return { loggedIn: true, bot: credentials.bot.username && `@${credentials.bot.username}`, group: credentials.group.title };
+	}
+
+	private async poll(
+		api: TelegramBotApi,
+		credentials: RemoteControlCredentials,
+		initialOffset: number | undefined,
+		signal: AbortSignal,
+		options: StartOptions,
+	): Promise<void> {
+		let offset = initialOffset;
+		let retryDelay = 1000;
+		const rejected = new Set<string>();
+		const reject = async (message: TelegramMessage, key: string, text: string) => {
+			if (rejected.has(key)) return;
+			rejected.add(key);
+			await api.sendMessage({ chatId: message.chat.id, threadId: message.threadId, text });
+		};
+
+		while (!signal.aborted) {
+			let updates: TelegramUpdate[];
+			try {
+				updates = await api.getUpdates({ offset, timeoutSeconds: POLL_TIMEOUT_SECONDS, signal });
+				retryDelay = 1000;
+			} catch (error) {
+				if (signal.aborted) return;
+				// Network or Telegram outages never stop the bridge; retry with backoff.
+				options.onError?.(error);
+				await sleep(retryDelay, signal);
+				retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY_MS);
+				continue;
+			}
+			for (const update of updates) {
+				if (signal.aborted) return;
+				offset = update.updateId + 1;
+				const message = update.message;
+				if (!message?.from || message.from.isBot) continue;
+				try {
+					if (message.from.id !== credentials.owner.id) {
+						await reject(message, `user:${message.from.id}`, "Not authorized: this bot only accepts its owner.");
+					} else if (message.chat.id !== credentials.group.id) {
+						await reject(message, `chat:${message.chat.id}`, "Remote control only accepts messages in the approved forum group.");
+					} else if (message.text) {
+						await options.onMessage?.({ messageId: message.messageId, threadId: message.threadId, text: message.text });
+					}
+				} catch (error) {
+					options.onError?.(error);
+				}
+			}
+		}
 	}
 }
