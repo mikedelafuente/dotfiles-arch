@@ -1,5 +1,26 @@
 # Remote Agent Control
 
+## Coordinator foundation
+
+`coordinator.ts` is the high-level seam for remote control. It owns the approved
+repository allowlist and the durable relationship between a repository, workspace,
+branch, Pi session, and Telegram session topic. Telegram, Pi, Git workspaces,
+credentials, and persistence are injected adapters; coordinator tests use fakes and
+do not import vendor SDKs.
+
+`state.ts` contains optional machine-local JSON adapters. Keep their files under
+`~/.config` or `~/.local/state` and never place them under the synced `pi/` tree:
+credentials and remote-control state are intentionally machine-local. The JSON
+credential adapter writes directories as `0700` and files as `0600`.
+
+Session creation is serialized and checks workspace ownership both before and after
+workspace preparation. If Pi, Telegram, or persistence fails, already-created
+resources are rolled back where their adapter supports removal.
+
+The adapter-backed tests are in `coordinator.test.ts`. They cover repository
+approval, durable relationships, grouping/attach, and duplicate workspace rejection.
+
+
 This context defines the concepts used to control persistent Pi agent sessions remotely through Telegram while preserving repository and workspace safety.
 
 ## Language
