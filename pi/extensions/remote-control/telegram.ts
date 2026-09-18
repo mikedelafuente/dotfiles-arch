@@ -96,6 +96,9 @@ export function createTelegramBotApi(token: string, fetchImpl: typeof fetch = fe
 			const topic = await call<{ message_thread_id: number }>("createForumTopic", { chat_id: chatId, name });
 			return { threadId: topic.message_thread_id };
 		},
+		async deleteForumTopic({ chatId, threadId }) {
+			await call("deleteForumTopic", { chat_id: chatId, message_thread_id: threadId });
+		},
 		async editForumTopic({ chatId, threadId, name }) {
 			await call("editForumTopic", { chat_id: chatId, message_thread_id: threadId, name });
 		},

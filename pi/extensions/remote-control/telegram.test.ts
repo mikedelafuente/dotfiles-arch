@@ -32,6 +32,7 @@ test("maps Bot API payloads to remote-control types", async () => {
 		sendMessage: { message_id: 77 },
 		editMessageText: true,
 		editForumTopic: true,
+		deleteForumTopic: true,
 	}, calls));
 
 	assert.deepEqual(await api.getUpdates({ offset: 5, timeoutSeconds: 25 }), [{
@@ -50,10 +51,12 @@ test("maps Bot API payloads to remote-control types", async () => {
 	assert.deepEqual(await api.sendMessage({ chatId: -1001, threadId: 9, text: "hi" }), { messageId: 77 });
 	await api.editMessageText({ chatId: -1001, messageId: 77, text: "edited" });
 	await api.editForumTopic({ chatId: -1001, threadId: 9, name: "renamed" });
-	assert.deepEqual(calls.slice(-3).map((call) => [call.url.split("/").pop(), call.body]), [
+	await api.deleteForumTopic({ chatId: -1001, threadId: 9 });
+	assert.deepEqual(calls.slice(-4).map((call) => [call.url.split("/").pop(), call.body]), [
 		["sendMessage", { chat_id: -1001, message_thread_id: 9, text: "hi" }],
 		["editMessageText", { chat_id: -1001, message_id: 77, text: "edited" }],
 		["editForumTopic", { chat_id: -1001, message_thread_id: 9, name: "renamed" }],
+		["deleteForumTopic", { chat_id: -1001, message_thread_id: 9 }],
 	]);
 });
 

@@ -7,6 +7,9 @@
 | `/rc` or `/rc start` | Start the remote bridge inside this Pi process and expose this conversation |
 | `/rc stop` | Stop accepting Telegram messages; Pi sessions are untouched |
 | `/rc status` | Show login and bridge state, and the session topics being routed |
+| `/rc new <name>` | Adopt this branch or worktree as agent session `<name>`, or start one in a new worktree |
+| `/rc sessions` | List agent sessions by repository, with their status |
+| `/rc attach <session>` | Reconnect a disconnected agent session |
 | `/rc login` | Link a BotFather token, the owner, and a private forum group |
 | `/rc logout` | Stop the bridge and delete local credentials |
 
@@ -37,7 +40,9 @@ token in @BotFather to disable the bot itself.
 
 The bridge is a long-polling task inside the running Pi process, not a daemon.
 It stops on `/rc stop`, `/rc logout`, or `session_shutdown` (quit, reload, and
-session switches), so nothing outlives the Pi process. `/rc start` re-validates
+session switches), so nothing outlives the Pi process. `session_shutdown` also
+stops the agent processes `/rc new` and `/rc attach` started; `/rc stop` leaves
+them running and `/rc start` routes their topics again. `/rc start` re-validates
 the token and group permissions and discards updates that arrived while it was
 stopped. While it runs:
 
@@ -53,9 +58,10 @@ stopped. While it runs:
 `/rc stop`, `/rc logout`, and Pi shutdown also cancel a login that is still
 waiting for its code.
 
-Owner messages in the control topic (or the General topic) are shown as local
-notifications; repository and session management there is not implemented yet.
-Messages in a topic with no running session get one "not connected" reply.
+Owner `/rc` commands in the control topic (or the General topic) manage agent
+sessions (see [Agent sessions](#agent-sessions)); other owner messages there are
+shown as local notifications. Messages in a topic with no running session get one
+"not connected" reply.
 
 ### Current session
 
@@ -108,6 +114,58 @@ typed locally:
 - When rebinding, only a topic Telegram reports as deleted is replaced; any other
   failure makes `/rc` fail instead.
 
+### Agent sessions
+
+An agent session is one Pi conversation with its own repository, workspace, branch,
+and session topic. Two sessions never share a workspace.
+
+| Command | Where | Effect |
+|---------|-------|--------|
+| `/rc new <name>` | Local Pi | On a feature branch or in a linked worktree: the current conversation becomes agent session `<name>` in its topic (renamed to match). On `main`/`master` or a detached HEAD in the main checkout: a new session, as below |
+| `/rc new <repository> <name>` | Control topic | A new session in an approved repository, named by its registry name or path |
+| `/rc sessions` | Both | Sessions grouped by repository, with their status |
+| `/rc attach <session>` | Both | Reconnects a disconnected session, by name or id |
+| `/rc help` | Control topic | The control-topic commands |
+
+A new session gets, together or not at all:
+
+- a worktree at `<repository>.worktrees/rc-<name>` on a new branch `rc/<name>`,
+  started from the remote's default branch (else `main`, else `master`). An
+  existing branch of that name is refused rather than reused;
+- a Pi conversation named `<name>`, running as a `pi --mode rpc` child of this Pi
+  in that worktree, with the same extensions, skills, and session history as a
+  local Pi;
+- a session topic named `<repository> / <name> / rc/<name>`.
+
+If any step fails, the ones already done are undone: the topic is deleted, Pi is
+stopped, and the worktree and branch are removed. Remote requests can only use
+repositories already in the registry; running `/rc` locally is the only way to add
+one. A name already used in the same repository is refused, as is a workspace
+another session is assigned.
+
+`/rc sessions` reports each session as:
+
+| Status | Meaning |
+|--------|---------|
+| connected | Its topic is routed to a running Pi |
+| disconnected | Not running, but its workspace and Pi history exist: `/rc attach` it |
+| stale | Its Pi history is gone (or was never written, as for a session that never got a prompt) |
+| missing workspace | Its worktree was removed |
+
+`/rc attach` resumes the stored Pi session file in its workspace, checks Pi really
+resumed that conversation, then posts `Reconnected` in the session topic (renamed
+if the branch changed, replaced if it was deleted). It refuses stale and
+missing-workspace sessions, and a name that matches more than one session asks for
+the id. Attach a session only when no other Pi has it open: two Pi processes
+writing one session file corrupt it.
+
+In an agent's topic, messages work as in [Current session](#current-session),
+except that skills and prompt templates are expanded (the agent receives them
+through Pi's RPC `prompt`). Extension commands are refused, and dialogs an extension
+opens are cancelled with a note in the topic, because remote approval does not
+exist yet. Extension warnings and errors are posted in the topic. If the agent's Pi
+exits, the topic says so and the session becomes disconnected.
+
 ### Tests
 
 ```bash
@@ -115,24 +173,27 @@ node --test pi/extensions/remote-control/*.test.ts
 ```
 
 Sources use only erasable TypeScript and `.ts` import specifiers, so Node's
-built-in type stripping runs them directly.
+built-in type stripping runs them directly. `git-workspaces.test.ts` needs `git`;
+`pi-rpc.test.ts` runs a scripted stand-in for `pi --mode rpc`, not Pi itself.
 
 ## Coordinator foundation
 
 `coordinator.ts` is the high-level seam for remote control. It owns the approved
 repository allowlist and the durable relationship between a repository, workspace,
-branch, Pi session, and Telegram session topic. Telegram, Pi, Git workspaces,
-credentials, and persistence are injected adapters; coordinator tests use fakes and
-do not import vendor SDKs.
+branch, Pi session, and Telegram session topic. Telegram, Pi processes, Git
+workspaces, credentials, and persistence are injected adapters; coordinator tests
+use fakes and do not import vendor SDKs. `git-workspaces.ts` and `pi-rpc.ts` are the
+real workspace and Pi adapters.
 
 `state.ts` contains optional machine-local JSON adapters. Keep their files under
 `~/.config` or `~/.local/state` and never place them under the synced `pi/` tree:
 credentials and remote-control state are intentionally machine-local. The JSON
 credential adapter writes directories as `0700` and files as `0600`.
 
-Session creation is serialized and checks workspace ownership both before and after
-workspace preparation. If Pi, Telegram, or persistence fails, already-created
-resources are rolled back where their adapter supports removal.
+Session creation, adoption, and attach are serialized and check workspace ownership
+both before and after workspace preparation. If Pi, Telegram, or persistence fails,
+already-created resources are rolled back. Session status is computed when listed,
+never stored.
 
 The coordinator also owns the login handshake and bridge lifecycle, using an
 injected `TelegramBotApi` (`telegram.ts` is the fetch-based implementation).
@@ -141,8 +202,9 @@ It also routes session-topic messages to an injected `LivePiSession` and turns
 `recordActivity()` reports (`index.ts` maps Pi's agent and tool events to them) into
 progress edits and responses. `messages.ts` holds the pure text formatting.
 
-Adapter-backed tests: `coordinator.test.ts` covers repository approval, durable
-relationships, grouping/attach, and duplicate workspace rejection;
+Adapter-backed tests: `coordinator.test.ts` covers creating, adopting, listing, and
+attaching agent sessions, rollback, repository approval, and duplicate workspace
+rejection;
 `lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
 and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
 current conversation, topic rebinding, message routing, progress, response

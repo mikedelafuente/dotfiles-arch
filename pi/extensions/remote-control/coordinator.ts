@@ -10,10 +10,14 @@ import {
 	condenseForTelegram,
 	describeTool,
 	failureText,
+	parseControlCommand,
 	parseSessionTopicInput,
 	renderProgress,
+	renderSessions,
+	sessionBranch,
 	SESSION_TOPIC_HELP,
 	topicTitle,
+	type ControlCommand,
 	type ToolProgress,
 } from "./messages.ts";
 
@@ -32,17 +36,33 @@ export type AgentSession = {
 	workspace: string;
 	branch: string;
 	piSessionId: string;
+	/** The Pi session file, used to resume the conversation and to check its history still exists. */
+	piSessionFile?: string;
 	topicId: string;
 	topicName: string;
 	createdAt: string;
-	status: "active" | "disconnected" | "stale" | "missing-workspace";
 };
 
-export type CreateSessionInput = {
+/**
+ * How an agent session stands, computed rather than stored: `active` sessions are
+ * routed by the running bridge, `disconnected` ones can be attached, `stale` ones
+ * lost their Pi history, and `missing-workspace` ones lost their worktree.
+ */
+export type SessionStatus = "active" | "disconnected" | "stale" | "missing-workspace";
+
+export type SessionOverview = AgentSession & { status: SessionStatus };
+
+export type RepositorySessions = { repository: { name: string; path: string }; sessions: SessionOverview[] };
+
+export type NewSessionInput = {
 	name: string;
-	repositoryPath: string;
-	branch?: string;
-	workspace?: string;
+	/**
+	 * The local conversation `/rc new` was run from. On a feature branch or in a
+	 * linked worktree it is adopted; on the main line a new workspace is created in its repository.
+	 */
+	current?: LivePiSession;
+	/** A registered repository's name or path, for remote requests. */
+	repository?: string;
 };
 
 export type Workspace = {
@@ -67,19 +87,32 @@ export interface AgentSessionStore {
 }
 
 export interface WorkspaceAdapter {
+	/** Creates a worktree on a new branch from the repository's main line. */
 	create(repository: Repository, branch: string): Promise<Workspace>;
-	adopt(path: string, branch?: string): Promise<Workspace>;
-	remove?(workspace: Workspace): Promise<void>;
+	/** Removes a worktree `create` made, and its branch; only used to roll back a failed creation. */
+	remove(workspace: Workspace, repository: Repository): Promise<void>;
+	/** The branch checked out in a workspace, or undefined when the workspace no longer exists. */
+	inspect(path: string): Promise<{ branch: string } | undefined>;
+}
+
+export type PiSessionEvents = {
+	activity(activity: PiActivity): void;
+	/** The Pi process ended without `close()`. */
+	exited(reason: string): void;
+};
+
+/** A Pi conversation remote control runs in its own Pi process, in its own workspace. */
+export interface AgentProcess extends LivePiSession {
+	close(): Promise<void>;
 }
 
 export interface PiSessionAdapter {
-	create(input: { name: string; repository: Repository; workspace: Workspace }): Promise<{ id: string }>;
-	remove?(id: string): Promise<void>;
-}
-
-export interface TelegramTransport {
-	createSessionTopic(name: string): Promise<{ id: string }>;
-	removeTopic?(id: string): Promise<void>;
+	/** Starts a new, named Pi conversation in the workspace. */
+	create(input: { name: string; repository: Repository; workspace: Workspace }, events: PiSessionEvents): Promise<AgentProcess>;
+	/** Starts Pi on the session's persisted conversation; rejects rather than start a different one. */
+	resume(session: AgentSession, events: PiSessionEvents): Promise<AgentProcess>;
+	/** Whether the session's Pi history still exists to resume. */
+	hasHistory(session: AgentSession): Promise<boolean>;
 }
 
 export interface CredentialStore {
@@ -127,6 +160,7 @@ export interface TelegramBotApi {
 	getChat(chatId: number): Promise<TelegramChat>;
 	getChatMember(chatId: number, userId: number): Promise<TelegramChatMember>;
 	createForumTopic(chatId: number, name: string): Promise<{ threadId: number }>;
+	deleteForumTopic(input: { chatId: number; threadId: number }): Promise<void>;
 	editForumTopic(input: { chatId: number; threadId: number; name: string }): Promise<void>;
 	sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<{ messageId: number }>;
 	editMessageText(input: { chatId: number; messageId: number; text: string }): Promise<void>;
@@ -163,9 +197,12 @@ export interface LivePiSession {
 	readonly name: string;
 	/** Root of the Git worktree the conversation works in. */
 	readonly workspace: string;
+	/** The checked-out branch, or `detached@<commit>` for a detached HEAD. */
 	readonly branch: string;
 	/** The repository to approve: the main checkout when `workspace` is a linked worktree. */
 	readonly repositoryPath: string;
+	/** The Pi session file, once Pi knows it. */
+	readonly sessionFile?: string;
 	isIdle(): boolean;
 	/** Starts a run with a new user message. */
 	prompt(text: string): void;
@@ -173,6 +210,8 @@ export interface LivePiSession {
 	steer(text: string): void;
 	/** Queues a user message for after the current run. */
 	followUp(text: string): void;
+	/** Sets the Pi session name, when an adopted conversation is renamed. */
+	rename?(name: string): void;
 }
 
 /** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
@@ -182,12 +221,14 @@ export type PiActivity =
 	| { type: "tool-end"; toolCallId: string; isError: boolean }
 	| { type: "response"; text: string; error?: string; aborted?: boolean }
 	/** Pi will not continue on its own: no retry, compaction, or queued follow-up is left. */
-	| { type: "settled" };
+	| { type: "settled" }
+	/** Something the owner should know that is not part of a run, posted as is. */
+	| { type: "notice"; text: string };
 
 export type StartOptions = {
 	/** The current Pi conversation to expose; omitted outside a Git repository. */
 	session?: LivePiSession;
-	/** Owner messages that are not for a running agent session, such as control-topic messages. */
+	/** Owner messages that are neither for an agent session nor a control-topic `/rc` command. */
 	onMessage?(message: AuthorizedMessage): Promise<void>;
 	/** A recoverable failure; polling retries with backoff. */
 	onError?(error: unknown): void;
@@ -217,7 +258,6 @@ export type RemoteControlAdapters = {
 	sessions: AgentSessionStore;
 	workspaces: WorkspaceAdapter;
 	pi: PiSessionAdapter;
-	telegram: TelegramTransport;
 	credentials: CredentialStore;
 	telegramBot(token: string): TelegramBotApi;
 };
@@ -226,7 +266,12 @@ export class RemoteControlError extends Error {
 	readonly code:
 		| "repository-not-approved"
 		| "duplicate-workspace"
+		| "duplicate-session"
 		| "session-not-found"
+		| "ambiguous-session"
+		| "missing-workspace"
+		| "stale-session"
+		| "not-running"
 		| "invalid-session-name"
 		| "invalid-token"
 		| "invalid-group"
@@ -255,6 +300,17 @@ const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
 const DEFAULT_PROGRESS_INTERVAL_MS = 5000;
 const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
 const DEFAULT_SESSION_NAME = "agent";
+/** Branches `/rc new` never adopts: new work there gets its own worktree. */
+const MAIN_LINE_BRANCHES = new Set(["main", "master"]);
+
+function isAdoptable(live: LivePiSession): boolean {
+	if (live.workspace !== live.repositoryPath) return true;
+	return !MAIN_LINE_BRANCHES.has(live.branch) && !live.branch.startsWith("detached@");
+}
+
+function connectedText(name: string, branch: string): string {
+	return `Connected to Pi session "${name}" on ${branch}. ${SESSION_TOPIC_HELP}`;
+}
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -367,6 +423,8 @@ type Bridge = {
 	options: StartOptions;
 	/** Keyed by Telegram thread id. */
 	routes: Map<number, Route>;
+	/** Serializes control-topic commands so their replies stay in order. */
+	control: Promise<void>;
 };
 
 /** The single authority for repository and agent-session invariants. */
@@ -375,6 +433,8 @@ export class RemoteControlCoordinator {
 	private bridge?: Bridge;
 	private lifecycleTail: Promise<void> = Promise.resolve();
 	private pendingLogin?: AbortController;
+	/** Pi processes remote control started, keyed by agent session id. They outlive `/rc stop` but not `shutdown()`. */
+	private readonly agents = new Map<string, { session: AgentSession; pi: AgentProcess }>();
 
 	private readonly adapters: RemoteControlAdapters;
 	private readonly now: () => Date;
@@ -409,71 +469,232 @@ export class RemoteControlCoordinator {
 		return this.adapters.repositories.list();
 	}
 
-	createSession(input: CreateSessionInput): Promise<AgentSession> {
-		return this.withCreationLock(() => this.createSessionLocked(input));
+	/**
+	 * Starts a named agent session. Run locally from a feature branch or a linked
+	 * worktree, it adopts that workspace and the current conversation; otherwise it
+	 * creates a worktree, branch, Pi session, and session topic together, or none of them.
+	 */
+	newSession(input: NewSessionInput): Promise<{ session: AgentSession; adopted: boolean }> {
+		return this.withCreationLock(async () => {
+			const bridge = this.requireBridge();
+			const name = input.name.trim();
+			if (!name) throw new RemoteControlError("invalid-session-name", "An agent session name is required.");
+			const current = input.current;
+			if (current && isAdoptable(current)) {
+				const session = await this.exposeLocked(bridge, current, name);
+				current.rename?.(name);
+				return { session, adopted: true };
+			}
+			const repository = current
+				? await this.registerRepositoryLocked(current.repositoryPath)
+				: await this.approvedRepository(input.repository ?? "");
+			return { session: await this.createLocked(bridge, repository, name), adopted: false };
+		});
 	}
 
-	private async createSessionLocked(input: CreateSessionInput): Promise<AgentSession> {
-		const name = input.name.trim();
-		if (!name) throw new RemoteControlError("invalid-session-name", "An agent session name is required.");
+	private requireBridge(): Bridge {
+		if (!this.bridge) throw new RemoteControlError("not-running", "Remote control is not running; start it locally with /rc.");
+		return this.bridge;
+	}
 
-		const repository = await this.adapters.repositories.getByPath(input.repositoryPath);
-		if (!repository) {
-			throw new RemoteControlError(
-				"repository-not-approved",
-				`Repository is not approved for remote control: ${input.repositoryPath}`,
-			);
-		}
+	/** Finds a registered repository by name or path. Remote requests can never register one. */
+	private async approvedRepository(reference: string): Promise<Repository> {
+		const repositories = await this.adapters.repositories.list();
+		const found = repositories.find((repository) => repository.path === reference)
+			?? repositories.find((repository) => repository.name.toLowerCase() === reference.toLowerCase());
+		if (found) return found;
+		const approved = repositories.map((repository) => repository.name).join(", ") || "none yet; run /rc in a repository locally";
+		throw new RemoteControlError("repository-not-approved", `Repository is not approved for remote control: ${reference}. Approved: ${approved}.`);
+	}
 
+	private async createLocked(bridge: Bridge, repository: Repository, name: string): Promise<AgentSession> {
+		const branch = sessionBranch(name);
+		if (!branch) throw new RemoteControlError("invalid-session-name", `Use letters or digits in the session name: ${name}`);
 		const existing = await this.adapters.sessions.list();
-		if (input.workspace && existing.some((session) => session.workspace === input.workspace)) {
-			throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${input.workspace}`);
+		if (existing.some((session) => session.repositoryPath === repository.path && session.name.toLowerCase() === name.toLowerCase())) {
+			throw new RemoteControlError("duplicate-session", `${repository.name} already has an agent session named ${name}; use /rc attach ${name}.`);
 		}
 
-		const workspace = input.workspace
-			? await this.adapters.workspaces.adopt(input.workspace, input.branch)
-			: await this.adapters.workspaces.create(repository, input.branch || `rc/${name}`);
-		if (existing.some((session) => session.workspace === workspace.path)) {
-			if (workspace.created) await this.adapters.workspaces.remove?.(workspace);
-			throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${workspace.path}`);
-		}
-
-		let piSession: { id: string } | undefined;
-		let topic: { id: string } | undefined;
+		const workspace = await this.adapters.workspaces.create(repository, branch);
+		const chatId = bridge.credentials.group.id;
+		let agent: AgentProcess | undefined;
+		let threadId: number | undefined;
 		try {
-			piSession = await this.adapters.pi.create({ name, repository, workspace });
-			const sessionTopicName = topicTitle(repository.name, name, workspace.branch);
-			topic = await this.adapters.telegram.createSessionTopic(sessionTopicName);
+			if (existing.some((session) => session.workspace === workspace.path)) {
+				throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${workspace.path}`);
+			}
+			agent = await this.adapters.pi.create({ name, repository, workspace }, this.agentEvents(() => agent));
+			const title = topicTitle(repository.name, name, workspace.branch);
+			threadId = (await bridge.api.createForumTopic(chatId, title)).threadId;
+			await bridge.api.sendMessage({ chatId, threadId, text: connectedText(name, workspace.branch) });
 			const session: AgentSession = {
 				id: id("session"), name, repositoryId: repository.id, repositoryPath: repository.path,
-				workspace: workspace.path, branch: workspace.branch, piSessionId: piSession.id,
-				topicId: topic.id, topicName: sessionTopicName,
-				createdAt: this.now().toISOString(), status: "active",
+				workspace: workspace.path, branch: workspace.branch, piSessionId: agent.id, piSessionFile: agent.sessionFile,
+				topicId: String(threadId), topicName: title, createdAt: this.now().toISOString(),
 			};
 			await this.adapters.sessions.save(session);
+			this.connectAgent(session, agent);
 			return session;
 		} catch (error) {
-			if (topic && this.adapters.telegram.removeTopic) await this.adapters.telegram.removeTopic(topic.id).catch(() => undefined);
-			if (piSession && this.adapters.pi.remove) await this.adapters.pi.remove(piSession.id).catch(() => undefined);
-			if (workspace.created && this.adapters.workspaces.remove) await this.adapters.workspaces.remove(workspace).catch(() => undefined);
+			if (threadId !== undefined) await bridge.api.deleteForumTopic({ chatId, threadId }).catch(() => undefined);
+			await agent?.close().catch(() => undefined);
+			await this.adapters.workspaces.remove(workspace, repository).catch(() => undefined);
 			throw error;
 		}
 	}
 
-	async sessionsByRepository(): Promise<Map<string, AgentSession[]>> {
-		const grouped = new Map<string, AgentSession[]>();
-		for (const session of await this.adapters.sessions.list()) {
-			const sessions = grouped.get(session.repositoryPath) || [];
-			sessions.push(session);
-			grouped.set(session.repositoryPath, sessions);
-		}
-		return grouped;
+	/** Relays a Pi process's activity to its topic and notices when it exits on its own. */
+	private agentEvents(agent: () => AgentProcess | undefined): PiSessionEvents {
+		return {
+			activity: (activity) => {
+				const current = agent();
+				if (current) this.recordActivity(current.id, activity);
+			},
+			exited: (reason) => {
+				const current = agent();
+				if (current) this.disconnectAgent(current, reason);
+			},
+		};
 	}
 
-	async attach(idToAttach: string): Promise<AgentSession> {
-		const session = await this.adapters.sessions.get(idToAttach);
-		if (!session) throw new RemoteControlError("session-not-found", `Agent session not found: ${idToAttach}`);
-		return session;
+	/** Keeps a running agent and routes its topic while the bridge runs, including after a restart. */
+	private connectAgent(session: AgentSession, agent: AgentProcess): void {
+		this.agents.set(session.id, { session, pi: agent });
+		const bridge = this.bridge;
+		if (bridge) this.route(bridge, session, agent);
+	}
+
+	private route(bridge: Bridge, session: AgentSession, pi: LivePiSession): void {
+		for (const [threadId, route] of bridge.routes) {
+			if (route.session.id === session.id || route.pi === pi) {
+				clearTimeout(route.progress?.timer);
+				bridge.routes.delete(threadId);
+			}
+		}
+		const threadId = Number(session.topicId);
+		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve() });
+	}
+
+	private disconnectAgent(agent: AgentProcess, reason: string): void {
+		const entry = [...this.agents].find(([, candidate]) => candidate.pi === agent);
+		if (!entry) return;
+		this.agents.delete(entry[0]);
+		const bridge = this.bridge;
+		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi === agent);
+		if (!bridge || !route) return;
+		bridge.routes.delete(route.threadId);
+		clearTimeout(route.progress?.timer);
+		this.reply(bridge, route, `Disconnected: the Pi agent exited (${reason}). Reconnect with /rc attach ${route.session.name}.`);
+	}
+
+	/** Agent sessions grouped by repository, each with its computed status. */
+	async sessions(): Promise<RepositorySessions[]> {
+		const connected = this.connectedSessionIds();
+		const repositories = await this.adapters.repositories.list();
+		const groups = new Map<string, RepositorySessions>();
+		for (const repository of repositories) groups.set(repository.path, { repository: { name: repository.name, path: repository.path }, sessions: [] });
+		for (const session of await this.adapters.sessions.list()) {
+			let group = groups.get(session.repositoryPath);
+			if (!group) {
+				group = { repository: { name: session.repositoryPath.split("/").filter(Boolean).pop() || session.repositoryPath, path: session.repositoryPath }, sessions: [] };
+				groups.set(session.repositoryPath, group);
+			}
+			group.sessions.push({ ...session, status: connected.has(session.id) ? "active" : await this.health(session) });
+		}
+		return [...groups.values()].filter((group) => group.sessions.length);
+	}
+
+	private connectedSessionIds(): Set<string> {
+		return new Set([...this.agents.keys(), ...[...this.bridge?.routes.values() ?? []].map((route) => route.session.id)]);
+	}
+
+	/** Why a session that is not connected can or cannot be attached. */
+	private async health(session: AgentSession): Promise<Exclude<SessionStatus, "active">> {
+		if (!(await this.adapters.workspaces.inspect(session.workspace))) return "missing-workspace";
+		if (!(await this.adapters.pi.hasHistory(session))) return "stale";
+		return "disconnected";
+	}
+
+	/** Finds a stored session by id, id prefix, or unique name. */
+	private async findSession(reference: string): Promise<AgentSession> {
+		const wanted = reference.trim();
+		const sessions = await this.adapters.sessions.list();
+		const byId = sessions.find((session) => session.id === wanted || session.id === `session-${wanted}`);
+		if (byId) return byId;
+		const byName = sessions.filter((session) => session.name.toLowerCase() === wanted.toLowerCase());
+		const matches = byName.length ? byName : wanted.length >= 4 ? sessions.filter((session) => session.id.replace(/^session-/, "").startsWith(wanted)) : [];
+		if (matches.length === 1) return matches[0];
+		if (matches.length > 1) {
+			const choices = matches.map((session) => `${session.id} (${session.repositoryPath}, ${session.branch})`).join("; ");
+			throw new RemoteControlError("ambiguous-session", `More than one agent session matches ${wanted}; attach one by id: ${choices}.`);
+		}
+		throw new RemoteControlError("session-not-found", `Agent session not found: ${wanted}. List them with /rc sessions.`);
+	}
+
+	/**
+	 * Reconnects a persisted agent session: resumes its Pi conversation in its
+	 * workspace and routes its topic again. Connected sessions are left as they are.
+	 */
+	attach(reference: string): Promise<{ session: AgentSession; alreadyConnected: boolean }> {
+		return this.withCreationLock(async () => {
+			const bridge = this.requireBridge();
+			const session = await this.findSession(reference);
+			if (this.connectedSessionIds().has(session.id)) return { session, alreadyConnected: true };
+			const workspace = await this.adapters.workspaces.inspect(session.workspace);
+			if (!workspace) {
+				throw new RemoteControlError("missing-workspace", `The workspace of ${session.name} no longer exists: ${session.workspace}`);
+			}
+			if (!(await this.adapters.pi.hasHistory(session))) {
+				throw new RemoteControlError("stale-session", `The Pi history of ${session.name} was not found, so it cannot be resumed.`);
+			}
+
+			let agent: AgentProcess | undefined;
+			agent = await this.adapters.pi.resume(session, this.agentEvents(() => agent));
+			try {
+				if (agent.id !== session.piSessionId) throw new Error(`Pi resumed session ${agent.id} instead of ${session.piSessionId}.`);
+				const title = topicTitle(await this.repositoryName(session), session.name, workspace.branch);
+				const threadId = await this.bindTopic(bridge, session, title, `Reconnected to Pi session "${session.name}" on ${workspace.branch}. ${SESSION_TOPIC_HELP}`);
+				const attached: AgentSession = {
+					...session, branch: workspace.branch, topicId: String(threadId), topicName: title,
+					piSessionFile: agent.sessionFile ?? session.piSessionFile,
+				};
+				await this.adapters.sessions.update(attached);
+				this.connectAgent(attached, agent);
+				return { session: attached, alreadyConnected: false };
+			} catch (error) {
+				await agent.close().catch(() => undefined);
+				throw error;
+			}
+		});
+	}
+
+	private async repositoryName(session: AgentSession): Promise<string> {
+		const repository = await this.adapters.repositories.getByPath(session.repositoryPath);
+		return repository?.name ?? (session.repositoryPath.split("/").filter(Boolean).pop() || session.repositoryPath);
+	}
+
+	/**
+	 * Announces a session in its stored topic, renaming it when the title changed.
+	 * Posting proves the topic still exists; one deleted in Telegram is replaced. Any
+	 * other failure is thrown rather than orphaning a topic that still exists.
+	 */
+	private async bindTopic(bridge: Bridge, stored: AgentSession | undefined, title: string, text: string): Promise<number> {
+		const { api, options } = bridge;
+		const chatId = bridge.credentials.group.id;
+		let threadId = stored ? Number(stored.topicId) : undefined;
+		if (threadId !== undefined) {
+			await api.sendMessage({ chatId, threadId, text }).catch((error) => {
+				if (!isMissingTopic(error)) throw error;
+				threadId = undefined;
+			});
+		}
+		if (threadId === undefined) {
+			threadId = (await api.createForumTopic(chatId, title)).threadId;
+			await api.sendMessage({ chatId, threadId, text });
+		} else if (stored?.topicName !== title) {
+			await api.editForumTopic({ chatId, threadId, name: title }).catch((error) => options.onDeliveryError?.(error));
+		}
+		return threadId;
 	}
 
 	credentials(): CredentialStore {
@@ -612,14 +833,18 @@ export class RemoteControlCoordinator {
 			const offset = await drainUpdates(api);
 
 			const live = options.session;
-			const session = live ? await this.withCreationLock(() => this.exposeLocked(api, credentials, live, options)) : undefined;
-			const abort = new AbortController();
-			const bridge: Bridge = { abort, done: Promise.resolve(), credentials, api, options, routes: new Map() };
-			if (session && live) {
-				const threadId = Number(session.topicId);
-				bridge.routes.set(threadId, { session, threadId, pi: live, outbox: Promise.resolve() });
-			}
-			this.bridge = bridge;
+			const bridge: Bridge = {
+				abort: new AbortController(), done: Promise.resolve(), credentials, api, options, routes: new Map(), control: Promise.resolve(),
+			};
+			const session = await this.withCreationLock(async () => {
+				const exposed = live ? await this.exposeLocked(bridge, live) : undefined;
+				for (const agent of this.agents.values()) {
+					this.route(bridge, agent.session, agent.pi);
+					this.reply(bridge, bridge.routes.get(Number(agent.session.topicId))!, `Remote control resumed. ${SESSION_TOPIC_HELP}`);
+				}
+				this.bridge = bridge;
+				return exposed;
+			});
 			bridge.done = this.poll(bridge, offset);
 			await api.sendMessage({ chatId: credentials.group.id, threadId: credentials.group.controlTopicId, text: "Remote control started." })
 				.catch((error) => options.onError?.(error));
@@ -628,33 +853,20 @@ export class RemoteControlCoordinator {
 	}
 
 	/**
-	 * Makes the live Pi conversation the agent session for its workspace. A workspace
-	 * already exposed by an earlier conversation keeps its topic, which is rebound to
-	 * this conversation and renamed if the session name or branch changed.
+	 * Makes a live Pi conversation the agent session for its workspace and routes its
+	 * topic. A workspace already exposed by an earlier conversation keeps its topic,
+	 * which is rebound to this conversation and renamed if the name or branch changed.
 	 */
-	private async exposeLocked(api: TelegramBotApi, credentials: RemoteControlCredentials, live: LivePiSession, options: StartOptions): Promise<AgentSession> {
+	private async exposeLocked(bridge: Bridge, live: LivePiSession, requestedName?: string): Promise<AgentSession> {
+		const owner = [...this.agents.values()].find((agent) => agent.session.workspace === live.workspace);
+		if (owner) {
+			throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned to the running agent session ${owner.session.name}: ${live.workspace}`);
+		}
 		const repository = await this.registerRepositoryLocked(live.repositoryPath);
 		const existing = (await this.adapters.sessions.list()).find((session) => session.workspace === live.workspace);
-		const name = live.name.trim() || existing?.name || DEFAULT_SESSION_NAME;
+		const name = requestedName ?? (live.name.trim() || existing?.name || DEFAULT_SESSION_NAME);
 		const title = topicTitle(repository.name, name, live.branch);
-		const chatId = credentials.group.id;
-		const connected = `Connected to Pi session "${name}" on ${live.branch}. ${SESSION_TOPIC_HELP}`;
-
-		// Posting proves the stored topic still exists; one deleted in Telegram is replaced.
-		// Any other failure fails the start rather than orphaning a topic that still exists.
-		let threadId = existing ? Number(existing.topicId) : undefined;
-		if (threadId !== undefined) {
-			await api.sendMessage({ chatId, threadId, text: connected }).catch((error) => {
-				if (!isMissingTopic(error)) throw error;
-				threadId = undefined;
-			});
-		}
-		if (threadId === undefined) {
-			threadId = (await api.createForumTopic(chatId, title)).threadId;
-			await api.sendMessage({ chatId, threadId, text: connected });
-		} else if (existing?.topicName !== title) {
-			await api.editForumTopic({ chatId, threadId, name: title }).catch((error) => options.onDeliveryError?.(error));
-		}
+		const threadId = await this.bindTopic(bridge, existing, title, connectedText(name, live.branch));
 
 		const session: AgentSession = {
 			id: existing?.id ?? id("session"),
@@ -664,13 +876,14 @@ export class RemoteControlCoordinator {
 			workspace: live.workspace,
 			branch: live.branch,
 			piSessionId: live.id,
+			piSessionFile: live.sessionFile,
 			topicId: String(threadId),
 			topicName: title,
 			createdAt: existing?.createdAt ?? this.now().toISOString(),
-			status: "active",
 		};
 		if (existing) await this.adapters.sessions.update(session);
 		else await this.adapters.sessions.save(session);
+		this.route(bridge, session, live);
 		return session;
 	}
 
@@ -690,12 +903,29 @@ export class RemoteControlCoordinator {
 		for (const [threadId, route] of bridge.routes) {
 			clearTimeout(route.progress?.timer);
 			await route.outbox;
-			await bridge.api.sendMessage({ chatId, threadId, text: "Disconnected: remote control stopped." }).catch(() => undefined);
+			const text = this.agents.has(route.session.id)
+				? "Disconnected: remote control stopped. This agent keeps running and reconnects when /rc starts again."
+				: "Disconnected: remote control stopped.";
+			await bridge.api.sendMessage({ chatId, threadId, text }).catch(() => undefined);
 		}
 		await bridge.api
 			.sendMessage({ chatId, threadId: bridge.credentials.group.controlTopicId, text: "Remote control stopped." })
 			.catch(() => undefined);
 		return true;
+	}
+
+	/** Pi shutdown: stops the bridge and every Pi process remote control started, so nothing outlives Pi. */
+	shutdown(): Promise<void> {
+		this.pendingLogin?.abort();
+		return this.withLifecycleLock(async () => {
+			await this.stopLocked();
+			// Waits for a creation in flight, whose process would otherwise be left running.
+			await this.withCreationLock(async () => {
+				const agents = [...this.agents.values()];
+				this.agents.clear();
+				await Promise.all(agents.map((agent) => agent.pi.close().catch(() => undefined)));
+			});
+		});
 	}
 
 	status(): RemoteControlStatus {
@@ -757,6 +987,10 @@ export class RemoteControlCoordinator {
 				if (route.progress) route.progress.failure = undefined;
 				const text = failure ?? condenseForTelegram(activity.text);
 				if (text) this.reply(bridge, route, text);
+				return;
+			}
+			case "notice": {
+				this.reply(bridge, route, condenseForTelegram(activity.text));
 				return;
 			}
 			case "settled": {
@@ -824,6 +1058,41 @@ export class RemoteControlCoordinator {
 		this.reply(bridge, route, "Steering the current run.");
 	}
 
+	/** Runs a control-topic command in the background, so polling continues, and replies where it was sent. */
+	private runControl(bridge: Bridge, threadId: number | undefined, command: ControlCommand): void {
+		const send = (text: string) => bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId, text });
+		bridge.control = bridge.control
+			.then(async () => {
+				let reply: string;
+				try {
+					reply = await this.controlReply(command);
+				} catch (error) {
+					reply = `Failed: ${errorMessage(error)}`;
+				}
+				await send(reply);
+			})
+			.catch((error) => bridge.options.onError?.(error));
+	}
+
+	private async controlReply(command: ControlCommand): Promise<string> {
+		switch (command.kind) {
+			case "invalid":
+				return command.reply;
+			case "sessions":
+				return renderSessions(await this.sessions());
+			case "new": {
+				const { session } = await this.newSession({ name: command.name, repository: command.repository });
+				return `Started ${session.name} in topic "${session.topicName}", working in ${session.workspace}.`;
+			}
+			case "attach": {
+				const { session, alreadyConnected } = await this.attach(command.session);
+				return alreadyConnected
+					? `${session.name} is already connected in topic "${session.topicName}".`
+					: `Reconnected ${session.name} in topic "${session.topicName}".`;
+			}
+		}
+	}
+
 	private async poll(bridge: Bridge, initialOffset: number | undefined): Promise<void> {
 		const { api, credentials, options } = bridge;
 		const signal = bridge.abort.signal;
@@ -881,7 +1150,9 @@ export class RemoteControlCoordinator {
 						} else if (message.threadId !== undefined && message.threadId !== credentials.group.controlTopicId) {
 							await reject(message, `topic:${message.threadId}`, "This topic is not connected to a running Pi session.");
 						} else {
-							await options.onMessage?.({ messageId: message.messageId, threadId: message.threadId, text: message.text });
+							const command = parseControlCommand(message.text);
+							if (command) this.runControl(bridge, message.threadId, command);
+							else await options.onMessage?.({ messageId: message.messageId, threadId: message.threadId, text: message.text });
 						}
 					}
 				} catch (error) {
