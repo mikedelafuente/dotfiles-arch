@@ -126,7 +126,7 @@ done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
 # --------------------------
 # Shared files under pi/ are version-controlled. Extensions under pi/extensions/
 # are synced by sync-extensions.sh so configured extra repositories can contribute too.
-# Machine-local files like auth.json are intentionally left untouched.
+# Machine-local files like auth.json and models-store.json are intentionally left untouched.
 
 PI_SOURCE_DIR="$REPO_ROOT/pi"
 PI_TARGET_DIR="$USER_HOME_DIR/.pi/agent"
@@ -136,11 +136,24 @@ if [ -d "$PI_SOURCE_DIR" ]; then
     || sudo mkdir -p "$PI_TARGET_DIR"
   print_info_message "Linking pi config files..."
 
+  # Pi updates models-store.json with provider-check timestamps. Detach an old
+  # repo symlink once, preserving its current contents as the local copy.
+  PI_MODELS_STORE_SOURCE="$PI_SOURCE_DIR/models-store.json"
+  PI_MODELS_STORE_TARGET="$PI_TARGET_DIR/models-store.json"
+  if [ -L "$PI_MODELS_STORE_TARGET" ] \
+    && [ "$(readlink -f "$PI_MODELS_STORE_TARGET")" = "$(readlink -f "$PI_MODELS_STORE_SOURCE")" ]; then
+    cp -L "$PI_MODELS_STORE_TARGET" "$PI_MODELS_STORE_TARGET.$$" \
+      && mv "$PI_MODELS_STORE_TARGET.$$" "$PI_MODELS_STORE_TARGET"
+    print_info_message "Detached machine-local: .pi/agent/models-store.json"
+  fi
+
   while IFS= read -r -d '' file; do
     relative_path="${file#"$PI_SOURCE_DIR"/}"
     link_path "$file" "$PI_TARGET_DIR/$relative_path"
     print_info_message "Linked: .pi/agent/$relative_path"
-  done < <(find "$PI_SOURCE_DIR" -type f ! -path "$PI_SOURCE_DIR/extensions/*" -print0)
+  done < <(find "$PI_SOURCE_DIR" -type f \
+    ! -path "$PI_SOURCE_DIR/extensions/*" \
+    ! -path "$PI_SOURCE_DIR/models-store.json" -print0)
 fi
 
 print_tool_setup_complete "Linking dotfiles"
