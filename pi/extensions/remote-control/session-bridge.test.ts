@@ -240,7 +240,8 @@ test("long responses are condensed for Telegram and tool output is never sent", 
 	const response = h.telegram.inTopic(topic)[1].text;
 	assert.ok(response.length <= 4096, `response fits one Telegram message (${response.length})`);
 	assert.ok(response.startsWith("Summary: fixed it."));
-	assert.ok(!response.includes("TAIL_MARKER"));
+	assert.ok(response.endsWith("TAIL_MARKER"), "the conclusion is kept");
+	assert.ok(!response.includes("Detail paragraph 200 "), "the middle is omitted");
 	assert.match(response, /full response is in the Pi session/i);
 	for (const text of [...h.telegram.sent.map((message) => message.text), ...h.telegram.edits.map((edit) => edit.text)]) {
 		assert.ok(!text.includes(secretOutput));
@@ -279,4 +280,68 @@ test("stopping remote control tells the session topic it is disconnected", async
 	h.telegram.sent = [];
 	await h.coordinator.stop();
 	assert.ok(h.telegram.inTopic(topic).some((message) => /disconnected/i.test(message.text)));
+});
+
+test("an error Pi retries is not reported as a failure", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.stop());
+	const { topic } = await startWith(h);
+	h.telegram.sent = [];
+	h.coordinator.recordActivity("pi-current", { type: "run-start", prompt: "go" });
+	h.coordinator.recordActivity("pi-current", { type: "response", text: "", error: "overloaded" });
+	h.coordinator.recordActivity("pi-current", { type: "run-start" });
+	h.coordinator.recordActivity("pi-current", { type: "response", text: "All done." });
+	h.coordinator.recordActivity("pi-current", { type: "settled" });
+	await until(() => h.telegram.edits.some((edit) => /done/i.test(edit.text)));
+	await tick();
+	assert.deepEqual(h.telegram.inTopic(topic).slice(1).map((message) => message.text), ["All done."]);
+});
+
+test("failure text is capped to one Telegram message", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.stop());
+	const { topic } = await startWith(h);
+	h.telegram.sent = [];
+	h.coordinator.recordActivity("pi-current", { type: "run-start" });
+	h.coordinator.recordActivity("pi-current", { type: "response", text: "", error: "e".repeat(10_000) });
+	h.coordinator.recordActivity("pi-current", { type: "settled" });
+	await until(() => h.telegram.inTopic(topic).length === 2);
+	assert.ok(h.telegram.inTopic(topic)[1].text.length <= 4096);
+	assert.match(h.telegram.inTopic(topic)[1].text, /^⚠️ Run failed: e+/);
+});
+
+test("a transient Telegram failure while rebinding fails the start instead of orphaning the topic", async () => {
+	const h = await harness();
+	const earlier = await startWith(h);
+	await h.coordinator.stop();
+	const send = h.telegram.sendMessage.bind(h.telegram);
+	h.telegram.sendMessage = async (input) => {
+		if (input.threadId === earlier.topic) throw Object.assign(new Error("fetch failed"), {});
+		return send(input);
+	};
+	await assert.rejects(h.coordinator.start({ session: new FakePiSession() }), /fetch failed/);
+	assert.equal(h.coordinator.status().running, false);
+	assert.equal(h.telegram.topics.length, 2, "no replacement topic");
+	assert.equal(h.stores.sessions.items[0].topicId, String(earlier.topic));
+});
+
+test("rate-limited topic updates are retried after Telegram's retry_after", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.stop());
+	const { topic } = await startWith(h);
+	h.telegram.sent = [];
+	const send = h.telegram.sendMessage.bind(h.telegram);
+	let limited = false;
+	h.telegram.sendMessage = async (input) => {
+		if (!limited && input.threadId === topic) {
+			limited = true;
+			throw Object.assign(new Error("Too Many Requests: retry after 0"), { errorCode: 429, retryAfter: 0 });
+		}
+		return send(input);
+	};
+	h.coordinator.recordActivity("pi-current", { type: "run-start", prompt: "go" });
+	h.coordinator.recordActivity("pi-current", { type: "response", text: "answer" });
+	h.coordinator.recordActivity("pi-current", { type: "settled" });
+	await until(() => h.telegram.inTopic(topic).length === 2);
+	await until(() => h.telegram.edits.some((edit) => /done/i.test(edit.text)));
 });

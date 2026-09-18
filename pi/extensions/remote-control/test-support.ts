@@ -1,16 +1,17 @@
 /** Shared fakes for remote-control tests. Not a test file itself: `node --test *.test.ts` skips it. */
 import assert from "node:assert/strict";
-import type {
-	AgentSession,
-	AgentSessionStore,
-	Repository,
-	RepositoryRegistry,
-	TelegramBotApi,
-	TelegramChat,
-	TelegramChatMember,
-	TelegramMessage,
-	TelegramUpdate,
-	TelegramUser,
+import {
+	RemoteControlError,
+	type AgentSession,
+	type AgentSessionStore,
+	type Repository,
+	type RepositoryRegistry,
+	type TelegramBotApi,
+	type TelegramChat,
+	type TelegramChatMember,
+	type TelegramMessage,
+	type TelegramUpdate,
+	type TelegramUser,
 } from "./coordinator.ts";
 
 export const TOKEN = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
@@ -110,6 +111,11 @@ export function apiError(errorCode: number, message: string): Error {
 export function memoryStores(): { repositories: RepositoryRegistry & { items: Repository[] }; sessions: AgentSessionStore & { items: AgentSession[] } } {
 	const repositories: Repository[] = [];
 	const sessions: AgentSession[] = [];
+	const assertWorkspaceFree = (session: AgentSession) => {
+		if (sessions.some((item) => item.id !== session.id && item.workspace === session.workspace)) {
+			throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${session.workspace}`);
+		}
+	};
 	return {
 		repositories: {
 			items: repositories,
@@ -123,12 +129,13 @@ export function memoryStores(): { repositories: RepositoryRegistry & { items: Re
 			list: async () => structuredClone(sessions),
 			get: async (id) => structuredClone(sessions.find((item) => item.id === id)),
 			save: async (session) => {
-				if (sessions.some((item) => item.workspace === session.workspace)) throw Object.assign(new Error("duplicate"), { code: "duplicate-workspace" });
+				assertWorkspaceFree(session);
 				sessions.push(structuredClone(session));
 			},
 			update: async (session) => {
 				const index = sessions.findIndex((item) => item.id === session.id);
-				assert.notEqual(index, -1, "update of an unknown session");
+				if (index === -1) throw new RemoteControlError("session-not-found", `Agent session not found: ${session.id}`);
+				assertWorkspaceFree(session);
 				sessions[index] = structuredClone(session);
 			},
 		},

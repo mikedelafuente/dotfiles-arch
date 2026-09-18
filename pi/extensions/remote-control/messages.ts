@@ -1,7 +1,9 @@
 /** Pure text formatting for session topics: commands in, progress and responses out. */
 
 /** Room left under Telegram's 4096-character message limit for the truncation note. */
-export const RESPONSE_BUDGET = 3500;
+const RESPONSE_BUDGET = 3500;
+/** Share of a condensed response kept from its end, where conclusions usually are. */
+const TAIL_SHARE = 0.4;
 const TOOL_DETAIL_LENGTH = 80;
 const PROMPT_LENGTH = 200;
 const VISIBLE_TOOLS = 8;
@@ -37,7 +39,7 @@ export function describeTool(toolName: string, args: unknown): string {
 	return detail ? `${toolName}: ${oneLine(detail, TOOL_DETAIL_LENGTH)}` : toolName;
 }
 
-export function formatDuration(ms: number): string {
+function formatDuration(ms: number): string {
 	const seconds = Math.max(0, Math.round(ms / 1000));
 	if (seconds < 60) return `${seconds}s`;
 	if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
@@ -73,17 +75,31 @@ export function renderProgress(view: ProgressView): string {
 	return lines.join("\n");
 }
 
+/** The offset nearest `limit` (at most `limit`) that falls on a paragraph, line, or word boundary. */
+function boundaryBefore(text: string, limit: number): number {
+	return [text.lastIndexOf("\n\n", limit), text.lastIndexOf("\n", limit), text.lastIndexOf(" ", limit)]
+		.find((index) => index >= limit / 2) ?? limit;
+}
+
 /**
- * Condenses a response to fit one Telegram message by keeping its opening, cut at
- * a paragraph, line, or word boundary. The full text stays only in the Pi session.
+ * Condenses a response to fit one Telegram message by keeping its opening and its
+ * conclusion, cut at paragraph, line, or word boundaries. The full text stays only
+ * in the Pi session.
  */
 export function condenseForTelegram(text: string, budget = RESPONSE_BUDGET): string {
 	const trimmed = text.trim();
 	if (trimmed.length <= budget) return trimmed;
-	const boundary = [trimmed.lastIndexOf("\n\n", budget), trimmed.lastIndexOf("\n", budget), trimmed.lastIndexOf(" ", budget)]
-		.find((index) => index >= budget / 2) ?? budget;
-	const kept = trimmed.slice(0, boundary).trimEnd();
-	return `${kept}\n\n… ${trimmed.length - kept.length} more characters: the full response is in the Pi session.`;
+	const tailBudget = Math.floor(budget * TAIL_SHARE);
+	const head = trimmed.slice(0, boundaryBefore(trimmed, budget - tailBudget)).trimEnd();
+	const reversed = trimmed.split("").reverse().join(""); // UTF-16 units, so offsets map back onto `trimmed`
+	const tail = trimmed.slice(trimmed.length - boundaryBefore(reversed, tailBudget)).trimStart();
+	const omitted = trimmed.length - head.length - tail.length;
+	return `${head}\n\n… ${omitted} characters omitted: the full response is in the Pi session. …\n\n${tail}`;
+}
+
+/** A failed run, in one Telegram message. */
+export function failureText(error: string): string {
+	return condenseForTelegram(`⚠️ Run failed: ${error}`);
 }
 
 /** Telegram topic names are limited to 128 characters. */

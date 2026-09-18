@@ -10,8 +10,9 @@ import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { RemoteControlCoordinator, RemoteControlError, type LivePiSession } from "./coordinator.ts";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity } from "./coordinator.ts";
+import { PiDelivery } from "./pi-delivery.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
 import { createTelegramBotApi } from "./telegram.ts";
 
@@ -119,18 +120,24 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		}
 	}
 
-	/** The current conversation as remote control drives it. Telegram prompts use Pi's queueing, so a run starting meanwhile is steered, not rejected. */
+	// Holds Telegram messages while a prompt is starting or Pi is compacting.
+	let delivery: PiDelivery | undefined;
+
+	/** The current conversation as remote control drives it. */
 	async function liveSession(ctx: ExtensionCommandContext): Promise<LivePiSession | undefined> {
-		const git = await gitWorkspace(ctx.cwd);
-		if (!git) return undefined;
+		const workspace = await gitWorkspace(ctx.cwd);
+		if (!workspace) return undefined;
+		delivery?.dispose();
+		const current = new PiDelivery({ send: (text, deliverAs) => pi.sendUserMessage(text, { deliverAs }), isIdle: () => ctx.isIdle() });
+		delivery = current;
 		return {
 			id: ctx.sessionManager.getSessionId(),
 			name: pi.getSessionName() ?? "",
-			...git,
-			isIdle: () => ctx.isIdle(),
-			prompt: (text) => pi.sendUserMessage(text, { deliverAs: "steer" }),
-			steer: (text) => pi.sendUserMessage(text, { deliverAs: "steer" }),
-			followUp: (text) => pi.sendUserMessage(text, { deliverAs: "followUp" }),
+			...workspace,
+			isIdle: () => ctx.isIdle() && current.isReady(),
+			prompt: (text) => current.prompt(text),
+			steer: (text) => current.steer(text),
+			followUp: (text) => current.followUp(text),
 		};
 	}
 
@@ -220,31 +227,43 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 
 	// Mirror this conversation's work into its session topic. The coordinator ignores
 	// these while the bridge is stopped. Tool output is never forwarded.
+	const report = (ctx: ExtensionContext, activity: PiActivity) => coordinator.recordActivity(ctx.sessionManager.getSessionId(), activity);
 	let pendingPrompt: string | undefined;
 	pi.on("before_agent_start", async (event) => {
 		pendingPrompt = event.prompt;
 	});
 	pi.on("agent_start", async (_event, ctx) => {
-		coordinator.recordActivity(ctx.sessionManager.getSessionId(), { type: "run-start", prompt: pendingPrompt });
+		delivery?.runStarted();
+		report(ctx, { type: "run-start", prompt: pendingPrompt });
 		pendingPrompt = undefined;
 	});
 	pi.on("tool_execution_start", async (event, ctx) => {
-		coordinator.recordActivity(ctx.sessionManager.getSessionId(), { type: "tool-start", toolCallId: event.toolCallId, toolName: event.toolName, args: event.args });
+		report(ctx, { type: "tool-start", toolCallId: event.toolCallId, toolName: event.toolName, args: event.args });
 	});
 	pi.on("tool_execution_end", async (event, ctx) => {
-		coordinator.recordActivity(ctx.sessionManager.getSessionId(), { type: "tool-end", toolCallId: event.toolCallId, isError: event.isError });
+		report(ctx, { type: "tool-end", toolCallId: event.toolCallId, isError: event.isError });
 	});
 	pi.on("agent_end", async (event, ctx) => {
 		const response = runResponse(event.messages as RunMessage[]);
-		if (response) coordinator.recordActivity(ctx.sessionManager.getSessionId(), { type: "response", ...response });
+		if (response) report(ctx, { type: "response", ...response });
 	});
 	pi.on("agent_settled", async (_event, ctx) => {
-		coordinator.recordActivity(ctx.sessionManager.getSessionId(), { type: "settled" });
+		report(ctx, { type: "settled" });
+	});
+	pi.on("session_before_compact", async () => {
+		delivery?.compactionStarted();
+	});
+	pi.on("session_compact", async () => {
+		delivery?.compactionEnded();
+	});
+	pi.on("session_compact_failed", async () => {
+		delivery?.compactionEnded();
 	});
 
 	// Pi tears down this extension instance on quit, reload, and session switches;
 	// the bridge must never outlive it. This also cancels a pending login.
 	pi.on("session_shutdown", async () => {
 		await coordinator.stop();
+		delivery?.dispose();
 	});
 }

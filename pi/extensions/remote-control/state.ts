@@ -58,6 +58,13 @@ export class JsonRepositoryRegistry implements RepositoryRegistry {
 	async remove(path: string): Promise<void> { const state = await this.store.read(); state.repositories = state.repositories.filter((item) => item.path !== path); await this.store.write(state); }
 }
 
+/** Concurrent agent sessions never share a workspace. */
+function assertWorkspaceFree(state: State, session: AgentSession): void {
+	if (state.sessions.some((item) => item.id !== session.id && item.workspace === session.workspace)) {
+		throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${session.workspace}`);
+	}
+}
+
 export class JsonAgentSessionStore implements AgentSessionStore {
 	private readonly store: JsonStateStore;
 	constructor(store: JsonStateStore) { this.store = store; }
@@ -65,9 +72,7 @@ export class JsonAgentSessionStore implements AgentSessionStore {
 	async get(id: string): Promise<AgentSession | undefined> { return (await this.store.read()).sessions.find((item) => item.id === id); }
 	async save(session: AgentSession): Promise<void> {
 		await this.store.update((state) => {
-			if (state.sessions.some((item) => item.workspace === session.workspace)) {
-				throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${session.workspace}`);
-			}
+			assertWorkspaceFree(state, session);
 			state.sessions.push(session);
 		});
 	}
@@ -75,9 +80,7 @@ export class JsonAgentSessionStore implements AgentSessionStore {
 		await this.store.update((state) => {
 			const index = state.sessions.findIndex((item) => item.id === session.id);
 			if (index === -1) throw new RemoteControlError("session-not-found", `Agent session not found: ${session.id}`);
-			if (state.sessions.some((item) => item.id !== session.id && item.workspace === session.workspace)) {
-				throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${session.workspace}`);
-			}
+			assertWorkspaceFree(state, session);
 			state.sessions[index] = session;
 		});
 	}

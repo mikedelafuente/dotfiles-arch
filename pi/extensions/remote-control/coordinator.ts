@@ -9,6 +9,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import {
 	condenseForTelegram,
 	describeTool,
+	failureText,
 	parseSessionTopicInput,
 	renderProgress,
 	SESSION_TOPIC_HELP,
@@ -251,7 +252,8 @@ const POLL_TIMEOUT_SECONDS = 25;
 const MAX_RETRY_DELAY_MS = 30_000;
 const CONTROL_TOPIC_NAME = "Pi remote control";
 const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
-const DEFAULT_PROGRESS_INTERVAL_MS = 3000;
+const DEFAULT_PROGRESS_INTERVAL_MS = 5000;
+const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
 const DEFAULT_SESSION_NAME = "agent";
 
 function errorMessage(error: unknown): string {
@@ -268,6 +270,25 @@ function fatalPollError(error: unknown): RemoteControlError | undefined {
 		return new RemoteControlError("bridge-conflict", "Another process is polling this bot (another Pi running /rc, or a webhook is set).");
 	}
 	return undefined;
+}
+
+/** Telegram's answer for a topic that was deleted, as opposed to a transient failure. */
+function isMissingTopic(error: unknown): boolean {
+	return (error as { errorCode?: number } | undefined)?.errorCode === 400
+		&& /thread not found|TOPIC_DELETED|TOPIC_ID_INVALID/i.test(errorMessage(error));
+}
+
+/** Runs a Telegram call, waiting out rate limits (429 retry_after) a couple of times before giving up. */
+async function withRateLimitRetry(call: () => Promise<void>, signal: AbortSignal): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await call();
+		} catch (error) {
+			const { errorCode, retryAfter } = (error ?? {}) as { errorCode?: number; retryAfter?: number };
+			if (errorCode !== 429 || retryAfter === undefined || retryAfter > MAX_RATE_LIMIT_WAIT_SECONDS || attempt >= 2) throw error;
+			await sleep(retryAfter * 1000, signal);
+		}
+	}
 }
 
 function isCredentials(value: unknown): value is RemoteControlCredentials {
@@ -317,7 +338,11 @@ type Progress = {
 	startedAt: number;
 	prompt?: string;
 	tools: ToolProgress[];
-	failed: boolean;
+	/**
+	 * The latest run's failure, held until Pi settles: extensions see `agent_end`
+	 * before Pi decides to auto-retry, so a retried error must not be reported.
+	 */
+	failure?: string;
 	messageId?: number;
 	shown?: string;
 	timer?: ReturnType<typeof setTimeout>;
@@ -326,6 +351,8 @@ type Progress = {
 /** A session topic the running bridge delivers to one live Pi session. */
 type Route = {
 	session: AgentSession;
+	/** The session topic's Telegram thread id (`session.topicId` as a number). */
+	threadId: number;
 	pi: LivePiSession;
 	/** Serializes this topic's Telegram calls so edits never overtake the message they edit. */
 	outbox: Promise<void>;
@@ -588,7 +615,10 @@ export class RemoteControlCoordinator {
 			const session = live ? await this.withCreationLock(() => this.exposeLocked(api, credentials, live, options)) : undefined;
 			const abort = new AbortController();
 			const bridge: Bridge = { abort, done: Promise.resolve(), credentials, api, options, routes: new Map() };
-			if (session && live) bridge.routes.set(Number(session.topicId), { session, pi: live, outbox: Promise.resolve() });
+			if (session && live) {
+				const threadId = Number(session.topicId);
+				bridge.routes.set(threadId, { session, threadId, pi: live, outbox: Promise.resolve() });
+			}
 			this.bridge = bridge;
 			bridge.done = this.poll(bridge, offset);
 			await api.sendMessage({ chatId: credentials.group.id, threadId: credentials.group.controlTopicId, text: "Remote control started." })
@@ -611,8 +641,14 @@ export class RemoteControlCoordinator {
 		const connected = `Connected to Pi session "${name}" on ${live.branch}. ${SESSION_TOPIC_HELP}`;
 
 		// Posting proves the stored topic still exists; one deleted in Telegram is replaced.
+		// Any other failure fails the start rather than orphaning a topic that still exists.
 		let threadId = existing ? Number(existing.topicId) : undefined;
-		if (threadId !== undefined && !(await api.sendMessage({ chatId, threadId, text: connected }).then(() => true, () => false))) threadId = undefined;
+		if (threadId !== undefined) {
+			await api.sendMessage({ chatId, threadId, text: connected }).catch((error) => {
+				if (!isMissingTopic(error)) throw error;
+				threadId = undefined;
+			});
+		}
 		if (threadId === undefined) {
 			threadId = (await api.createForumTopic(chatId, title)).threadId;
 			await api.sendMessage({ chatId, threadId, text: connected });
@@ -688,8 +724,6 @@ export class RemoteControlCoordinator {
 		const bridge = this.bridge;
 		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi.id === piSessionId);
 		if (!bridge || !route) return;
-		const chatId = bridge.credentials.group.id;
-		const threadId = Number(route.session.topicId);
 
 		switch (activity.type) {
 			case "run-start": {
@@ -715,12 +749,14 @@ export class RemoteControlCoordinator {
 				return;
 			}
 			case "response": {
-				let text: string;
-				if (activity.aborted) text = "⚠️ Run aborted.";
-				else if (activity.error) text = `⚠️ Run failed: ${activity.error}`;
-				else text = condenseForTelegram(activity.text);
-				if (route.progress && (activity.aborted || activity.error)) route.progress.failed = true;
-				if (text) this.post(bridge, route, async () => { await bridge.api.sendMessage({ chatId, threadId, text }); });
+				const failure = activity.aborted ? "⚠️ Run aborted." : activity.error ? failureText(activity.error) : undefined;
+				if (failure && route.progress) {
+					route.progress.failure = failure;
+					return;
+				}
+				if (route.progress) route.progress.failure = undefined;
+				const text = failure ?? condenseForTelegram(activity.text);
+				if (text) this.reply(bridge, route, text);
 				return;
 			}
 			case "settled": {
@@ -728,16 +764,17 @@ export class RemoteControlCoordinator {
 				if (!progress) return;
 				route.progress = undefined;
 				clearTimeout(progress.timer);
-				this.post(bridge, route, () => this.showProgress(bridge, progress, threadId, progress.failed ? "failed" : "done"));
+				if (progress.failure) this.reply(bridge, route, progress.failure);
+				this.post(bridge, route, () => this.showProgress(bridge, route, progress, progress.failure ? "failed" : "done"));
 				return;
 			}
 		}
 	}
 
 	private beginProgress(bridge: Bridge, route: Route, prompt?: string): Progress {
-		const progress: Progress = { startedAt: this.now().getTime(), prompt, tools: [], failed: false };
+		const progress: Progress = { startedAt: this.now().getTime(), prompt, tools: [] };
 		route.progress = progress;
-		this.post(bridge, route, () => this.showProgress(bridge, progress, Number(route.session.topicId)));
+		this.post(bridge, route, () => this.showProgress(bridge, route, progress));
 		return progress;
 	}
 
@@ -747,44 +784,44 @@ export class RemoteControlCoordinator {
 		if (!progress || progress.timer) return;
 		progress.timer = setTimeout(() => {
 			progress.timer = undefined;
-			if (route.progress === progress) this.post(bridge, route, () => this.showProgress(bridge, progress, Number(route.session.topicId)));
+			if (route.progress === progress) this.post(bridge, route, () => this.showProgress(bridge, route, progress));
 		}, this.progressIntervalMs);
 	}
 
 	/** Sends the progress message on first use and edits it in place afterwards. */
-	private async showProgress(bridge: Bridge, progress: Progress, threadId: number, finished?: "done" | "failed"): Promise<void> {
+	private async showProgress(bridge: Bridge, route: Route, progress: Progress, finished?: "done" | "failed"): Promise<void> {
 		const text = renderProgress({ prompt: progress.prompt, tools: progress.tools, elapsedMs: this.now().getTime() - progress.startedAt, finished });
 		if (text === progress.shown) return;
 		const chatId = bridge.credentials.group.id;
-		if (progress.messageId === undefined) {
-			if (progress.shown !== undefined) return; // The first send failed; there is nothing to edit.
-			progress.shown = text;
-			progress.messageId = (await bridge.api.sendMessage({ chatId, threadId, text })).messageId;
-		} else {
-			progress.shown = text;
-			await bridge.api.editMessageText({ chatId, messageId: progress.messageId, text });
-		}
+		if (progress.messageId === undefined) progress.messageId = (await bridge.api.sendMessage({ chatId, threadId: route.threadId, text })).messageId;
+		else await bridge.api.editMessageText({ chatId, messageId: progress.messageId, text });
+		progress.shown = text;
 	}
 
 	/** Queues a Telegram call for a session topic; failures are reported, never thrown. */
 	private post(bridge: Bridge, route: Route, send: () => Promise<void>): void {
-		route.outbox = route.outbox.then(send).catch((error) => bridge.options.onDeliveryError?.(error));
+		route.outbox = route.outbox
+			.then(() => withRateLimitRetry(send, bridge.abort.signal))
+			.catch((error) => bridge.options.onDeliveryError?.(error));
+	}
+
+	private reply(bridge: Bridge, route: Route, text: string): void {
+		this.post(bridge, route, async () => {
+			await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId: route.threadId, text });
+		});
 	}
 
 	/** Delivers an owner message from a session topic to its live Pi session. */
 	private deliver(bridge: Bridge, route: Route, text: string): void {
-		const chatId = bridge.credentials.group.id;
-		const threadId = Number(route.session.topicId);
-		const reply = (message: string) => this.post(bridge, route, async () => { await bridge.api.sendMessage({ chatId, threadId, text: message }); });
 		const input = parseSessionTopicInput(text);
-		if (input.kind === "invalid") return reply(input.reply);
+		if (input.kind === "invalid") return this.reply(bridge, route, input.reply);
 		if (route.pi.isIdle()) return route.pi.prompt(input.text);
 		if (input.kind === "followUp") {
 			route.pi.followUp(input.text);
-			return reply("Queued as a follow-up after the current run.");
+			return this.reply(bridge, route, "Queued as a follow-up after the current run.");
 		}
 		route.pi.steer(input.text);
-		reply("Steering the current run.");
+		this.reply(bridge, route, "Steering the current run.");
 	}
 
 	private async poll(bridge: Bridge, initialOffset: number | undefined): Promise<void> {
