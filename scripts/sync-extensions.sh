@@ -2,8 +2,9 @@
 # --------------------------
 # Sync Pi extensions from dotfiles-arch and configured extra sources
 # --------------------------
-# Standard sources contribute extensions/; extensions-root sources contribute
-# the source directory itself. Later sources override earlier entries.
+# Standard sources contribute extensions/ (or pi/extensions/ for this repo);
+# extensions-root sources contribute the source directory itself. Later sources
+# override earlier entries.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 

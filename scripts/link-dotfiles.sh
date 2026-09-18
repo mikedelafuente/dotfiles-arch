@@ -124,8 +124,8 @@ done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
 # --------------------------
 # Link Pi (coding agent) config files into ~/.pi/agent
 # --------------------------
-# Shared files under pi/ are version-controlled. Extensions are synced by
-# sync-extensions.sh so configured extra repositories can contribute too.
+# Shared files under pi/ are version-controlled. Extensions under pi/extensions/
+# are synced by sync-extensions.sh so configured extra repositories can contribute too.
 # Machine-local files like auth.json are intentionally left untouched.
 
 PI_SOURCE_DIR="$REPO_ROOT/pi"
