@@ -2,12 +2,13 @@
 import { chmod, mkdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
-import { RemoteControlError, type AgentSession, type AgentSessionStore, type CredentialStore, type Repository, type RepositoryRegistry } from "./coordinator";
+import { RemoteControlError, type AgentSession, type AgentSessionStore, type CredentialStore, type Repository, type RepositoryRegistry } from "./coordinator.ts";
 
 type State = { repositories: Repository[]; sessions: AgentSession[] };
 
 export class JsonStateStore {
-	constructor(private readonly path: string) {}
+	private readonly path: string;
+	constructor(path: string) { this.path = path; }
 
 	async read(): Promise<State> {
 		try {
@@ -45,7 +46,8 @@ export class JsonStateStore {
 }
 
 export class JsonRepositoryRegistry implements RepositoryRegistry {
-	constructor(private readonly store: JsonStateStore) {}
+	private readonly store: JsonStateStore;
+	constructor(store: JsonStateStore) { this.store = store; }
 	async getByPath(path: string): Promise<Repository | undefined> { return (await this.store.read()).repositories.find((item) => item.path === path); }
 	async list(): Promise<Repository[]> { return (await this.store.read()).repositories; }
 	async register(repository: Repository): Promise<void> {
@@ -57,7 +59,8 @@ export class JsonRepositoryRegistry implements RepositoryRegistry {
 }
 
 export class JsonAgentSessionStore implements AgentSessionStore {
-	constructor(private readonly store: JsonStateStore) {}
+	private readonly store: JsonStateStore;
+	constructor(store: JsonStateStore) { this.store = store; }
 	async list(): Promise<AgentSession[]> { return (await this.store.read()).sessions; }
 	async get(id: string): Promise<AgentSession | undefined> { return (await this.store.read()).sessions.find((item) => item.id === id); }
 	async save(session: AgentSession): Promise<void> {
@@ -71,7 +74,8 @@ export class JsonAgentSessionStore implements AgentSessionStore {
 }
 
 export class JsonCredentialStore implements CredentialStore {
-	constructor(private readonly path: string) {}
+	private readonly path: string;
+	constructor(path: string) { this.path = path; }
 	async read(): Promise<unknown | undefined> {
 		try { return JSON.parse(await readFile(this.path, "utf8")); }
 		catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }

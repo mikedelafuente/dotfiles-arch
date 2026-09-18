@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RemoteControlCoordinator, type AgentSession, type RemoteControlAdapters, type Repository, type Workspace } from "./coordinator";
+import { RemoteControlCoordinator, type AgentSession, type RemoteControlAdapters, type Repository, type Workspace } from "./coordinator.ts";
 
 function fakes(): RemoteControlAdapters {
 	const repositories: Repository[] = [];
@@ -25,6 +25,7 @@ function fakes(): RemoteControlAdapters {
 		pi: { create: async ({ name }) => ({ id: `pi-${name}` }) },
 		telegram: { createSessionTopic: async (name) => { topics.push(name); return { id: `topic-${topics.length}` }; } },
 		credentials: { read: async () => undefined, write: async () => undefined, clear: async () => undefined },
+		telegramBot: () => { throw new Error("Telegram is not used by these tests"); },
 	};
 }
 
