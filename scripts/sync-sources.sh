@@ -5,8 +5,9 @@
 # dotfiles-arch is always the primary source; this command lists, adds, or
 # removes additional sources synced by dfa-sync-rules, dfa-sync-skills, and
 # dfa-sync-extensions. Each source has a type:
-#   standard    (default) — the path has rules/, skills/, and/or extensions/ subdirs, same
-#               layout as dotfiles-arch itself.
+#   standard    (default) — the path has rules/, skills/, and/or extensions/ subdirs
+#               (dotfiles-arch uses pi/extensions/ for Pi extensions), same layout
+#               as dotfiles-arch itself.
 #   skills-root — the path itself IS a flat folder of skill dirs (no skills/
 #               subdir). Useful for a subfolder of someone else's skills repo,
 #               e.g. ~/repos/mattpocock/skills/skills/engineering.
@@ -269,6 +270,7 @@ wins on a name collision).
 
 Types:
   standard    (default) path has rules/, skills/, and/or extensions/ subdirs
+               (dotfiles-arch uses pi/extensions/ for Pi extensions)
   skills-root path itself is a flat folder of skill dirs
   rules-root  path itself is a flat folder of *.mdc files
   extensions-root path itself is a flat folder of Pi extensions

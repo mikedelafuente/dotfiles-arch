@@ -4,7 +4,8 @@
 # Expects fn-lib.sh (print_*, bootstrap_config_dir) to be loaded.
 #
 # Each configured source has a type:
-#   standard    — repo root has rules/, skills/, and/or extensions/ under it,
+#   standard    — repo root has rules/, skills/, and/or extensions/ under it
+#                  (Pi's own repo may use pi/extensions/),
 #                 same layout as dotfiles-arch itself.
 #   skills-root — the path itself IS a flat folder of skill dirs (no skills/
 #                 subdir). Useful for a subfolder of someone else's skills repo,
@@ -138,10 +139,10 @@ write_sync_source_repos() {
   mkdir -p "$dir"
   {
     echo "# Extra rules/skills source repos, one per line: path | type:path"
-    echo "# Types: standard (default, has rules/ + skills/ + extensions/ subdirs),"
+    echo "# Types: standard (default, has rules/ + skills/ + extensions/ subdirs;"
     echo "# skills-root (path is itself a flat folder of skill dirs), rules-root"
-    echo "# (path is itself a flat folder of *.mdc files), extensions-root (path is"
-    echo "# itself a flat folder of Pi extensions)."
+    echo "# dotfiles-arch uses pi/extensions/), rules-root (path is itself a flat folder"
+    echo "# of *.mdc files), extensions-root (path is itself a flat folder of Pi extensions)."
     echo "# Managed by dfa-sync-sources add/remove — dotfiles-arch is always primary"
     for i in "${!SYNC_SOURCE_REPOS[@]}"; do
       path="${SYNC_SOURCE_REPOS[$i]}"
@@ -188,8 +189,8 @@ add_sync_source_repo() {
   write_sync_source_repos
   case "$type" in
     standard)
-      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" ]]; then
-        print_warning_message "No rules/, skills/, or extensions/ under $normalized — nothing to sync until you add them"
+      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" && ! -d "$normalized/pi/extensions" ]]; then
+        print_warning_message "No rules/, skills/, extensions/, or pi/extensions/ under $normalized — nothing to sync until you add them"
       fi
       ;;
     skills-root)
@@ -297,7 +298,15 @@ sync_source_effective_dir() {
     rules:standard | rules:rules-root) echo "$(sync_source_rules_build_dir "$repo_root")/mdc" ;;
     skills:standard) echo "$repo_root/skills" ;;
     skills:skills-root) echo "$repo_root" ;;
-    extensions:standard) echo "$repo_root/extensions" ;;
+    extensions:standard)
+      # Pi's own extensions live with the rest of its config under pi/. Keep
+      # the root-level layout as a compatibility fallback for external sources.
+      if [[ -d "$repo_root/pi/extensions" ]]; then
+        echo "$repo_root/pi/extensions"
+      else
+        echo "$repo_root/extensions"
+      fi
+      ;;
     extensions:extensions-root) echo "$repo_root" ;;
     *) return 1 ;;
   esac
@@ -510,8 +519,8 @@ prune_managed_extension_symlinks() {
     resolved="$(_sync_sources_abs_symlink_target "$entry")"
     [[ -n "$resolved" ]] || continue
     parent="$(dirname "$resolved")"
-    if [[ -z "${expected_dirs[$parent]:-}" ]]; then
-      print_action_message "Removing extension symlink from unlisted/removed source: $entry"
+    if [[ ! -e "$entry" || -z "${expected_dirs[$parent]:-}" ]]; then
+      print_action_message "Removing stale extension symlink: $entry"
       rm -f "$entry"
       SYNC_EXTENSIONS_PRUNED_COUNT=$((SYNC_EXTENSIONS_PRUNED_COUNT + 1))
     fi
