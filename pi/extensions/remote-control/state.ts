@@ -71,6 +71,16 @@ export class JsonAgentSessionStore implements AgentSessionStore {
 			state.sessions.push(session);
 		});
 	}
+	async update(session: AgentSession): Promise<void> {
+		await this.store.update((state) => {
+			const index = state.sessions.findIndex((item) => item.id === session.id);
+			if (index === -1) throw new RemoteControlError("session-not-found", `Agent session not found: ${session.id}`);
+			if (state.sessions.some((item) => item.id !== session.id && item.workspace === session.workspace)) {
+				throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${session.workspace}`);
+			}
+			state.sessions[index] = session;
+		});
+	}
 }
 
 export class JsonCredentialStore implements CredentialStore {

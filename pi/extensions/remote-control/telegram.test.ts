@@ -29,6 +29,9 @@ test("maps Bot API payloads to remote-control types", async () => {
 		}],
 		getChatMember: { status: "administrator", can_manage_topics: true },
 		createForumTopic: { message_thread_id: 9 },
+		sendMessage: { message_id: 77 },
+		editMessageText: true,
+		editForumTopic: true,
 	}, calls));
 
 	assert.deepEqual(await api.getUpdates({ offset: 5, timeoutSeconds: 25 }), [{
@@ -44,6 +47,14 @@ test("maps Bot API payloads to remote-control types", async () => {
 	assert.equal(calls[0].url, "https://api.telegram.org/bot123:secret/getUpdates");
 	assert.deepEqual(await api.getChatMember(-1001, 1000), { status: "administrator", canManageTopics: true });
 	assert.deepEqual(await api.createForumTopic(-1001, "control"), { threadId: 9 });
+	assert.deepEqual(await api.sendMessage({ chatId: -1001, threadId: 9, text: "hi" }), { messageId: 77 });
+	await api.editMessageText({ chatId: -1001, messageId: 77, text: "edited" });
+	await api.editForumTopic({ chatId: -1001, threadId: 9, name: "renamed" });
+	assert.deepEqual(calls.slice(-3).map((call) => [call.url.split("/").pop(), call.body]), [
+		["sendMessage", { chat_id: -1001, message_thread_id: 9, text: "hi" }],
+		["editMessageText", { chat_id: -1001, message_id: 77, text: "edited" }],
+		["editForumTopic", { chat_id: -1001, message_thread_id: 9, name: "renamed" }],
+	]);
 });
 
 test("reports Telegram errors without leaking the bot token", async () => {
