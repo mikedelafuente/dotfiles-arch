@@ -124,8 +124,9 @@ done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
 # --------------------------
 # Link Pi (coding agent) config files into ~/.pi/agent
 # --------------------------
-# Single shared files only (e.g. models.json). Never link machine-local files
-# like auth.json (OAuth credentials) — those stay per-machine.
+# Everything under pi/ is shared and version-controlled. Machine-local files
+# like auth.json and models-store.json are intentionally not in the repo and
+# are left untouched.
 
 PI_SOURCE_DIR="$REPO_ROOT/pi"
 PI_TARGET_DIR="$USER_HOME_DIR/.pi/agent"
@@ -136,9 +137,9 @@ if [ -d "$PI_SOURCE_DIR" ]; then
   print_info_message "Linking pi config files..."
 
   while IFS= read -r -d '' file; do
-    filename="$(basename "$file")"
-    link_path "$file" "$PI_TARGET_DIR/$filename"
-    print_info_message "Linked: .pi/agent/$filename"
+    relative_path="${file#"$PI_SOURCE_DIR"/}"
+    link_path "$file" "$PI_TARGET_DIR/$relative_path"
+    print_info_message "Linked: .pi/agent/$relative_path"
   done < <(find "$PI_SOURCE_DIR" -type f -print0)
 fi
 

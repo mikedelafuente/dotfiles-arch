@@ -122,6 +122,14 @@ With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only r
 
 **Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages). Use `update-system.sh` for day-to-day package-only updates without re-running setup scripts.
 
+### Pi configuration
+
+Shared Pi configuration lives under [`pi/`](pi/) and is linked into `~/.pi/agent` by
+`link-dotfiles.sh` (including extensions, settings, and model configuration). Pi's
+machine-local credentials and runtime state — `auth.json` and `models-store.json` —
+remain local and are never committed. Global `AGENTS.md` is generated from the
+repository's synced rules and linked by `sync-rules.sh`.
+
 ---
 
 ## Profiles
