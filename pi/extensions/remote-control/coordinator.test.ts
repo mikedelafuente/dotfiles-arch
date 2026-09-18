@@ -17,6 +17,7 @@ function fakes(): RemoteControlAdapters {
 			list: async () => sessions,
 			get: async (id) => sessions.find((item) => item.id === id),
 			save: async (session) => { sessions.push(session); },
+			update: async (session) => { sessions[sessions.findIndex((item) => item.id === session.id)] = session; },
 		},
 		workspaces: {
 			create: async (_repository, branch): Promise<Workspace> => ({ path: `/tmp/${branch}`, branch, created: true }),

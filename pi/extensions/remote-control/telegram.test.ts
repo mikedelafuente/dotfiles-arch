@@ -22,13 +22,16 @@ test("maps Bot API payloads to remote-control types", async () => {
 		getUpdates: [{
 			update_id: 7,
 			message: {
-				message_id: 3, message_thread_id: 501, text: "hi",
+				message_id: 3, message_thread_id: 501, is_topic_message: true, text: "hi",
 				from: { id: 42, is_bot: false, username: "owner" },
 				chat: { id: -1001, type: "supergroup", title: "Pi", is_forum: true },
 			},
 		}],
 		getChatMember: { status: "administrator", can_manage_topics: true },
 		createForumTopic: { message_thread_id: 9 },
+		sendMessage: { message_id: 77 },
+		editMessageText: true,
+		editForumTopic: true,
 	}, calls));
 
 	assert.deepEqual(await api.getUpdates({ offset: 5, timeoutSeconds: 25 }), [{
@@ -44,6 +47,31 @@ test("maps Bot API payloads to remote-control types", async () => {
 	assert.equal(calls[0].url, "https://api.telegram.org/bot123:secret/getUpdates");
 	assert.deepEqual(await api.getChatMember(-1001, 1000), { status: "administrator", canManageTopics: true });
 	assert.deepEqual(await api.createForumTopic(-1001, "control"), { threadId: 9 });
+	assert.deepEqual(await api.sendMessage({ chatId: -1001, threadId: 9, text: "hi" }), { messageId: 77 });
+	await api.editMessageText({ chatId: -1001, messageId: 77, text: "edited" });
+	await api.editForumTopic({ chatId: -1001, threadId: 9, name: "renamed" });
+	assert.deepEqual(calls.slice(-3).map((call) => [call.url.split("/").pop(), call.body]), [
+		["sendMessage", { chat_id: -1001, message_thread_id: 9, text: "hi" }],
+		["editMessageText", { chat_id: -1001, message_id: 77, text: "edited" }],
+		["editForumTopic", { chat_id: -1001, message_thread_id: 9, name: "renamed" }],
+	]);
+});
+
+test("replies in the General topic are not attributed to a topic thread", async () => {
+	const api = createTelegramBotApi("123:secret", fakeFetch({
+		getUpdates: [{
+			update_id: 8,
+			message: { message_id: 4, message_thread_id: 3, text: "reply", from: { id: 42, is_bot: false }, chat: { id: -1001, type: "supergroup", is_forum: true } },
+		}],
+	}, []));
+	const [update] = await api.getUpdates({ timeoutSeconds: 0 });
+	assert.equal(update.message?.threadId, undefined);
+});
+
+test("exposes Telegram's retry_after on rate-limit errors", async () => {
+	const fetchImpl = (async () => new Response(JSON.stringify({ ok: false, error_code: 429, description: "Too Many Requests", parameters: { retry_after: 7 } }), { status: 429 })) as unknown as typeof fetch;
+	const api = createTelegramBotApi("123:secret", fetchImpl);
+	await assert.rejects(api.sendMessage({ chatId: 1, text: "x" }), { errorCode: 429, retryAfter: 7 });
 });
 
 test("reports Telegram errors without leaking the bot token", async () => {

@@ -6,6 +6,16 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
+import {
+	condenseForTelegram,
+	describeTool,
+	failureText,
+	parseSessionTopicInput,
+	renderProgress,
+	SESSION_TOPIC_HELP,
+	topicTitle,
+	type ToolProgress,
+} from "./messages.ts";
 
 export type Repository = {
 	id: string;
@@ -52,6 +62,8 @@ export interface AgentSessionStore {
 	list(): Promise<AgentSession[]>;
 	save(session: AgentSession): Promise<void>;
 	get(id: string): Promise<AgentSession | undefined>;
+	/** Replaces a stored session with the same id. */
+	update(session: AgentSession): Promise<void>;
 }
 
 export interface WorkspaceAdapter {
@@ -115,7 +127,9 @@ export interface TelegramBotApi {
 	getChat(chatId: number): Promise<TelegramChat>;
 	getChatMember(chatId: number, userId: number): Promise<TelegramChatMember>;
 	createForumTopic(chatId: number, name: string): Promise<{ threadId: number }>;
-	sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<void>;
+	editForumTopic(input: { chatId: number; threadId: number; name: string }): Promise<void>;
+	sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<{ messageId: number }>;
+	editMessageText(input: { chatId: number; messageId: number; text: string }): Promise<void>;
 }
 
 /** Machine-local remote-control credentials: never synchronized or committed. */
@@ -139,7 +153,41 @@ export type LoginOptions = {
 	signal?: AbortSignal;
 };
 
+/**
+ * The Pi conversation running in this process. Remote control exposes it as an
+ * agent session and delivers its session topic's messages to it.
+ */
+export interface LivePiSession {
+	readonly id: string;
+	/** Display name; empty when the conversation is unnamed. */
+	readonly name: string;
+	/** Root of the Git worktree the conversation works in. */
+	readonly workspace: string;
+	readonly branch: string;
+	/** The repository to approve: the main checkout when `workspace` is a linked worktree. */
+	readonly repositoryPath: string;
+	isIdle(): boolean;
+	/** Starts a run with a new user message. */
+	prompt(text: string): void;
+	/** Redirects the current run. */
+	steer(text: string): void;
+	/** Queues a user message for after the current run. */
+	followUp(text: string): void;
+}
+
+/** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
+export type PiActivity =
+	| { type: "run-start"; prompt?: string }
+	| { type: "tool-start"; toolCallId: string; toolName: string; args: unknown }
+	| { type: "tool-end"; toolCallId: string; isError: boolean }
+	| { type: "response"; text: string; error?: string; aborted?: boolean }
+	/** Pi will not continue on its own: no retry, compaction, or queued follow-up is left. */
+	| { type: "settled" };
+
 export type StartOptions = {
+	/** The current Pi conversation to expose; omitted outside a Git repository. */
+	session?: LivePiSession;
+	/** Owner messages that are not for a running agent session, such as control-topic messages. */
 	onMessage?(message: AuthorizedMessage): Promise<void>;
 	/** A recoverable failure; polling retries with backoff. */
 	onError?(error: unknown): void;
@@ -147,12 +195,21 @@ export type StartOptions = {
 	onRecovered?(): void;
 	/** The bridge stopped itself because retrying cannot succeed. */
 	onStopped?(reason: RemoteControlError): void;
+	/** Sending to or editing a session topic failed; the bridge keeps running. */
+	onDeliveryError?(error: unknown): void;
+};
+
+export type CoordinatorOptions = {
+	/** Minimum time between edits of a progress message; Telegram rate-limits edits. */
+	progressIntervalMs?: number;
 };
 
 export type RemoteControlStatus = {
 	running: boolean;
 	bot?: string;
 	group?: string;
+	/** Session topics the running bridge routes to Pi. */
+	topics: string[];
 };
 
 export type RemoteControlAdapters = {
@@ -195,6 +252,9 @@ const POLL_TIMEOUT_SECONDS = 25;
 const MAX_RETRY_DELAY_MS = 30_000;
 const CONTROL_TOPIC_NAME = "Pi remote control";
 const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
+const DEFAULT_PROGRESS_INTERVAL_MS = 5000;
+const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
+const DEFAULT_SESSION_NAME = "agent";
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
@@ -210,6 +270,25 @@ function fatalPollError(error: unknown): RemoteControlError | undefined {
 		return new RemoteControlError("bridge-conflict", "Another process is polling this bot (another Pi running /rc, or a webhook is set).");
 	}
 	return undefined;
+}
+
+/** Telegram's answer for a topic that was deleted, as opposed to a transient failure. */
+function isMissingTopic(error: unknown): boolean {
+	return (error as { errorCode?: number } | undefined)?.errorCode === 400
+		&& /thread not found|TOPIC_DELETED|TOPIC_ID_INVALID/i.test(errorMessage(error));
+}
+
+/** Runs a Telegram call, waiting out rate limits (429 retry_after) a couple of times before giving up. */
+async function withRateLimitRetry(call: () => Promise<void>, signal: AbortSignal): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await call();
+		} catch (error) {
+			const { errorCode, retryAfter } = (error ?? {}) as { errorCode?: number; retryAfter?: number };
+			if (errorCode !== 429 || retryAfter === undefined || retryAfter > MAX_RATE_LIMIT_WAIT_SECONDS || attempt >= 2) throw error;
+			await sleep(retryAfter * 1000, signal);
+		}
+	}
 }
 
 function isCredentials(value: unknown): value is RemoteControlCredentials {
@@ -255,23 +334,56 @@ async function drainUpdates(api: TelegramBotApi): Promise<number | undefined> {
 	return latest ? latest.updateId + 1 : undefined;
 }
 
-function topicName(repository: Repository, sessionName: string, branch: string): string {
-	return `${repository.name} / ${sessionName} / ${branch}`;
-}
+type Progress = {
+	startedAt: number;
+	prompt?: string;
+	tools: ToolProgress[];
+	/**
+	 * The latest run's failure, held until Pi settles: extensions see `agent_end`
+	 * before Pi decides to auto-retry, so a retried error must not be reported.
+	 */
+	failure?: string;
+	messageId?: number;
+	shown?: string;
+	timer?: ReturnType<typeof setTimeout>;
+};
+
+/** A session topic the running bridge delivers to one live Pi session. */
+type Route = {
+	session: AgentSession;
+	/** The session topic's Telegram thread id (`session.topicId` as a number). */
+	threadId: number;
+	pi: LivePiSession;
+	/** Serializes this topic's Telegram calls so edits never overtake the message they edit. */
+	outbox: Promise<void>;
+	progress?: Progress;
+};
+
+type Bridge = {
+	abort: AbortController;
+	done: Promise<void>;
+	credentials: RemoteControlCredentials;
+	api: TelegramBotApi;
+	options: StartOptions;
+	/** Keyed by Telegram thread id. */
+	routes: Map<number, Route>;
+};
 
 /** The single authority for repository and agent-session invariants. */
 export class RemoteControlCoordinator {
 	private creationTail: Promise<void> = Promise.resolve();
-	private bridge?: { abort: AbortController; done: Promise<void>; credentials: RemoteControlCredentials; api: TelegramBotApi };
+	private bridge?: Bridge;
 	private lifecycleTail: Promise<void> = Promise.resolve();
 	private pendingLogin?: AbortController;
 
 	private readonly adapters: RemoteControlAdapters;
 	private readonly now: () => Date;
+	private readonly progressIntervalMs: number;
 
-	constructor(adapters: RemoteControlAdapters, now = () => new Date()) {
+	constructor(adapters: RemoteControlAdapters, now = () => new Date(), options: CoordinatorOptions = {}) {
 		this.adapters = adapters;
 		this.now = now;
+		this.progressIntervalMs = options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
 	}
 
 	private withCreationLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -281,14 +393,16 @@ export class RemoteControlCoordinator {
 		return previous.then(operation).finally(release);
 	}
 
-	registerRepository(path: string, name = path.split("/").filter(Boolean).pop() || path): Promise<Repository> {
-		return this.withCreationLock(async () => {
-			const existing = await this.adapters.repositories.getByPath(path);
-			if (existing) return existing;
-			const repository: Repository = { id: id("repo"), path, name, registeredAt: this.now().toISOString() };
-			await this.adapters.repositories.register(repository);
-			return repository;
-		});
+	registerRepository(path: string, name?: string): Promise<Repository> {
+		return this.withCreationLock(() => this.registerRepositoryLocked(path, name));
+	}
+
+	private async registerRepositoryLocked(path: string, name = path.split("/").filter(Boolean).pop() || path): Promise<Repository> {
+		const existing = await this.adapters.repositories.getByPath(path);
+		if (existing) return existing;
+		const repository: Repository = { id: id("repo"), path, name, registeredAt: this.now().toISOString() };
+		await this.adapters.repositories.register(repository);
+		return repository;
 	}
 
 	listRepositories(): Promise<Repository[]> {
@@ -328,7 +442,7 @@ export class RemoteControlCoordinator {
 		let topic: { id: string } | undefined;
 		try {
 			piSession = await this.adapters.pi.create({ name, repository, workspace });
-			const sessionTopicName = topicName(repository, name, workspace.branch);
+			const sessionTopicName = topicTitle(repository.name, name, workspace.branch);
 			topic = await this.adapters.telegram.createSessionTopic(sessionTopicName);
 			const session: AgentSession = {
 				id: id("session"), name, repositoryId: repository.id, repositoryPath: repository.path,
@@ -475,10 +589,14 @@ export class RemoteControlCoordinator {
 	/**
 	 * Starts the remote bridge as a long-polling task inside the current process.
 	 * It runs until stop(), logout(), or process shutdown; nothing outlives Pi.
+	 * With `options.session`, the current Pi conversation is exposed in its session topic first.
 	 */
-	start(options: StartOptions = {}): Promise<{ alreadyRunning: boolean; credentials: RemoteControlCredentials }> {
+	start(options: StartOptions = {}): Promise<{ alreadyRunning: boolean; credentials: RemoteControlCredentials; session?: AgentSession }> {
 		return this.withLifecycleLock(async () => {
-			if (this.bridge) return { alreadyRunning: true, credentials: this.bridge.credentials };
+			if (this.bridge) {
+				const [route] = this.bridge.routes.values();
+				return { alreadyRunning: true, credentials: this.bridge.credentials, session: route?.session };
+			}
 			const credentials = await this.readCredentials();
 			if (!credentials) throw new RemoteControlError("not-logged-in", "Remote control is not logged in; run /rc login locally.");
 
@@ -493,14 +611,67 @@ export class RemoteControlCoordinator {
 			await verifyGroup(api, chat, bot.id, credentials.owner.id);
 			const offset = await drainUpdates(api);
 
+			const live = options.session;
+			const session = live ? await this.withCreationLock(() => this.exposeLocked(api, credentials, live, options)) : undefined;
 			const abort = new AbortController();
-			const bridge = { abort, done: Promise.resolve(), credentials, api };
+			const bridge: Bridge = { abort, done: Promise.resolve(), credentials, api, options, routes: new Map() };
+			if (session && live) {
+				const threadId = Number(session.topicId);
+				bridge.routes.set(threadId, { session, threadId, pi: live, outbox: Promise.resolve() });
+			}
 			this.bridge = bridge;
-			bridge.done = this.poll(api, credentials, offset, abort.signal, options);
+			bridge.done = this.poll(bridge, offset);
 			await api.sendMessage({ chatId: credentials.group.id, threadId: credentials.group.controlTopicId, text: "Remote control started." })
 				.catch((error) => options.onError?.(error));
-			return { alreadyRunning: false, credentials };
+			return { alreadyRunning: false, credentials, session };
 		});
+	}
+
+	/**
+	 * Makes the live Pi conversation the agent session for its workspace. A workspace
+	 * already exposed by an earlier conversation keeps its topic, which is rebound to
+	 * this conversation and renamed if the session name or branch changed.
+	 */
+	private async exposeLocked(api: TelegramBotApi, credentials: RemoteControlCredentials, live: LivePiSession, options: StartOptions): Promise<AgentSession> {
+		const repository = await this.registerRepositoryLocked(live.repositoryPath);
+		const existing = (await this.adapters.sessions.list()).find((session) => session.workspace === live.workspace);
+		const name = live.name.trim() || existing?.name || DEFAULT_SESSION_NAME;
+		const title = topicTitle(repository.name, name, live.branch);
+		const chatId = credentials.group.id;
+		const connected = `Connected to Pi session "${name}" on ${live.branch}. ${SESSION_TOPIC_HELP}`;
+
+		// Posting proves the stored topic still exists; one deleted in Telegram is replaced.
+		// Any other failure fails the start rather than orphaning a topic that still exists.
+		let threadId = existing ? Number(existing.topicId) : undefined;
+		if (threadId !== undefined) {
+			await api.sendMessage({ chatId, threadId, text: connected }).catch((error) => {
+				if (!isMissingTopic(error)) throw error;
+				threadId = undefined;
+			});
+		}
+		if (threadId === undefined) {
+			threadId = (await api.createForumTopic(chatId, title)).threadId;
+			await api.sendMessage({ chatId, threadId, text: connected });
+		} else if (existing?.topicName !== title) {
+			await api.editForumTopic({ chatId, threadId, name: title }).catch((error) => options.onDeliveryError?.(error));
+		}
+
+		const session: AgentSession = {
+			id: existing?.id ?? id("session"),
+			name,
+			repositoryId: repository.id,
+			repositoryPath: repository.path,
+			workspace: live.workspace,
+			branch: live.branch,
+			piSessionId: live.id,
+			topicId: String(threadId),
+			topicName: title,
+			createdAt: existing?.createdAt ?? this.now().toISOString(),
+			status: "active",
+		};
+		if (existing) await this.adapters.sessions.update(session);
+		else await this.adapters.sessions.save(session);
+		return session;
 	}
 
 	/** Stops accepting remote messages and cancels a pending login. Returns whether the bridge was running. */
@@ -515,8 +686,14 @@ export class RemoteControlCoordinator {
 		this.bridge = undefined;
 		bridge.abort.abort();
 		await bridge.done;
+		const chatId = bridge.credentials.group.id;
+		for (const [threadId, route] of bridge.routes) {
+			clearTimeout(route.progress?.timer);
+			await route.outbox;
+			await bridge.api.sendMessage({ chatId, threadId, text: "Disconnected: remote control stopped." }).catch(() => undefined);
+		}
 		await bridge.api
-			.sendMessage({ chatId: bridge.credentials.group.id, threadId: bridge.credentials.group.controlTopicId, text: "Remote control stopped." })
+			.sendMessage({ chatId, threadId: bridge.credentials.group.controlTopicId, text: "Remote control stopped." })
 			.catch(() => undefined);
 		return true;
 	}
@@ -527,6 +704,7 @@ export class RemoteControlCoordinator {
 			running: this.bridge !== undefined,
 			bot: credentials?.bot.username && `@${credentials.bot.username}`,
 			group: credentials?.group.title,
+			topics: [...(this.bridge?.routes.values() ?? [])].map((route) => route.session.topicName),
 		};
 	}
 
@@ -537,13 +715,118 @@ export class RemoteControlCoordinator {
 		return { loggedIn: true, bot: credentials.bot.username && `@${credentials.bot.username}`, group: credentials.group.title };
 	}
 
-	private async poll(
-		api: TelegramBotApi,
-		credentials: RemoteControlCredentials,
-		initialOffset: number | undefined,
-		signal: AbortSignal,
-		options: StartOptions,
-	): Promise<void> {
+	/**
+	 * Reports what a live Pi session is doing to its session topic: one editable
+	 * progress message per run of work, then the condensed final response. Ignored
+	 * unless the running bridge exposes that session.
+	 */
+	recordActivity(piSessionId: string, activity: PiActivity): void {
+		const bridge = this.bridge;
+		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi.id === piSessionId);
+		if (!bridge || !route) return;
+
+		switch (activity.type) {
+			case "run-start": {
+				if (route.progress) {
+					route.progress.prompt ??= activity.prompt;
+					this.scheduleProgressEdit(bridge, route);
+				} else {
+					this.beginProgress(bridge, route, activity.prompt);
+				}
+				return;
+			}
+			case "tool-start": {
+				const progress = route.progress ?? this.beginProgress(bridge, route);
+				progress.tools.push({ id: activity.toolCallId, label: describeTool(activity.toolName, activity.args), state: "running" });
+				this.scheduleProgressEdit(bridge, route);
+				return;
+			}
+			case "tool-end": {
+				const tool = route.progress?.tools.find((candidate) => candidate.id === activity.toolCallId);
+				if (!tool) return;
+				tool.state = activity.isError ? "failed" : "done";
+				this.scheduleProgressEdit(bridge, route);
+				return;
+			}
+			case "response": {
+				const failure = activity.aborted ? "⚠️ Run aborted." : activity.error ? failureText(activity.error) : undefined;
+				if (failure && route.progress) {
+					route.progress.failure = failure;
+					return;
+				}
+				if (route.progress) route.progress.failure = undefined;
+				const text = failure ?? condenseForTelegram(activity.text);
+				if (text) this.reply(bridge, route, text);
+				return;
+			}
+			case "settled": {
+				const progress = route.progress;
+				if (!progress) return;
+				route.progress = undefined;
+				clearTimeout(progress.timer);
+				if (progress.failure) this.reply(bridge, route, progress.failure);
+				this.post(bridge, route, () => this.showProgress(bridge, route, progress, progress.failure ? "failed" : "done"));
+				return;
+			}
+		}
+	}
+
+	private beginProgress(bridge: Bridge, route: Route, prompt?: string): Progress {
+		const progress: Progress = { startedAt: this.now().getTime(), prompt, tools: [] };
+		route.progress = progress;
+		this.post(bridge, route, () => this.showProgress(bridge, route, progress));
+		return progress;
+	}
+
+	/** Coalesces progress changes into at most one edit per interval. */
+	private scheduleProgressEdit(bridge: Bridge, route: Route): void {
+		const progress = route.progress;
+		if (!progress || progress.timer) return;
+		progress.timer = setTimeout(() => {
+			progress.timer = undefined;
+			if (route.progress === progress) this.post(bridge, route, () => this.showProgress(bridge, route, progress));
+		}, this.progressIntervalMs);
+	}
+
+	/** Sends the progress message on first use and edits it in place afterwards. */
+	private async showProgress(bridge: Bridge, route: Route, progress: Progress, finished?: "done" | "failed"): Promise<void> {
+		const text = renderProgress({ prompt: progress.prompt, tools: progress.tools, elapsedMs: this.now().getTime() - progress.startedAt, finished });
+		if (text === progress.shown) return;
+		const chatId = bridge.credentials.group.id;
+		if (progress.messageId === undefined) progress.messageId = (await bridge.api.sendMessage({ chatId, threadId: route.threadId, text })).messageId;
+		else await bridge.api.editMessageText({ chatId, messageId: progress.messageId, text });
+		progress.shown = text;
+	}
+
+	/** Queues a Telegram call for a session topic; failures are reported, never thrown. */
+	private post(bridge: Bridge, route: Route, send: () => Promise<void>): void {
+		route.outbox = route.outbox
+			.then(() => withRateLimitRetry(send, bridge.abort.signal))
+			.catch((error) => bridge.options.onDeliveryError?.(error));
+	}
+
+	private reply(bridge: Bridge, route: Route, text: string): void {
+		this.post(bridge, route, async () => {
+			await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId: route.threadId, text });
+		});
+	}
+
+	/** Delivers an owner message from a session topic to its live Pi session. */
+	private deliver(bridge: Bridge, route: Route, text: string): void {
+		const input = parseSessionTopicInput(text);
+		if (input.kind === "invalid") return this.reply(bridge, route, input.reply);
+		if (route.pi.isIdle()) return route.pi.prompt(input.text);
+		if (input.kind === "followUp") {
+			route.pi.followUp(input.text);
+			return this.reply(bridge, route, "Queued as a follow-up after the current run.");
+		}
+		route.pi.steer(input.text);
+		this.reply(bridge, route, "Steering the current run.");
+	}
+
+	private async poll(bridge: Bridge, initialOffset: number | undefined): Promise<void> {
+		const { api, credentials, options } = bridge;
+		const signal = bridge.abort.signal;
 		let offset = initialOffset;
 		let retryDelay = 1000;
 		let failing = false;
@@ -565,7 +848,8 @@ export class RemoteControlCoordinator {
 				if (signal.aborted) return;
 				const fatal = fatalPollError(error);
 				if (fatal) {
-					if (this.bridge?.abort.signal === signal) this.bridge = undefined;
+					if (this.bridge === bridge) this.bridge = undefined;
+					for (const route of bridge.routes.values()) clearTimeout(route.progress?.timer);
 					options.onStopped?.(fatal);
 					return;
 				}
@@ -591,7 +875,14 @@ export class RemoteControlCoordinator {
 					} else if (message.chat.id !== credentials.group.id) {
 						await reject(message, `chat:${message.chat.id}`, "Remote control only accepts messages in the approved forum group.");
 					} else if (message.text) {
-						await options.onMessage?.({ messageId: message.messageId, threadId: message.threadId, text: message.text });
+						const route = message.threadId === undefined ? undefined : bridge.routes.get(message.threadId);
+						if (route) {
+							this.deliver(bridge, route, message.text);
+						} else if (message.threadId !== undefined && message.threadId !== credentials.group.controlTopicId) {
+							await reject(message, `topic:${message.threadId}`, "This topic is not connected to a running Pi session.");
+						} else {
+							await options.onMessage?.({ messageId: message.messageId, threadId: message.threadId, text: message.text });
+						}
 					}
 				} catch (error) {
 					options.onError?.(error);

@@ -3,14 +3,20 @@
  *
  * `/rc` explicitly starts a Telegram bridge inside this Pi process. It stops with
  * `/rc stop`, `/rc logout`, or Pi shutdown; there is no background daemon.
+ * Inside a Git repository, the current conversation is exposed in a session topic.
  */
 
+import { execFile } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { RemoteControlCoordinator, RemoteControlError } from "./coordinator.ts";
+import { basename, dirname, join } from "node:path";
+import { promisify } from "node:util";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity } from "./coordinator.ts";
+import { PiDelivery } from "./pi-delivery.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
 import { createTelegramBotApi } from "./telegram.ts";
+
+const execFileAsync = promisify(execFile);
 
 const STATUS_KEY = "rc";
 const SUBCOMMANDS = [
@@ -44,6 +50,40 @@ function createCoordinator(): RemoteControlCoordinator {
 
 function describe(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+async function git(cwd: string, args: string[]): Promise<string> {
+	const result = await execFileAsync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+	return result.stdout.trim();
+}
+
+/** The worktree, branch, and main repository `cwd` belongs to, or undefined outside Git. */
+async function gitWorkspace(cwd: string): Promise<{ workspace: string; branch: string; repositoryPath: string } | undefined> {
+	let workspace: string;
+	try {
+		workspace = await git(cwd, ["rev-parse", "--show-toplevel"]);
+	} catch {
+		return undefined;
+	}
+	const commonDir = await git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+	const branch = await git(cwd, ["branch", "--show-current"])
+		|| `detached@${await git(cwd, ["rev-parse", "--short", "HEAD"]).catch(() => "unborn")}`;
+	return { workspace, branch, repositoryPath: basename(commonDir) === ".git" ? dirname(commonDir) : commonDir };
+}
+
+type TextBlock = { type: string; text?: string };
+type RunMessage = { role: string; content?: string | TextBlock[]; stopReason?: string; errorMessage?: string };
+
+/** The final assistant message of a run, as the session topic's response. */
+function runResponse(messages: RunMessage[]): { text: string; error?: string; aborted?: boolean } | undefined {
+	const last = messages.findLast((message) => message.role === "assistant");
+	if (!last) return undefined;
+	const text = typeof last.content === "string"
+		? last.content
+		: (last.content ?? []).filter((block) => block.type === "text").map((block) => block.text ?? "").join("\n");
+	if (last.stopReason === "aborted") return { text, aborted: true };
+	if (last.stopReason === "error") return { text, error: last.errorMessage || "unknown error" };
+	return { text };
 }
 
 export default function remoteControlExtension(pi: ExtensionAPI): void {
@@ -80,9 +120,32 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		}
 	}
 
+	// Holds Telegram messages while a prompt is starting or Pi is compacting.
+	let delivery: PiDelivery | undefined;
+
+	/** The current conversation as remote control drives it. */
+	async function liveSession(ctx: ExtensionCommandContext): Promise<LivePiSession | undefined> {
+		const workspace = await gitWorkspace(ctx.cwd);
+		if (!workspace) return undefined;
+		delivery?.dispose();
+		const current = new PiDelivery({ send: (text, deliverAs) => pi.sendUserMessage(text, { deliverAs }), isIdle: () => ctx.isIdle() });
+		delivery = current;
+		return {
+			id: ctx.sessionManager.getSessionId(),
+			name: pi.getSessionName() ?? "",
+			...workspace,
+			isIdle: () => ctx.isIdle() && current.isReady(),
+			prompt: (text) => current.prompt(text),
+			steer: (text) => current.steer(text),
+			followUp: (text) => current.followUp(text),
+		};
+	}
+
 	async function start(ctx: ExtensionCommandContext): Promise<void> {
 		try {
-			const { alreadyRunning, credentials } = await coordinator.start({
+			const session = await liveSession(ctx);
+			const { alreadyRunning, credentials, session: exposed } = await coordinator.start({
+				session,
 				onMessage: async (message) => ctx.ui.notify(`Telegram: ${message.text}`, "info"),
 				onError: (error) => ctx.ui.setStatus(STATUS_KEY, `rc: reconnecting (${describe(error)})`),
 				onRecovered: () => ctx.ui.setStatus(STATUS_KEY, "rc: on"),
@@ -90,9 +153,14 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 					ctx.ui.setStatus(STATUS_KEY, undefined);
 					ctx.ui.notify(`Remote control stopped: ${reason.message}`, "error");
 				},
+				onDeliveryError: (error) => ctx.ui.notify(`Remote control could not update Telegram: ${describe(error)}`, "warning"),
 			});
 			ctx.ui.setStatus(STATUS_KEY, "rc: on");
-			ctx.ui.notify(alreadyRunning ? "Remote control is already running." : `Remote control started in ${credentials.group.title ?? "Telegram"}.`, "info");
+			const where = exposed ? ` This session is in topic "${exposed.topicName}".` : " Not in a Git repository, so this session is not exposed.";
+			ctx.ui.notify(
+				alreadyRunning ? "Remote control is already running." : `Remote control started in ${credentials.group.title ?? "Telegram"}.${where}`,
+				"info",
+			);
 		} catch (error) {
 			const hint = error instanceof RemoteControlError && error.code === "invalid-group" ? " Fix the group or run /rc login again." : "";
 			ctx.ui.notify(`Remote control did not start: ${describe(error)}${hint}`, "error");
@@ -105,8 +173,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("Remote control: not logged in. Run /rc login.", "info");
 			return;
 		}
-		const bridge = coordinator.status().running ? "running" : "stopped";
-		ctx.ui.notify(`Remote control: ${bridge}; bot ${login.bot ?? "unknown"} in ${login.group ?? "the forum group"}.`, "info");
+		const bridge = coordinator.status();
+		const topics = bridge.topics.length ? ` Session topics: ${bridge.topics.join(", ")}.` : "";
+		ctx.ui.notify(`Remote control: ${bridge.running ? "running" : "stopped"}; bot ${login.bot ?? "unknown"} in ${login.group ?? "the forum group"}.${topics}`, "info");
 	}
 
 	pi.registerCommand("rc", {
@@ -156,9 +225,45 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		}
 	}
 
+	// Mirror this conversation's work into its session topic. The coordinator ignores
+	// these while the bridge is stopped. Tool output is never forwarded.
+	const report = (ctx: ExtensionContext, activity: PiActivity) => coordinator.recordActivity(ctx.sessionManager.getSessionId(), activity);
+	let pendingPrompt: string | undefined;
+	pi.on("before_agent_start", async (event) => {
+		pendingPrompt = event.prompt;
+	});
+	pi.on("agent_start", async (_event, ctx) => {
+		delivery?.runStarted();
+		report(ctx, { type: "run-start", prompt: pendingPrompt });
+		pendingPrompt = undefined;
+	});
+	pi.on("tool_execution_start", async (event, ctx) => {
+		report(ctx, { type: "tool-start", toolCallId: event.toolCallId, toolName: event.toolName, args: event.args });
+	});
+	pi.on("tool_execution_end", async (event, ctx) => {
+		report(ctx, { type: "tool-end", toolCallId: event.toolCallId, isError: event.isError });
+	});
+	pi.on("agent_end", async (event, ctx) => {
+		const response = runResponse(event.messages as RunMessage[]);
+		if (response) report(ctx, { type: "response", ...response });
+	});
+	pi.on("agent_settled", async (_event, ctx) => {
+		report(ctx, { type: "settled" });
+	});
+	pi.on("session_before_compact", async () => {
+		delivery?.compactionStarted();
+	});
+	pi.on("session_compact", async () => {
+		delivery?.compactionEnded();
+	});
+	pi.on("session_compact_failed", async () => {
+		delivery?.compactionEnded();
+	});
+
 	// Pi tears down this extension instance on quit, reload, and session switches;
 	// the bridge must never outlive it. This also cancels a pending login.
 	pi.on("session_shutdown", async () => {
 		await coordinator.stop();
+		delivery?.dispose();
 	});
 }

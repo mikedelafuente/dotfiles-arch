@@ -4,9 +4,9 @@
 
 | Command | Effect |
 |---------|--------|
-| `/rc` or `/rc start` | Start the remote bridge inside this Pi process |
+| `/rc` or `/rc start` | Start the remote bridge inside this Pi process and expose this conversation |
 | `/rc stop` | Stop accepting Telegram messages; Pi sessions are untouched |
-| `/rc status` | Show login and bridge state |
+| `/rc status` | Show login and bridge state, and the session topics being routed |
 | `/rc login` | Link a BotFather token, the owner, and a private forum group |
 | `/rc logout` | Stop the bridge and delete local credentials |
 
@@ -53,8 +53,60 @@ stopped. While it runs:
 `/rc stop`, `/rc logout`, and Pi shutdown also cancel a login that is still
 waiting for its code.
 
-Owner messages in the group are currently shown as local notifications; routing
-them into Pi sessions is not implemented yet.
+Owner messages in the control topic (or the General topic) are shown as local
+notifications; repository and session management there is not implemented yet.
+Messages in a topic with no running session get one "not connected" reply.
+
+### Current session
+
+Run inside a Git repository, `/rc` exposes the running Pi conversation as an
+agent session before it starts polling:
+
+- The repository is added to the repository registry if it is not already there.
+  For a linked worktree, that is the main checkout; the workspace is the worktree.
+- The session topic is named `<repository> / <session> / <branch>`. The session
+  name is the Pi session name (`/name`), else the name the topic already had, else
+  `agent`. The branch is read once, at `/rc` time.
+- A workspace keeps one session topic. A later Pi conversation in the same
+  workspace takes that topic over: the stored agent session is rebound to the new
+  conversation, and the topic is renamed if the name or branch changed. A topic
+  deleted in Telegram is replaced with a new one.
+
+Outside a Git repository the bridge still starts, but no session is exposed.
+
+In the session topic:
+
+| Message | Effect |
+|---------|--------|
+| Plain text while Pi is idle | A new prompt |
+| Plain text while Pi is working | Steering for the current run |
+| `/rc followup <message>` | A follow-up queued after the current run (a prompt if idle) |
+| Any other `/rc …` | A usage reply; nothing reaches Pi |
+
+Other `/` text is passed to Pi verbatim; prompt templates and skills are not
+expanded yet. Messages that arrive while a prompt is starting or Pi is compacting
+are held and delivered in order once Pi can accept them (`pi-delivery.ts`), so a
+burst of messages is never lost to Pi rejecting a concurrent prompt. Replies in the
+General topic count as General, not as the topic of the message they reply to.
+
+Every run of this conversation is mirrored into its topic, including prompts
+typed locally:
+
+- One progress message per run, edited in place at most every five seconds:
+  the prompt, elapsed time, and the last eight tool calls as `name: main argument`.
+  It ends as `Done in …` or `Failed after …` with a tool-call count. Rate-limited
+  (429) updates are retried after Telegram's `retry_after`.
+- The final assistant response is sent as a separate message. Responses longer
+  than 3500 characters keep their opening and conclusion, cut at paragraph, line,
+  or word boundaries, with a note that the full response is in the Pi session.
+  Nothing is attached.
+- A failed run is reported only once Pi settles, because extensions see the
+  failure before Pi decides to auto-retry it.
+- Tool output is never sent; it stays in the Pi session history.
+- `/rc stop` posts `Disconnected` in the topic. Delivery failures appear as local
+  warnings and do not stop the bridge.
+- When rebinding, only a topic Telegram reports as deleted is replaced; any other
+  failure makes `/rc` fail instead.
 
 ### Tests
 
@@ -85,10 +137,18 @@ resources are rolled back where their adapter supports removal.
 The coordinator also owns the login handshake and bridge lifecycle, using an
 injected `TelegramBotApi` (`telegram.ts` is the fetch-based implementation).
 
+It also routes session-topic messages to an injected `LivePiSession` and turns
+`recordActivity()` reports (`index.ts` maps Pi's agent and tool events to them) into
+progress edits and responses. `messages.ts` holds the pure text formatting.
+
 Adapter-backed tests: `coordinator.test.ts` covers repository approval, durable
 relationships, grouping/attach, and duplicate workspace rejection;
 `lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
-and logout against a fake Bot API.
+and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
+current conversation, topic rebinding, message routing, progress, response
+condensing, retry-safe failure reporting, and rate limits; `pi-delivery.test.ts`
+covers holding messages while a prompt starts or Pi compacts. Shared fakes live in
+`test-support.ts`.
 
 
 This context defines the concepts used to control persistent Pi agent sessions remotely through Telegram while preserving repository and workspace safety.

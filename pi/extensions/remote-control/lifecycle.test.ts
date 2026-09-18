@@ -1,85 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-	RemoteControlCoordinator,
-	type AuthorizedMessage,
-	type RemoteControlAdapters,
-	type TelegramBotApi,
-	type TelegramChat,
-	type TelegramChatMember,
-	type TelegramMessage,
-	type TelegramUpdate,
-	type TelegramUser,
-} from "./coordinator.ts";
-
-const TOKEN = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
-const BOT: TelegramUser = { id: 1000, isBot: true, username: "pi_rc_bot" };
-const OWNER: TelegramUser = { id: 42, isBot: false, username: "owner" };
-const STRANGER: TelegramUser = { id: 99, isBot: false, username: "stranger" };
-const GROUP: TelegramChat = { id: -1001, type: "supergroup", title: "Pi", isForum: true };
-
-/** Scriptable Telegram Bot API: updates are delivered through long polling like the real API. */
-class FakeTelegram implements TelegramBotApi {
-	updates: TelegramUpdate[] = [];
-	sent: { chatId: number; threadId?: number; text: string }[] = [];
-	topics: string[] = [];
-	members = new Map<number, TelegramChatMember>([
-		[OWNER.id, { status: "creator" }],
-		[BOT.id, { status: "administrator", canManageTopics: true }],
-	]);
-	chat: TelegramChat = { ...GROUP };
-	tokenValid = true;
-	polls = 0;
-	/** Errors thrown by the next getUpdates calls, in order. */
-	pollFailures: Error[] = [];
-	private nextId = 1;
-	private wake?: () => void;
-
-	push(message: Omit<TelegramMessage, "messageId">): void {
-		const id = this.nextId++;
-		this.updates.push({ updateId: id, message: { messageId: id, ...message } });
-		this.wake?.();
-	}
-
-	async getMe(): Promise<TelegramUser> {
-		if (!this.tokenValid) throw new Error("Unauthorized");
-		return BOT;
-	}
-
-	async getUpdates(input: { offset?: number; timeoutSeconds: number; signal?: AbortSignal }): Promise<TelegramUpdate[]> {
-		this.polls++;
-		if (input.offset === -1) return this.updates.slice(-1);
-		const failure = this.pollFailures.shift();
-		if (failure) throw failure;
-		const pending = () => this.updates.filter((update) => update.updateId >= (input.offset ?? 0));
-		if (pending().length || input.timeoutSeconds === 0) return pending();
-		input.signal?.throwIfAborted();
-		await new Promise<void>((resolve, reject) => {
-			this.wake = resolve;
-			input.signal?.addEventListener("abort", () => reject(input.signal?.reason), { once: true });
-		});
-		return pending();
-	}
-
-	async getChat(): Promise<TelegramChat> { return this.chat; }
-
-	async getChatMember(_chatId: number, userId: number): Promise<TelegramChatMember> {
-		return this.members.get(userId) ?? { status: "left" };
-	}
-
-	async createForumTopic(_chatId: number, name: string): Promise<{ threadId: number }> {
-		this.topics.push(name);
-		return { threadId: 500 + this.topics.length };
-	}
-
-	async sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<void> {
-		this.sent.push(input);
-	}
-}
-
-function apiError(errorCode: number, message: string): Error {
-	return Object.assign(new Error(message), { errorCode });
-}
+import { RemoteControlCoordinator, type AuthorizedMessage, type RemoteControlAdapters, type TelegramChat, type TelegramUser } from "./coordinator.ts";
+import { apiError, BOT, FakeTelegram, GROUP, OWNER, STRANGER, TOKEN, until } from "./test-support.ts";
 
 const ANONYMOUS_ADMIN: TelegramUser = { id: 1087968824, isBot: true, username: "GroupAnonymousBot" };
 
@@ -90,7 +12,7 @@ function harness() {
 	const tokens: string[] = [];
 	const adapters = {
 		repositories: { getByPath: async () => undefined, list: async () => [], register: async () => undefined, remove: async () => undefined },
-		sessions: { list: async () => [], get: async () => undefined, save: async () => undefined },
+		sessions: { list: async () => [], get: async () => undefined, save: async () => undefined, update: async () => undefined },
 		workspaces: {
 			create: async (_repository, branch) => ({ path: `/tmp/${branch}`, branch, created: true }),
 			adopt: async (path, branch = "main") => ({ path, branch, created: false }),
@@ -120,11 +42,6 @@ function loginWith(h: ReturnType<typeof harness>, from: TelegramUser = OWNER, ch
 			}, 5);
 		},
 	});
-}
-
-async function until(condition: () => boolean, timeoutMs = 1000): Promise<void> {
-	for (let i = 0; i < timeoutMs / 5 && !condition(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
-	assert.ok(condition(), "condition not reached");
 }
 
 test("login rejects malformed and Telegram-rejected tokens without storing credentials", async () => {

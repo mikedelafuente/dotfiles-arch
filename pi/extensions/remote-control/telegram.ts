@@ -8,6 +8,7 @@ type RawChat = { id: number; type: TelegramChat["type"]; title?: string; usernam
 type RawMessage = {
 	message_id: number;
 	message_thread_id?: number;
+	is_topic_message?: boolean;
 	text?: string;
 	from?: RawUser;
 	sender_chat?: { id: number };
@@ -18,11 +19,14 @@ type RawChatMember = { status: TelegramChatMember["status"]; can_manage_topics?:
 
 export class TelegramApiError extends Error {
 	readonly errorCode?: number;
+	/** Seconds to wait before retrying a rate-limited (429) request. */
+	readonly retryAfter?: number;
 
-	constructor(method: string, description: string, errorCode?: number) {
+	constructor(method: string, description: string, errorCode?: number, retryAfter?: number) {
 		super(`Telegram ${method} failed: ${description}`);
 		this.name = "TelegramApiError";
 		this.errorCode = errorCode;
+		this.retryAfter = retryAfter;
 	}
 }
 
@@ -45,8 +49,16 @@ export function createTelegramBotApi(token: string, fetchImpl: typeof fetch = fe
 			// Never include the request URL: it contains the bot token.
 			throw new TelegramApiError(method, error instanceof Error ? error.message : String(error));
 		}
-		const payload = (await response.json().catch(() => ({}))) as { ok?: boolean; result?: T; description?: string; error_code?: number };
-		if (!payload.ok) throw new TelegramApiError(method, payload.description ?? `HTTP ${response.status}`, payload.error_code ?? response.status);
+		const payload = (await response.json().catch(() => ({}))) as {
+			ok?: boolean;
+			result?: T;
+			description?: string;
+			error_code?: number;
+			parameters?: { retry_after?: number };
+		};
+		if (!payload.ok) {
+			throw new TelegramApiError(method, payload.description ?? `HTTP ${response.status}`, payload.error_code ?? response.status, payload.parameters?.retry_after);
+		}
 		return payload.result as T;
 	}
 
@@ -64,7 +76,8 @@ export function createTelegramBotApi(token: string, fetchImpl: typeof fetch = fe
 				updateId: update.update_id,
 				message: update.message && {
 					messageId: update.message.message_id,
-					threadId: update.message.message_thread_id,
+					// Replies in the General topic carry the reply's root as message_thread_id.
+				threadId: update.message.is_topic_message ? update.message.message_thread_id : undefined,
 					text: update.message.text,
 					from: update.message.from && user(update.message.from),
 					senderChatId: update.message.sender_chat?.id,
@@ -83,8 +96,15 @@ export function createTelegramBotApi(token: string, fetchImpl: typeof fetch = fe
 			const topic = await call<{ message_thread_id: number }>("createForumTopic", { chat_id: chatId, name });
 			return { threadId: topic.message_thread_id };
 		},
+		async editForumTopic({ chatId, threadId, name }) {
+			await call("editForumTopic", { chat_id: chatId, message_thread_id: threadId, name });
+		},
 		async sendMessage({ chatId, threadId, text }) {
-			await call("sendMessage", { chat_id: chatId, message_thread_id: threadId, text });
+			const message = await call<{ message_id: number }>("sendMessage", { chat_id: chatId, message_thread_id: threadId, text });
+			return { messageId: message.message_id };
+		},
+		async editMessageText({ chatId, messageId, text }) {
+			await call("editMessageText", { chat_id: chatId, message_id: messageId, text });
 		},
 	};
 }
