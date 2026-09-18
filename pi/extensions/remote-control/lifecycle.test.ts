@@ -30,6 +30,8 @@ class FakeTelegram implements TelegramBotApi {
 	chat: TelegramChat = { ...GROUP };
 	tokenValid = true;
 	polls = 0;
+	/** Errors thrown by the next getUpdates calls, in order. */
+	pollFailures: Error[] = [];
 	private nextId = 1;
 	private wake?: () => void;
 
@@ -47,8 +49,11 @@ class FakeTelegram implements TelegramBotApi {
 	async getUpdates(input: { offset?: number; timeoutSeconds: number; signal?: AbortSignal }): Promise<TelegramUpdate[]> {
 		this.polls++;
 		if (input.offset === -1) return this.updates.slice(-1);
+		const failure = this.pollFailures.shift();
+		if (failure) throw failure;
 		const pending = () => this.updates.filter((update) => update.updateId >= (input.offset ?? 0));
 		if (pending().length || input.timeoutSeconds === 0) return pending();
+		input.signal?.throwIfAborted();
 		await new Promise<void>((resolve, reject) => {
 			this.wake = resolve;
 			input.signal?.addEventListener("abort", () => reject(input.signal?.reason), { once: true });
@@ -72,9 +77,16 @@ class FakeTelegram implements TelegramBotApi {
 	}
 }
 
+function apiError(errorCode: number, message: string): Error {
+	return Object.assign(new Error(message), { errorCode });
+}
+
+const ANONYMOUS_ADMIN: TelegramUser = { id: 1087968824, isBot: true, username: "GroupAnonymousBot" };
+
 function harness() {
 	const telegram = new FakeTelegram();
 	let stored: unknown;
+	let corrupt = false;
 	const tokens: string[] = [];
 	const adapters = {
 		repositories: { getByPath: async () => undefined, list: async () => [], register: async () => undefined, remove: async () => undefined },
@@ -86,14 +98,14 @@ function harness() {
 		pi: { create: async () => ({ id: "pi" }) },
 		telegram: { createSessionTopic: async () => ({ id: "topic" }) },
 		credentials: {
-			read: async () => stored,
+			read: async () => { if (corrupt) throw new SyntaxError("Unexpected token in JSON"); return stored; },
 			write: async (value: unknown) => { stored = structuredClone(value); },
-			clear: async () => { stored = undefined; },
+			clear: async () => { stored = undefined; corrupt = false; },
 		},
 		telegramBot: (token: string) => { tokens.push(token); return telegram; },
 	} satisfies RemoteControlAdapters;
 	const coordinator = new RemoteControlCoordinator(adapters, () => new Date("2026-01-01T00:00:00Z"));
-	return { telegram, coordinator, tokens, stored: () => stored };
+	return { telegram, coordinator, tokens, stored: () => stored, corruptCredentials: () => { corrupt = true; } };
 }
 
 /** Starts a login and sends the handshake code from `from` in `chat` once it is shown locally. */
@@ -110,8 +122,8 @@ function loginWith(h: ReturnType<typeof harness>, from: TelegramUser = OWNER, ch
 	});
 }
 
-async function until(condition: () => boolean): Promise<void> {
-	for (let i = 0; i < 200 && !condition(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
+async function until(condition: () => boolean, timeoutMs = 1000): Promise<void> {
+	for (let i = 0; i < timeoutMs / 5 && !condition(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
 	assert.ok(condition(), "condition not reached");
 }
 
@@ -217,4 +229,74 @@ test("logout stops the bridge and removes local credentials", async () => {
 	assert.equal(h.coordinator.status().running, false);
 	assert.equal(h.stored(), undefined);
 	await assert.rejects(h.coordinator.start(), { code: "not-logged-in" });
+});
+
+test("stop and logout cancel a pending login instead of waiting for it", async () => {
+	for (const cancel of ["stop", "logout"] as const) {
+		const h = harness();
+		let codeShown!: () => void;
+		const shown = new Promise<void>((resolve) => { codeShown = resolve; });
+		const login = h.coordinator.login({ token: TOKEN, timeoutMs: 60_000, onHandshakeCode: () => codeShown() });
+		await shown;
+		const started = Date.now();
+		await h.coordinator[cancel]();
+		await assert.rejects(login, { code: "login-cancelled" }, cancel);
+		assert.ok(Date.now() - started < 1000, `${cancel} waited for the login`);
+		assert.equal(h.stored(), undefined);
+	}
+});
+
+test("logout removes unreadable credentials", async () => {
+	const h = harness();
+	await loginWith(h);
+	h.corruptCredentials();
+	assert.deepEqual(await h.coordinator.logout(), { wasRunning: false, hadCredentials: true });
+	assert.equal(h.stored(), undefined);
+});
+
+test("the bridge stops instead of retrying when the token is revoked or another poller holds the bot", async () => {
+	for (const [error, code] of [[apiError(401, "Unauthorized"), "invalid-token"], [apiError(409, "Conflict: terminated by other getUpdates request"), "bridge-conflict"]] as const) {
+		const h = harness();
+		await loginWith(h);
+		h.telegram.pollFailures.push(error);
+		let stopped: unknown;
+		await h.coordinator.start({ onStopped: (reason) => { stopped = reason; } });
+		await until(() => stopped !== undefined);
+		assert.equal((stopped as { code: string }).code, code);
+		assert.equal(h.coordinator.status().running, false);
+		assert.equal((await h.coordinator.start()).alreadyRunning, false, "can start again after fixing the cause");
+		await h.coordinator.stop();
+	}
+});
+
+test("the bridge reports recovery after a transient failure", async () => {
+	const h = harness();
+	await loginWith(h);
+	h.telegram.pollFailures.push(new Error("fetch failed"));
+	const events: string[] = [];
+	await h.coordinator.start({ onError: () => events.push("error"), onRecovered: () => events.push("recovered") });
+	await until(() => events.includes("error"));
+	h.telegram.push({ chat: GROUP, from: OWNER, text: "back online" });
+	await until(() => events.includes("recovered"), 3000); // first retry waits one second
+	assert.deepEqual(events, ["error", "recovered"]);
+	assert.equal(h.coordinator.status().running, true);
+	await h.coordinator.stop();
+});
+
+test("anonymous group admins are told to post as themselves", async () => {
+	const h = harness();
+	const anonymous = h.coordinator.login({
+		token: TOKEN,
+		onHandshakeCode: (code) => { setTimeout(() => h.telegram.push({ chat: GROUP, from: ANONYMOUS_ADMIN, senderChatId: GROUP.id, text: code }), 5); },
+	});
+	await assert.rejects(anonymous, { code: "anonymous-owner" });
+
+	await loginWith(h);
+	const received: AuthorizedMessage[] = [];
+	await h.coordinator.start({ onMessage: async (message) => { received.push(message); } });
+	h.telegram.sent = [];
+	h.telegram.push({ chat: GROUP, from: ANONYMOUS_ADMIN, senderChatId: GROUP.id, text: "anonymous prompt" });
+	await until(() => h.telegram.sent.some((message) => /anonymous/i.test(message.text)));
+	assert.equal(received.length, 0);
+	await h.coordinator.stop();
 });

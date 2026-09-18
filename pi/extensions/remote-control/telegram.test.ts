@@ -36,6 +36,7 @@ test("maps Bot API payloads to remote-control types", async () => {
 		message: {
 			messageId: 3, threadId: 501, text: "hi",
 			from: { id: 42, isBot: false, username: "owner" },
+			senderChatId: undefined,
 			chat: { id: -1001, type: "supergroup", title: "Pi", username: undefined, isForum: true },
 		},
 	}]);

@@ -85,6 +85,11 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			const { alreadyRunning, credentials } = await coordinator.start({
 				onMessage: async (message) => ctx.ui.notify(`Telegram: ${message.text}`, "info"),
 				onError: (error) => ctx.ui.setStatus(STATUS_KEY, `rc: reconnecting (${describe(error)})`),
+				onRecovered: () => ctx.ui.setStatus(STATUS_KEY, "rc: on"),
+				onStopped: (reason) => {
+					ctx.ui.setStatus(STATUS_KEY, undefined);
+					ctx.ui.notify(`Remote control stopped: ${reason.message}`, "error");
+				},
 			});
 			ctx.ui.setStatus(STATUS_KEY, "rc: on");
 			ctx.ui.notify(alreadyRunning ? "Remote control is already running." : `Remote control started in ${credentials.group.title ?? "Telegram"}.`, "info");
@@ -113,38 +118,46 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		},
 		handler: async (args, ctx) => {
 			const subcommand = args.trim().split(/\s+/)[0] || "start";
-			switch (subcommand) {
-				case "start":
-					return start(ctx);
-				case "stop": {
-					const wasRunning = await coordinator.stop();
-					ctx.ui.setStatus(STATUS_KEY, undefined);
-					ctx.ui.notify(wasRunning ? "Remote control stopped." : "Remote control was not running.", "info");
-					return;
-				}
-				case "status":
-					return status(ctx);
-				case "login":
-					return login(ctx);
-				case "logout": {
-					const { hadCredentials } = await coordinator.logout();
-					ctx.ui.setStatus(STATUS_KEY, undefined);
-					ctx.ui.notify(
-						hadCredentials
-							? "Remote control stopped and local credentials removed. Revoke the token in @BotFather to disable the bot entirely."
-							: "Remote control was not logged in.",
-						"info",
-					);
-					return;
-				}
-				default:
-					ctx.ui.notify(`Unknown /rc command: ${subcommand}. Use ${SUBCOMMANDS.map((item) => item.value).join(", ")}.`, "error");
+			try {
+				await run(subcommand, ctx);
+			} catch (error) {
+				ctx.ui.notify(`/rc ${subcommand} failed: ${describe(error)}`, "error");
 			}
 		},
 	});
 
+	async function run(subcommand: string, ctx: ExtensionCommandContext): Promise<void> {
+		switch (subcommand) {
+			case "start":
+				return start(ctx);
+			case "stop": {
+				const wasRunning = await coordinator.stop();
+				ctx.ui.setStatus(STATUS_KEY, undefined);
+				ctx.ui.notify(wasRunning ? "Remote control stopped." : "Remote control was not running.", "info");
+				return;
+			}
+			case "status":
+				return status(ctx);
+			case "login":
+				return login(ctx);
+			case "logout": {
+				const { hadCredentials } = await coordinator.logout();
+				ctx.ui.setStatus(STATUS_KEY, undefined);
+				ctx.ui.notify(
+					hadCredentials
+						? "Remote control stopped and local credentials removed. Revoke the token in @BotFather to disable the bot entirely."
+						: "Remote control was not logged in.",
+					"info",
+				);
+				return;
+			}
+			default:
+				ctx.ui.notify(`Unknown /rc command: ${subcommand}. Use ${SUBCOMMANDS.map((item) => item.value).join(", ")}.`, "error");
+		}
+	}
+
 	// Pi tears down this extension instance on quit, reload, and session switches;
-	// the bridge must never outlive it.
+	// the bridge must never outlive it. This also cancels a pending login.
 	pi.on("session_shutdown", async () => {
 		await coordinator.stop();
 	});

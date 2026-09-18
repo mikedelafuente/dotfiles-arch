@@ -87,7 +87,15 @@ export type TelegramChat = {
 	isForum?: boolean;
 };
 
-export type TelegramMessage = { messageId: number; chat: TelegramChat; from?: TelegramUser; threadId?: number; text?: string };
+export type TelegramMessage = {
+	messageId: number;
+	chat: TelegramChat;
+	from?: TelegramUser;
+	/** Set when a chat posts as itself; equals `chat.id` for anonymous group admins. */
+	senderChatId?: number;
+	threadId?: number;
+	text?: string;
+};
 
 export type TelegramUpdate = { updateId: number; message?: TelegramMessage };
 
@@ -96,7 +104,10 @@ export type TelegramChatMember = {
 	canManageTopics?: boolean;
 };
 
-/** The subset of the Telegram Bot API remote control uses, bound to one bot token. */
+/**
+ * The subset of the Telegram Bot API remote control uses, bound to one bot token.
+ * Bot API failures reject with an error carrying the API's numeric `errorCode`.
+ */
 export interface TelegramBotApi {
 	getMe(): Promise<TelegramUser>;
 	/** Long-polls for updates. `offset: -1` returns only the newest pending update. */
@@ -130,7 +141,12 @@ export type LoginOptions = {
 
 export type StartOptions = {
 	onMessage?(message: AuthorizedMessage): Promise<void>;
+	/** A recoverable failure; polling retries with backoff. */
 	onError?(error: unknown): void;
+	/** Polling works again after one or more onError calls. */
+	onRecovered?(): void;
+	/** The bridge stopped itself because retrying cannot succeed. */
+	onStopped?(reason: RemoteControlError): void;
 };
 
 export type RemoteControlStatus = {
@@ -158,6 +174,9 @@ export class RemoteControlError extends Error {
 		| "invalid-token"
 		| "invalid-group"
 		| "login-timeout"
+		| "login-cancelled"
+		| "anonymous-owner"
+		| "bridge-conflict"
 		| "not-logged-in";
 
 	constructor(code: RemoteControlError["code"], message: string) {
@@ -179,6 +198,18 @@ const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+const ANONYMOUS_OWNER_MESSAGE = "Anonymous admin messages cannot be verified; turn off Remain anonymous for your account in this group.";
+
+/** Bot API failures that retrying cannot fix: the bridge must stop instead. */
+function fatalPollError(error: unknown): RemoteControlError | undefined {
+	const code = (error as { errorCode?: number } | undefined)?.errorCode;
+	if (code === 401 || code === 404) return new RemoteControlError("invalid-token", "Telegram rejected the bot token; run /rc login again.");
+	if (code === 409) {
+		return new RemoteControlError("bridge-conflict", "Another process is polling this bot (another Pi running /rc, or a webhook is set).");
+	}
+	return undefined;
 }
 
 function isCredentials(value: unknown): value is RemoteControlCredentials {
@@ -233,6 +264,7 @@ export class RemoteControlCoordinator {
 	private creationTail: Promise<void> = Promise.resolve();
 	private bridge?: { abort: AbortController; done: Promise<void>; credentials: RemoteControlCredentials; api: TelegramBotApi };
 	private lifecycleTail: Promise<void> = Promise.resolve();
+	private pendingLogin?: AbortController;
 
 	private readonly adapters: RemoteControlAdapters;
 	private readonly now: () => Date;
@@ -363,24 +395,35 @@ export class RemoteControlCoordinator {
 
 			const code = `rc-${randomBytes(4).toString("hex")}`;
 			const deadline = AbortSignal.timeout(options.timeoutMs ?? LOGIN_TIMEOUT_MS);
-			const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+			// stop(), logout(), and Pi shutdown cancel a pending handshake rather than wait for it.
+			const cancel = new AbortController();
+			this.pendingLogin = cancel;
+			const signal = AbortSignal.any([deadline, cancel.signal, ...(options.signal ? [options.signal] : [])]);
 			let offset = await drainUpdates(api);
 			await options.onHandshakeCode(code, bot);
 
 			let handshake: TelegramMessage | undefined;
-			while (!handshake) {
-				let updates: TelegramUpdate[];
-				try {
-					updates = await api.getUpdates({ offset, timeoutSeconds: POLL_TIMEOUT_SECONDS, signal });
-				} catch (error) {
-					if (deadline.aborted) throw new RemoteControlError("login-timeout", "No login code arrived from Telegram in time.");
-					throw error;
+			try {
+				while (!handshake) {
+					let updates: TelegramUpdate[];
+					try {
+						signal.throwIfAborted();
+						updates = await api.getUpdates({ offset, timeoutSeconds: POLL_TIMEOUT_SECONDS, signal });
+					} catch (error) {
+						if (cancel.signal.aborted) throw new RemoteControlError("login-cancelled", "Remote control login was cancelled.");
+						if (deadline.aborted) throw new RemoteControlError("login-timeout", "No login code arrived from Telegram in time.");
+						throw error;
+					}
+					for (const update of updates) {
+						offset = update.updateId + 1;
+						const message = update.message;
+						if (!message?.text?.trim().split(/\s+/).includes(code)) continue;
+						if (message.senderChatId === message.chat.id) throw new RemoteControlError("anonymous-owner", ANONYMOUS_OWNER_MESSAGE);
+						if (message.from && !message.from.isBot) handshake = message;
+					}
 				}
-				for (const update of updates) {
-					offset = update.updateId + 1;
-					const words = update.message?.text?.trim().split(/\s+/) ?? [];
-					if (words.includes(code) && update.message?.from && !update.message.from.isBot) handshake = update.message;
-				}
+			} finally {
+				this.pendingLogin = undefined;
 			}
 			// Acknowledge the handshake so the bridge never replays it.
 			await api.getUpdates({ offset, timeoutSeconds: 0 });
@@ -419,9 +462,11 @@ export class RemoteControlCoordinator {
 
 	/** Stops the bridge and removes local credentials. Revoking the token itself is a BotFather operation. */
 	logout(): Promise<{ wasRunning: boolean; hadCredentials: boolean }> {
+		this.pendingLogin?.abort();
 		return this.withLifecycleLock(async () => {
 			const wasRunning = await this.stopLocked();
-			const hadCredentials = (await this.adapters.credentials.read()) !== undefined;
+			// An unreadable credentials file still counts as present and must still be removed.
+			const hadCredentials = await this.adapters.credentials.read().then((stored) => stored !== undefined, () => true);
 			await this.adapters.credentials.clear();
 			return { wasRunning, hadCredentials };
 		});
@@ -449,16 +494,18 @@ export class RemoteControlCoordinator {
 			const offset = await drainUpdates(api);
 
 			const abort = new AbortController();
-			const done = this.poll(api, credentials, offset, abort.signal, options);
-			this.bridge = { abort, done, credentials, api };
+			const bridge = { abort, done: Promise.resolve(), credentials, api };
+			this.bridge = bridge;
+			bridge.done = this.poll(api, credentials, offset, abort.signal, options);
 			await api.sendMessage({ chatId: credentials.group.id, threadId: credentials.group.controlTopicId, text: "Remote control started." })
 				.catch((error) => options.onError?.(error));
 			return { alreadyRunning: false, credentials };
 		});
 	}
 
-	/** Stops accepting remote messages. Returns whether the bridge was running. */
+	/** Stops accepting remote messages and cancels a pending login. Returns whether the bridge was running. */
 	stop(): Promise<boolean> {
+		this.pendingLogin?.abort();
 		return this.withLifecycleLock(() => this.stopLocked());
 	}
 
@@ -499,6 +546,7 @@ export class RemoteControlCoordinator {
 	): Promise<void> {
 		let offset = initialOffset;
 		let retryDelay = 1000;
+		let failing = false;
 		const rejected = new Set<string>();
 		const reject = async (message: TelegramMessage, key: string, text: string) => {
 			if (rejected.has(key)) return;
@@ -511,9 +559,18 @@ export class RemoteControlCoordinator {
 			try {
 				updates = await api.getUpdates({ offset, timeoutSeconds: POLL_TIMEOUT_SECONDS, signal });
 				retryDelay = 1000;
+				if (failing) options.onRecovered?.();
+				failing = false;
 			} catch (error) {
 				if (signal.aborted) return;
+				const fatal = fatalPollError(error);
+				if (fatal) {
+					if (this.bridge?.abort.signal === signal) this.bridge = undefined;
+					options.onStopped?.(fatal);
+					return;
+				}
 				// Network or Telegram outages never stop the bridge; retry with backoff.
+				failing = true;
 				options.onError?.(error);
 				await sleep(retryDelay, signal);
 				retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY_MS);
@@ -523,9 +580,13 @@ export class RemoteControlCoordinator {
 				if (signal.aborted) return;
 				offset = update.updateId + 1;
 				const message = update.message;
-				if (!message?.from || message.from.isBot) continue;
+				if (!message?.from) continue;
 				try {
-					if (message.from.id !== credentials.owner.id) {
+					if (message.chat.id === credentials.group.id && message.senderChatId === credentials.group.id) {
+						await reject(message, "anonymous", ANONYMOUS_OWNER_MESSAGE);
+					} else if (message.from.isBot) {
+						continue;
+					} else if (message.from.id !== credentials.owner.id) {
 						await reject(message, `user:${message.from.id}`, "Not authorized: this bot only accepts its owner.");
 					} else if (message.chat.id !== credentials.group.id) {
 						await reject(message, `chat:${message.chat.id}`, "Remote control only accepts messages in the approved forum group.");

@@ -5,7 +5,14 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 type RawUser = { id: number; is_bot: boolean; username?: string };
 type RawChat = { id: number; type: TelegramChat["type"]; title?: string; username?: string; is_forum?: boolean };
-type RawMessage = { message_id: number; message_thread_id?: number; text?: string; from?: RawUser; chat: RawChat };
+type RawMessage = {
+	message_id: number;
+	message_thread_id?: number;
+	text?: string;
+	from?: RawUser;
+	sender_chat?: { id: number };
+	chat: RawChat;
+};
 type RawUpdate = { update_id: number; message?: RawMessage };
 type RawChatMember = { status: TelegramChatMember["status"]; can_manage_topics?: boolean };
 
@@ -60,6 +67,7 @@ export function createTelegramBotApi(token: string, fetchImpl: typeof fetch = fe
 					threadId: update.message.message_thread_id,
 					text: update.message.text,
 					from: update.message.from && user(update.message.from),
+					senderChatId: update.message.sender_chat?.id,
 					chat: chat(update.message.chat),
 				},
 			}));

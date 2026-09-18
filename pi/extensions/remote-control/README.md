@@ -43,7 +43,15 @@ stopped. While it runs:
 
 - Messages from anyone but the owner get one "not authorized" reply per user.
 - Owner messages outside the approved group get one rejection reply per chat.
-- Telegram or network failures are retried with backoff; the bridge keeps running.
+- Messages posted with "Remain anonymous" cannot be tied to the owner and get
+  one reply asking to turn it off (login rejects an anonymous code the same way).
+- Network failures are retried with backoff; the status line returns to
+  `rc: on` once polling recovers.
+- A revoked token (401) or another poller on the same bot (409: a second Pi
+  running `/rc`, or a webhook) stops the bridge with an error instead of retrying.
+
+`/rc stop`, `/rc logout`, and Pi shutdown also cancel a login that is still
+waiting for its code.
 
 Owner messages in the group are currently shown as local notifications; routing
 them into Pi sessions is not implemented yet.
