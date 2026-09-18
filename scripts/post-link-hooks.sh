@@ -29,6 +29,11 @@ refresh_font_cache
 bash "$DF_SCRIPT_DIR/migrate.sh"
 
 # --------------------------
+# Sync Pi extensions from all configured sources
+# --------------------------
+bash "$DF_SCRIPT_DIR/sync-extensions.sh"
+
+# --------------------------
 # Sync personal skills (Claude Code / Cursor / Codex / Pi)
 # --------------------------
 bash "$DF_SCRIPT_DIR/sync-skills.sh"

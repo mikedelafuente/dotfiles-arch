@@ -21,10 +21,10 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ### Day-to-day updates (preferred)
 
 ```bash
-dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
+dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-extensions + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
 dfa-weekly                        # dfa-daily + a forced dfa-update-system + dfa-remove-orphans — reach for this ~weekly
-dfa-sync-sources add /path/to/repo # optional: extra rules/skills repo (work-specific); then dfa-sync-skills && dfa-sync-rules
+dfa-sync-sources add /path/to/repo # optional: extra rules/skills/extensions repo; then dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
 bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
@@ -125,7 +125,9 @@ With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only r
 ### Pi configuration
 
 Shared Pi configuration lives under [`pi/`](pi/) and is linked into `~/.pi/agent` by
-`link-dotfiles.sh` (including extensions, settings, and model configuration). Pi's machine-local credentials — `auth.json` — remain local and are never
+`link-dotfiles.sh` (settings and model configuration). Pi extensions live under
+[`extensions/`](extensions/) and are synced from dotfiles-arch plus configured extra
+sources by `dfa-sync-extensions`. Pi's machine-local credentials — `auth.json` — remain local and are never
 committed. The shared model catalog (`models-store.json`) is version-controlled,
 so model availability stays consistent across machines. Global `AGENTS.md` is generated from the
 repository's synced rules and linked by `sync-rules.sh`.
@@ -237,7 +239,7 @@ Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap a
 | `Ctrl+B` `n` / `p` | Next / previous window |
 | `Ctrl+B` `?` | All bindings |
 
-Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) starts that CLI in the split pane. Without `--agent`, `dev --tmux` uses `DEFAULT_HARNESS` — set during `setup-dev.sh` (auto-picked if only one harness CLI is installed, asked with a numbered list if several are) — and falls back gracefully at runtime if that saved default's CLI has gone stale (silently to the sole installed harness, an interactive prompt if several remain, a plain shell if none are installed). Claude's and Codex's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-codex.sh`. `dfa-sync-skills` and `dfa-sync-rules` keep shared skills and always-apply rules available to detected Codex installations under `$CODEX_HOME` (default `~/.codex`).
+Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) starts that CLI in the split pane. Without `--agent`, `dev --tmux` uses `DEFAULT_HARNESS` — set during `setup-dev.sh` (auto-picked if only one harness CLI is installed, asked with a numbered list if several are) — and falls back gracefully at runtime if that saved default's CLI has gone stale (silently to the sole installed harness, an interactive prompt if several remain, a plain shell if none are installed). Claude's and Codex's file edits automatically reveal themselves in the Neovim pane (loaded into the edit window like a nvim-tree click, or focused/reloaded in place if already open) via the `nvim-reveal-edit` hook installed by `setup-claude.sh`/`setup-codex.sh`. `dfa-sync-extensions`, `dfa-sync-skills`, and `dfa-sync-rules` keep shared Pi extensions, skills, and always-apply rules available to detected Codex installations under `$CODEX_HOME` (default `~/.codex`).
 
 **Zed:** a Terminal Thread (Agent Panel → "+" → Terminal, or `Ctrl+Alt+T` — see `config/zed/keymap.json`) runs `zed-agent-init`, which starts the same `DEFAULT_HARNESS` CLI as `dev --tmux` (with the same stale-default fallback) — no separate reveal hook is needed since the agent runs inside the same Zed window as the editor, so Zed's own file watcher picks up its edits.
 
