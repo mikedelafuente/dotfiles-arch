@@ -125,8 +125,7 @@ done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
 # Link Pi (coding agent) config files into ~/.pi/agent
 # --------------------------
 # Everything under pi/ is shared and version-controlled. Machine-local files
-# like auth.json and models-store.json are intentionally not in the repo and
-# are left untouched.
+# like auth.json are intentionally not in the repo and are left untouched.
 
 PI_SOURCE_DIR="$REPO_ROOT/pi"
 PI_TARGET_DIR="$USER_HOME_DIR/.pi/agent"

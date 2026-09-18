@@ -125,9 +125,9 @@ With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only r
 ### Pi configuration
 
 Shared Pi configuration lives under [`pi/`](pi/) and is linked into `~/.pi/agent` by
-`link-dotfiles.sh` (including extensions, settings, and model configuration). Pi's
-machine-local credentials and runtime state — `auth.json` and `models-store.json` —
-remain local and are never committed. Global `AGENTS.md` is generated from the
+`link-dotfiles.sh` (including extensions, settings, and model configuration). Pi's machine-local credentials — `auth.json` — remain local and are never
+committed. The shared model catalog (`models-store.json`) is version-controlled,
+so model availability stays consistent across machines. Global `AGENTS.md` is generated from the
 repository's synced rules and linked by `sync-rules.sh`.
 
 ---
