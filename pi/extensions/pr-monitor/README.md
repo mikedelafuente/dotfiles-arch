@@ -31,7 +31,7 @@ monitorable rather than being treated as failures.
 - `pr` — required pull request number or URL.
 - `repo` — optional `OWNER/REPO`; defaults to the current repository used by
   `gh`.
-- `pollIntervalSeconds` — optional polling interval, minimum 5 seconds.
+- `pollIntervalSeconds` — optional polling interval, minimum 10 seconds (default: 10).
 - `timeoutMinutes` — optional maximum wait, minimum 1 minute.
 
 The tool requires the authenticated GitHub CLI (`gh`) and access to the

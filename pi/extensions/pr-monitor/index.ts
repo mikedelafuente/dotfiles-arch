@@ -16,7 +16,7 @@ const monitorPrSchema = Type.Object({
 	pr: Type.String({ description: "Pull request number or URL" }),
 	repo: Type.Optional(Type.String({ description: "GitHub repository (OWNER/REPO); defaults to the current repository" })),
 	pollIntervalSeconds: Type.Optional(
-		Type.Integer({ description: "Seconds between checks (default: 30)", minimum: 5, default: 30 }),
+		Type.Integer({ description: "Seconds between checks (default: 10)", minimum: 10, default: 10 }),
 	),
 	timeoutMinutes: Type.Optional(
 		Type.Integer({ description: "Maximum monitoring time in minutes (default: 30)", minimum: 1, default: 30 }),
@@ -25,7 +25,7 @@ const monitorPrSchema = Type.Object({
 
 export type MonitorPrInput = Static<typeof monitorPrSchema>;
 
-type PullRequest = {
+export type PullRequest = {
 	number: number;
 	title: string;
 	state: "OPEN" | "CLOSED";
@@ -37,7 +37,7 @@ type PullRequest = {
 	baseRefName: string;
 };
 
-type Check = {
+export type Check = {
 	name: string;
 	state: string;
 	bucket: string;
@@ -55,14 +55,20 @@ type MonitorDetails = {
 
 type CommandError = Error & { stdout?: string; stderr?: string };
 
-async function ghJson<T>(args: string[], signal: AbortSignal | undefined): Promise<T> {
-	const result = await execFileAsync("gh", args, { encoding: "utf8", signal });
+async function ghJson<T>(args: string[], signal: AbortSignal | undefined, cwd = process.cwd()): Promise<T> {
+	const result = await execFileAsync("gh", args, { cwd, encoding: "utf8", signal });
 	return JSON.parse(result.stdout) as T;
 }
 
-async function getChecks(args: string[], signal: AbortSignal | undefined): Promise<Check[]> {
+export async function getPullRequestChecks(
+	pr: string,
+	repo: string | undefined,
+	signal: AbortSignal | undefined,
+	cwd = process.cwd(),
+): Promise<Check[]> {
+	const repoArgs = repo ? ["--repo", repo] : [];
 	try {
-		return await ghJson<Check[]>(["pr", "checks", ...args, "--json", "name,state,bucket,link"], signal);
+		return await ghJson<Check[]>(["pr", "checks", pr, ...repoArgs, "--json", "name,state,bucket,link"], signal, cwd);
 	} catch (error) {
 		const commandError = error as CommandError;
 		if (!commandError.stdout?.trim()) throw error;
@@ -70,19 +76,33 @@ async function getChecks(args: string[], signal: AbortSignal | undefined): Promi
 	}
 }
 
-function failedCheck(check: Check): boolean {
+export async function getPullRequest(
+	pr: string,
+	repo: string | undefined,
+	signal: AbortSignal | undefined,
+	cwd = process.cwd(),
+): Promise<PullRequest> {
+	const repoArgs = repo ? ["--repo", repo] : [];
+	return ghJson<PullRequest>(
+		["pr", "view", pr, ...repoArgs, "--json", "number,title,state,isDraft,mergeStateStatus,mergedAt,url,headRefName,baseRefName"],
+		signal,
+		cwd,
+	);
+}
+
+export function failedCheck(check: Check): boolean {
 	return ["fail", "failure", "error", "cancelled", "timed_out"].includes(
 		(check.bucket || check.state).toLowerCase(),
 	);
 }
 
-function pendingCheck(check: Check): boolean {
+export function pendingCheck(check: Check): boolean {
 	return ["pending", "queued", "in_progress", "expected"].includes(
 		(check.bucket || check.state).toLowerCase(),
 	);
 }
 
-function formatChecks(checks: Check[]): string {
+export function formatChecks(checks: Check[]): string {
 	if (checks.length === 0) return "no checks reported";
 	const failed = checks.filter(failedCheck).length;
 	const pending = checks.filter(pendingCheck).length;
@@ -132,10 +152,8 @@ export default function prMonitorExtension(pi: ExtensionAPI): void {
 		executionMode: "sequential",
 
 		async execute(_toolCallId, params: MonitorPrInput, signal, onUpdate) {
-			const intervalSeconds = params.pollIntervalSeconds ?? 30;
+			const intervalSeconds = params.pollIntervalSeconds ?? 10;
 			const timeoutMinutes = params.timeoutMinutes ?? 30;
-			const repoArgs = params.repo ? ["--repo", params.repo] : [];
-			const prArgs = [params.pr, ...repoArgs];
 			const startedAt = Date.now();
 			let polls = 0;
 
@@ -146,11 +164,8 @@ export default function prMonitorExtension(pi: ExtensionAPI): void {
 			try {
 				while (true) {
 					polls++;
-					const pr = await ghJson<PullRequest>(
-						["pr", "view", ...prArgs, "--json", "number,title,state,isDraft,mergeStateStatus,mergedAt,url,headRefName,baseRefName"],
-						signal,
-					);
-					const checks = await getChecks(prArgs, signal);
+					const pr = await getPullRequest(params.pr, params.repo, signal);
+					const checks = await getPullRequestChecks(params.pr, params.repo, signal);
 					const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
 					const baseDetails = { pr, checks, polls, elapsedSeconds };
 
