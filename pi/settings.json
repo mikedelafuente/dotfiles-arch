@@ -1,0 +1,18 @@
+{
+  "lastChangelogVersion": "0.85.1",
+  "theme": "dark",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-luna",
+  "enabledModels": [
+    "openrouter/openrouter/auto",
+    "openrouter/z-ai/glm-5.3",
+    "openrouter/deepseek/deepseek-v4-flash-0731",
+    "ollama/qwen2.5:7b",
+    "ollama/qwen2.5-coder:7b",
+    "openrouter/openai/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-5.6-sol"
+  ],
+  "defaultThinkingLevel": "medium"
+}

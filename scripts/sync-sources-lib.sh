@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Sync-sources domain: config CRUD (add/remove/list extra rules/skills source
-# repos) plus the link/prune helpers used by sync-rules.sh and sync-skills.sh.
+# Sync-sources domain: config CRUD (add/remove/list extra rules/skills/extensions
+# source repos) plus the link/prune helpers used by the sync scripts.
 # Expects fn-lib.sh (print_*, bootstrap_config_dir) to be loaded.
 #
 # Each configured source has a type:
-#   standard    — repo root has rules/ and/or skills/ (skill dirs) under it,
+#   standard    — repo root has rules/, skills/, and/or extensions/ under it,
 #                 same layout as dotfiles-arch itself.
 #   skills-root — the path itself IS a flat folder of skill dirs (no skills/
 #                 subdir). Useful for a subfolder of someone else's skills repo,
 #                 e.g. mattpocock/skills/skills/engineering.
 #   rules-root  — the path itself IS a flat folder of rule files (no rules/
 #                 subdir).
+#   extensions-root — the path itself IS a flat folder of Pi extensions (no
+#                     extensions/ subdir).
 #
 # Config file lines: bare "path" means standard (for backwards compatibility);
 # "type:path" is explicit. Comments (#) and blank lines are ignored.
@@ -39,7 +41,7 @@
 #     (rules-build/pi-agents.md) and symlinked there (see
 #     build_pi_agents_file / sync_pi_agents_file).
 
-SYNC_SOURCE_KNOWN_TYPES=(standard skills-root rules-root)
+SYNC_SOURCE_KNOWN_TYPES=(standard skills-root rules-root extensions-root)
 
 # True when type is one of SYNC_SOURCE_KNOWN_TYPES.
 is_valid_sync_source_type() {
@@ -67,8 +69,9 @@ _parse_sync_source_line() {
   local line="${1:-}" type path
   case "$line" in
     skills-root:*) type="skills-root" path="${line#skills-root:}" ;;
-    rules-root:*)  type="rules-root"  path="${line#rules-root:}" ;;
-    standard:*)    type="standard"    path="${line#standard:}" ;;
+    rules-root:*)      type="rules-root"      path="${line#rules-root:}" ;;
+    extensions-root:*) type="extensions-root" path="${line#extensions-root:}" ;;
+    standard:*)        type="standard"        path="${line#standard:}" ;;
     *)             type="standard"    path="$line" ;;
   esac
   [[ -n "$path" ]] || return 1
@@ -135,9 +138,10 @@ write_sync_source_repos() {
   mkdir -p "$dir"
   {
     echo "# Extra rules/skills source repos, one per line: path | type:path"
-    echo "# Types: standard (default, has rules/ + skills/ subdirs), skills-root"
-    echo "# (path is itself a flat folder of skill dirs), rules-root (path is"
-    echo "# itself a flat folder of *.mdc files)."
+    echo "# Types: standard (default, has rules/ + skills/ + extensions/ subdirs),"
+    echo "# skills-root (path is itself a flat folder of skill dirs), rules-root"
+    echo "# (path is itself a flat folder of *.mdc files), extensions-root (path is"
+    echo "# itself a flat folder of Pi extensions)."
     echo "# Managed by dfa-sync-sources add/remove — dotfiles-arch is always primary"
     for i in "${!SYNC_SOURCE_REPOS[@]}"; do
       path="${SYNC_SOURCE_REPOS[$i]}"
@@ -184,8 +188,8 @@ add_sync_source_repo() {
   write_sync_source_repos
   case "$type" in
     standard)
-      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" ]]; then
-        print_warning_message "No rules/ or skills/ under $normalized — nothing to sync until you add them"
+      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" ]]; then
+        print_warning_message "No rules/, skills/, or extensions/ under $normalized — nothing to sync until you add them"
       fi
       ;;
     skills-root)
@@ -196,6 +200,11 @@ add_sync_source_repo() {
     rules-root)
       if [[ -z "$(find "$normalized" -mindepth 1 -maxdepth 1 -type f \( -name '*.mdc' -o -name '*.md' \) -print -quit 2>/dev/null)" ]]; then
         print_warning_message "No *.mdc/*.md files under $normalized — nothing to sync until rule files appear"
+      fi
+      ;;
+    extensions-root)
+      if [[ -z "$(find "$normalized" -mindepth 1 -maxdepth 1 \( -type f -o -type d \) -print -quit 2>/dev/null)" ]]; then
+        print_warning_message "No extension entries under $normalized — nothing to sync until extensions appear"
       fi
       ;;
   esac
@@ -275,9 +284,9 @@ sync_source_raw_rules_dir() {
 }
 
 # Effective directory to scan for a given source (repo_root, type, kind),
-# where kind is "rules" or "skills" (stdout). Returns 1 when this
-# source/kind combination doesn't apply (e.g. a skills-root source has no
-# rules to contribute).
+# where kind is "rules", "skills", or "extensions" (stdout). Returns 1 when
+# this source/kind combination doesn't apply (e.g. a skills-root source has no
+# rules or extensions to contribute).
 #
 # For "rules", this is the source's *build output* dir (see
 # build_sync_source_rules), not its raw rules dir — every source's rules are
@@ -288,6 +297,8 @@ sync_source_effective_dir() {
     rules:standard | rules:rules-root) echo "$(sync_source_rules_build_dir "$repo_root")/mdc" ;;
     skills:standard) echo "$repo_root/skills" ;;
     skills:skills-root) echo "$repo_root" ;;
+    extensions:standard) echo "$repo_root/extensions" ;;
+    extensions:extensions-root) echo "$repo_root" ;;
     *) return 1 ;;
   esac
 }
@@ -456,6 +467,55 @@ sync_skills_from_repo() {
     _sync_skills_linked_names["$skill_name"]="$repo_root"
     SYNC_SKILLS_LINKED_COUNT=$((SYNC_SKILLS_LINKED_COUNT + 1))
   done < <(find "$skills_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+}
+
+# Link extension files/directories from a source into Pi's extensions dir. Later
+# sources override earlier ones by basename. Extensions are intentionally linked
+# as entries rather than copied so edits remain in their source repo.
+sync_extensions_from_repo() {
+  local repo_root="${1:-}" type="${2:-}" target_dir="${3:-}" extensions_dir entry extension_name
+
+  extensions_dir="$(sync_source_effective_dir "$repo_root" "$type" extensions)" || return 0
+  [[ -d "$extensions_dir" ]] || return 0
+
+  while IFS= read -r -d '' entry; do
+    extension_name="$(basename "$entry")"
+    if [[ -n "${_sync_extensions_linked_names[$extension_name]:-}" ]]; then
+      print_warning_message "Overriding extension $extension_name (was ${_sync_extensions_linked_names[$extension_name]}) with $repo_root"
+    fi
+    if [[ -e "$target_dir/$extension_name" && ! -L "$target_dir/$extension_name" ]]; then
+      print_action_message "Removing local (non-symlinked) extension, superseded by source: $target_dir/$extension_name"
+      rm -rf "${target_dir:?}/$extension_name"
+    fi
+    ln -sfn "$entry" "$target_dir/$extension_name"
+    print_info_message "Linked: $target_dir/$extension_name"
+    _sync_extensions_linked_names["$extension_name"]="$repo_root"
+    SYNC_EXTENSIONS_LINKED_COUNT=$((SYNC_EXTENSIONS_LINKED_COUNT + 1))
+  done < <(find "$extensions_dir" -mindepth 1 -maxdepth 1 \( -type f -o -type d \) -print0)
+}
+
+# Prune managed extension symlinks whose source is no longer configured.
+prune_managed_extension_symlinks() {
+  local target_dir="${1:-}" entry resolved parent i eff_dir
+  local -A expected_dirs=()
+
+  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+    if eff_dir="$(sync_source_effective_dir "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}" extensions)"; then
+      expected_dirs["$eff_dir"]=1
+    fi
+  done
+
+  while IFS= read -r -d '' entry; do
+    [[ -L "$entry" ]] || continue
+    resolved="$(_sync_sources_abs_symlink_target "$entry")"
+    [[ -n "$resolved" ]] || continue
+    parent="$(dirname "$resolved")"
+    if [[ -z "${expected_dirs[$parent]:-}" ]]; then
+      print_action_message "Removing extension symlink from unlisted/removed source: $entry"
+      rm -f "$entry"
+      SYNC_EXTENSIONS_PRUNED_COUNT=$((SYNC_EXTENSIONS_PRUNED_COUNT + 1))
+    fi
+  done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -type l -print0)
 }
 
 # Prune managed symlinks in target_dir for rules or skills (kind = rules|skills).

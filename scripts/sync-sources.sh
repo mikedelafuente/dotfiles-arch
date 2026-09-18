@@ -1,17 +1,19 @@
 #!/bin/bash
 # --------------------------
-# Manage extra rules/skills source repos
+# Manage extra rules/skills/extensions source repos
 # --------------------------
 # dotfiles-arch is always the primary source; this command lists, adds, or
-# removes additional sources synced by dfa-sync-rules and dfa-sync-skills.
-# Each source has a type:
-#   standard    (default) — the path has rules/ and/or skills/ subdirs, same
+# removes additional sources synced by dfa-sync-rules, dfa-sync-skills, and
+# dfa-sync-extensions. Each source has a type:
+#   standard    (default) — the path has rules/, skills/, and/or extensions/ subdirs, same
 #               layout as dotfiles-arch itself.
 #   skills-root — the path itself IS a flat folder of skill dirs (no skills/
 #               subdir). Useful for a subfolder of someone else's skills repo,
 #               e.g. ~/repos/mattpocock/skills/skills/engineering.
 #   rules-root  — the path itself IS a flat folder of *.mdc files (no rules/
 #               subdir).
+#   extensions-root — the path itself IS a flat folder of Pi extensions (no
+#               extensions/ subdir).
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -33,7 +35,7 @@ CURSOR_SKILLS_DIR="$USER_HOME_DIR/.cursor/skills"
 PI_SKILLS_DIR="$(pi_agent_dir)/skills"
 CODEX_SKILLS_DIR="$(codex_home_dir)/skills"
 
-SYNC_SOURCES_HINT="Run dfa-sync-skills && dfa-sync-rules to apply changes."
+SYNC_SOURCES_HINT="Run dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules to apply changes."
 
 cmd_list() {
   local i path type
@@ -78,7 +80,7 @@ cmd_add() {
     esac
   done
   if [[ -z "$raw" ]]; then
-    print_error_message "Usage: dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]"
+    print_error_message "Usage: dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root]"
     exit 1
   fi
   if ! add_sync_source_repo "$raw" "$type"; then
@@ -109,7 +111,7 @@ cmd_remove() {
     esac
   done
   if [[ -z "$raw" ]]; then
-    print_error_message "Usage: dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]"
+    print_error_message "Usage: dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root|extensions-root]"
     exit 1
   fi
   if [[ -n "$type" ]] && ! is_valid_sync_source_type "$type"; then
@@ -257,8 +259,8 @@ cmd_reorder() {
 usage() {
   cat <<EOF
 Usage: dfa-sync-sources list
-       dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root]
-       dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root]
+       dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root]
+       dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root|extensions-root]
        dfa-sync-sources reorder
 
 dotfiles-arch is always synced first; extra sources override on name collision.
@@ -266,9 +268,10 @@ Use 'reorder' to change extra sources' relative priority (bottom of the list
 wins on a name collision).
 
 Types:
-  standard    (default) path has rules/ and/or skills/ subdirs
+  standard    (default) path has rules/, skills/, and/or extensions/ subdirs
   skills-root path itself is a flat folder of skill dirs
   rules-root  path itself is a flat folder of *.mdc files
+  extensions-root path itself is a flat folder of Pi extensions
 
 Examples:
   dfa-sync-sources add ~/repos/someone/rules-and-skills-repo
