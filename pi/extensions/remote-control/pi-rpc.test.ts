@@ -42,7 +42,7 @@ function handle(command) {
 			writeFileSync(process.cwd() + "/state.json", JSON.stringify({ args, agentFlag: process.env.PI_REMOTE_CONTROL_AGENT }));
 			if (process.env.FAKE_PI_FAIL_STATE) return respond(undefined, false, "no model available");
 			return respond({ sessionId: id, sessionFile: file, sessionName: flag("--name"), cwd: process.cwd(), args });
-		case "get_commands": return respond({ commands });
+		case "get_commands": if (process.env.FAKE_PI_HANG_COMMANDS) return; return respond({ commands });
 		case "extension_ui_response": answers.push(command); return;
 		case "abort": case "compact": case "set_thinking_level":
 			received.push(command);
@@ -244,9 +244,9 @@ test("abort and the catalog's built-ins are sent as their RPC commands", async (
 	const agent = await h.sessions.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events);
 	t.after(() => agent.close());
 	await agent.abort();
-	assert.match(await agent.runBuiltin("compact", "keep the plan"), /120000.*30000/);
-	assert.match(await agent.runBuiltin("thinking", "high"), /high/);
-	await assert.rejects(agent.runBuiltin("thinking", "loud"), /Invalid thinking level/);
+	assert.deepEqual(await agent.compact("keep the plan"), { tokensBefore: 120000, estimatedTokensAfter: 30000 });
+	await agent.setThinkingLevel("high");
+	await assert.rejects(agent.setThinkingLevel("loud" as "high"), /Invalid thinking level/);
 	const received = JSON.parse(await readFile(join(h.root, "received.json"), "utf8")) as Record<string, unknown>[];
 	assert.deepEqual(received.map(({ id: _id, ...command }) => command), [
 		{ type: "abort" },
@@ -254,4 +254,14 @@ test("abort and the catalog's built-ins are sent as their RPC commands", async (
 		{ type: "set_thinking_level", level: "high" },
 		{ type: "set_thinking_level", level: "loud" },
 	]);
+});
+
+test("a Pi that never lists its commands still starts and takes messages", async (t) => {
+	const h = await setup(t);
+	const hanging = new RpcPiSessions({ command: [process.execPath, join(h.root, "fake-pi.mjs")], env: { FAKE_PI_HANG_COMMANDS: "1" }, commandsTimeoutMs: 50 });
+	const agent = await hanging.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events);
+	t.after(() => agent.close());
+	assert.deepEqual(await agent.commands(), []);
+	agent.prompt("go");
+	await until(() => h.activity.some((item) => item.type === "settled"), 3000);
 });

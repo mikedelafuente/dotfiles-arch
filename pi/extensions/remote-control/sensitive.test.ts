@@ -26,6 +26,21 @@ test("merges, branch deletions, deployments, and privileged commands are sensiti
 		["echo ok; doas reboot", "privileged"],
 		["(pkexec rm -rf /opt/x)", "privileged"],
 		["su -c 'id'", "privileged"],
+		["env -i git merge feature", "merge"],
+		["time -p git merge feature", "merge"],
+		["nice -n 5 git push origin --delete rc/old", "branch-deletion"],
+		["timeout 30 sudo systemctl restart nginx", "privileged"],
+		["timeout -s KILL 30 npm publish", "deployment"],
+		["echo rc/old | xargs -n 1 git branch -D", "branch-deletion"],
+		["bash -c \"sudo pacman -Syu\"", "privileged"],
+		["sh -lc 'git merge feature'", "merge"],
+		["eval \"gh pr merge 12\"", "merge"],
+		["gh -R me/app pr merge 12", "merge"],
+		["gh --repo me/app release create v2", "deployment"],
+		["git push --prune origin", "branch-deletion"],
+		["git push --mirror backup", "branch-deletion"],
+		["gh api -X DELETE repos/me/app/git/refs/heads/rc/old", "branch-deletion"],
+		["gh api --method DELETE /repos/me/app/git/refs/heads/old", "branch-deletion"],
 	];
 	for (const [command, kind] of cases) assert.equal(bash(command), kind, command);
 });
@@ -43,6 +58,12 @@ test("everyday commands are not sensitive", () => {
 		"cat deploy.md",
 		"echo sudo",
 		"ls -la",
+		"command -v sudo",
+		"type sudo",
+		"bash -c 'git status'",
+		"gh -R me/app pr view 12",
+		"gh api repos/me/app/git/refs/heads/main",
+		"env -u FOO git log",
 	]) assert.equal(bash(command), undefined, command);
 });
 

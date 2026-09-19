@@ -135,11 +135,42 @@ test("the current conversation's approvals are asked in its topic and can be wit
 	const withdrawn = h.coordinator.requestApproval("pi-current", { title: "Approve privileged command?", message: "sudo pacman -Syu" }, withdraw.signal);
 	const approval = await buttonsIn(h, topic);
 	withdraw.abort();
-	assert.equal(await withdrawn, false);
+	assert.equal(await withdrawn, undefined, "withdrawn: the owner decided nothing");
 	const late = h.telegram.press(approval, "Approve");
 	assert.match(await answered(h, late), /no longer valid/i);
 
-	assert.equal(await h.coordinator.requestApproval("someone-else", { title: "Approve merge?" }), false, "no topic routes that conversation");
+	assert.equal(await h.coordinator.requestApproval("someone-else", { title: "Approve merge?" }), undefined, "no topic routes that conversation");
+});
+
+test("an approval that cannot be posted leaves the decision to the local Pi, but denies an agent's request", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { agent, topic, current } = await withAgent(h);
+	const send = h.telegram.sendMessage.bind(h.telegram);
+	h.telegram.sendMessage = async (input) => {
+		if (input.buttons) throw new Error("fetch failed");
+		return send(input);
+	};
+	assert.equal(await h.coordinator.requestApproval(current.pi.id, { title: "Approve merge?" }), undefined);
+	assert.equal(await agent.events.confirm({ title: "Approve merge?" }), false);
+	assert.ok(!h.telegram.inTopic(topic).some((message) => message.buttons));
+});
+
+test("a stop confirmed after its run ended does not stop the next run", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { pi, topic } = await startWith(h);
+	pi.idle = false;
+	h.coordinator.recordActivity(pi.id, { type: "run-start", prompt: "first" });
+	say(h, topic, "/rc stop-agent");
+	const confirmation = await buttonsIn(h, topic);
+
+	h.coordinator.recordActivity(pi.id, { type: "response", text: "done" });
+	h.coordinator.recordActivity(pi.id, { type: "settled" });
+	h.coordinator.recordActivity(pi.id, { type: "run-start", prompt: "second" });
+	const press = h.telegram.press(confirmation, "Stop run");
+	assert.match(await answered(h, press), /no longer valid/i);
+	assert.equal(pi.aborts, 0);
 });
 
 test("/rc stop-agent in a session topic aborts the run only after confirmation", async (t) => {
@@ -245,7 +276,7 @@ test("a rebound topic invalidates approvals asked by the conversation it replace
 	const answer = h.coordinator.requestApproval("pi-current", { title: "Approve merge?" });
 	const approval = await buttonsIn(h, topic);
 	await h.coordinator.stop();
-	assert.equal(await answer, false);
+	assert.equal(await answer, undefined, "remote control stopped: the local Pi decides");
 
 	const later = new FakePiSession();
 	later.id = "pi-later";

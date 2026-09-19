@@ -37,8 +37,6 @@ const SUBCOMMANDS = [
 /** This Pi is an agent session remote control started: every sensitive operation needs the owner's approval. */
 const isAgent = process.env[AGENT_ENV] === "1";
 
-type ThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0];
-
 // Machine-local on purpose: never under ~/.pi/agent, which is partly symlinked from dotfiles.
 const configDir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "pi-remote-control");
 const stateDir = join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "pi-remote-control");
@@ -118,22 +116,8 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		return name !== undefined && discovered().some((command) => command.name === name && command.source !== "extension");
 	}
 
-	async function runBuiltin(ctx: ExtensionContext, name: string, args: string): Promise<string> {
-		switch (name) {
-			case "compact":
-				return new Promise((resolve, reject) => {
-					ctx.compact({
-						customInstructions: args || undefined,
-						onComplete: (result) => resolve(`Compacted the context from ${result.tokensBefore} to about ${result.estimatedTokensAfter ?? "?"} tokens.`),
-						onError: reject,
-					});
-				});
-			case "thinking":
-				pi.setThinkingLevel(args as ThinkingLevel);
-				return `Thinking level set to ${pi.getThinkingLevel()}.`;
-			default:
-				throw new Error(`/${name} is not a Pi built-in remote control can run.`);
-		}
+	function compact(ctx: ExtensionContext, instructions?: string): Promise<{ tokensBefore?: number; estimatedTokensAfter?: number }> {
+		return new Promise((resolve, reject) => ctx.compact({ customInstructions: instructions, onComplete: resolve, onError: reject }));
 	}
 
 	/** The current conversation as remote control drives it, with the branch it is on now. */
@@ -157,7 +141,8 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			rename: (name) => pi.setSessionName(name),
 			commands: async () => discovered(),
 			abort: async () => ctx.abort(),
-			runBuiltin: (name, args) => runBuiltin(ctx, name, args),
+			compact: (instructions) => compact(ctx, instructions),
+			setThinkingLevel: async (level) => pi.setThinkingLevel(level),
 		};
 	}
 
@@ -286,11 +271,14 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 
 	/**
 	 * Asks for approval both here and in Telegram; the first answer wins and
-	 * withdraws the other question.
+	 * withdraws the other question. When Telegram decides nothing (the approval could
+	 * not be posted, or remote control stopped), the local answer decides.
 	 */
 	async function approveHereOrRemotely(ctx: ExtensionContext, operation: SensitiveOperation): Promise<boolean> {
 		const withdraw = new AbortController();
-		const remote = coordinator.requestApproval(ctx.sessionManager.getSessionId(), { title: operation.title, message: operation.detail }, withdraw.signal);
+		const remote = coordinator
+			.requestApproval(ctx.sessionManager.getSessionId(), { title: operation.title, message: operation.detail }, withdraw.signal)
+			.then((answer) => answer ?? (ctx.hasUI ? new Promise<boolean>(() => undefined) : false));
 		const local = ctx.hasUI
 			? ctx.ui.confirm(operation.title, `${operation.detail}\n\nAlso asked in Telegram.`, { signal: withdraw.signal })
 			: new Promise<boolean>(() => undefined);

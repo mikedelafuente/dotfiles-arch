@@ -213,13 +213,17 @@ export class FakePiSession implements LivePiSession {
 	/** What Pi discovered: read on every request, like Pi's own list after a reload. */
 	commandList: PiCommand[] = [];
 	aborts = 0;
+	/** Built-ins run through this session, as [name, argument]. */
 	builtins: [name: string, args: string][] = [];
 	isIdle(): boolean { return this.idle; }
 	async commands(): Promise<PiCommand[]> { return structuredClone(this.commandList); }
 	async abort(): Promise<void> { this.aborts++; }
-	async runBuiltin(name: string, args: string): Promise<string> {
-		this.builtins.push([name, args]);
-		return `ran /${name}`;
+	async compact(instructions?: string): Promise<{ tokensBefore?: number; estimatedTokensAfter?: number }> {
+		this.builtins.push(["compact", instructions ?? ""]);
+		return { tokensBefore: 1000, estimatedTokensAfter: 200 };
+	}
+	async setThinkingLevel(level: string): Promise<void> {
+		this.builtins.push(["thinking", level]);
 	}
 	prompt(text: string): void { this.delivered.push(["prompt", text]); }
 	steer(text: string): void { this.delivered.push(["steer", text]); }

@@ -7,24 +7,55 @@
  * the interactive TUI and do nothing when sent as a prompt. The catalog below lists
  * the built-ins remote control runs itself, through RPC or the extension API.
  */
-import type { PiCommand } from "./coordinator.ts";
+import type { LivePiSession, PiCommand } from "./coordinator.ts";
 import { condenseForTelegram } from "./messages.ts";
 
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export type BuiltinName = "compact" | "thinking";
 
 type CatalogEntry = { usage: string; description: string };
 
-/** Pi built-ins that remote control can run; kept in step with Pi's BUILTIN_SLASH_COMMANDS by hand. */
-export const REMOTE_BUILTINS: Record<BuiltinName, CatalogEntry & { requiresArgument?: readonly string[] }> = {
-	compact: { usage: "/rc compact [instructions]", description: "Compact the session context" },
+type Builtin = CatalogEntry & {
+	/** The only arguments the built-in accepts, checked before it runs. */
+	requiresArgument?: readonly string[];
+	/** Runs the built-in in a session; resolves with the reply for its topic. */
+	run(pi: LivePiSession, args: string): Promise<string>;
+};
+
+/**
+ * Pi built-ins that remote control can run; kept in step with Pi's
+ * BUILTIN_SLASH_COMMANDS by hand. `/reload` is left out on purpose: RPC has no
+ * reload command, and reloading the local Pi tears this extension down with the bridge.
+ */
+export const REMOTE_BUILTINS: Record<BuiltinName, Builtin> = {
+	compact: {
+		usage: "/rc compact [instructions]",
+		description: "Compact the session context",
+		async run(pi, args) {
+			const { tokensBefore, estimatedTokensAfter } = await pi.compact(args || undefined);
+			return tokensBefore === undefined
+				? "Compacted the context."
+				: `Compacted the context from ${tokensBefore} to about ${estimatedTokensAfter ?? "?"} tokens.`;
+		},
+	},
 	thinking: {
 		usage: "/rc thinking <level>",
 		description: `Set the thinking level: ${THINKING_LEVELS.join(", ")}`,
 		requiresArgument: THINKING_LEVELS,
+		async run(pi, args) {
+			await pi.setThinkingLevel(args as ThinkingLevel);
+			return `Thinking level set to ${args}.`;
+		},
 	},
 };
+
+/** The reply to an extension command sent from Telegram. */
+export function extensionCommandRefusal(name: string): string {
+	return `/${name} is an extension command, which runs only in a local Pi: remote control cannot approve what it does.`;
+}
 
 export const TOPIC_COMMANDS: CatalogEntry[] = [
 	{ usage: "/rc followup <message>", description: "Queue work after the current run" },
@@ -39,7 +70,7 @@ export function isBuiltin(name: string): name is BuiltinName {
 /** A usage reply when a built-in's argument is missing or invalid. */
 export function builtinArgumentError(name: BuiltinName, args: string): string | undefined {
 	const allowed = REMOTE_BUILTINS[name].requiresArgument;
-	if (!allowed || allowed.includes(args.trim())) return undefined;
+	if (!allowed || allowed.includes(args)) return undefined;
 	return `Usage: ${REMOTE_BUILTINS[name].usage}, with one of ${allowed.join(", ")}.`;
 }
 

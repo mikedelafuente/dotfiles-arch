@@ -214,13 +214,16 @@ topic says so and the session becomes disconnected.
 - remote control's own commands: `followup`, `stop-agent`, `commands`;
 - a maintained catalog of Pi built-ins that remote control runs itself, because
   Pi's command discovery leaves built-ins out and they do nothing sent as a prompt:
-  `/rc compact [instructions]` and `/rc thinking <level>` (`commands.ts`);
+  `/rc compact [instructions]` and `/rc thinking <level>` (`commands.ts`). `/reload`
+  is not among them: RPC has no reload command, and reloading the local Pi would
+  stop the bridge with this extension;
 - the prompt templates and skills Pi discovered, usable as `/rc <name>` or `/<name>`;
 - extension commands, listed as local Pi only.
 
 Discovery is read from Pi on every request, so it follows a reload. An agent's Pi
 reports its reload to the Pi that started it, which re-reads that agent's commands
-before delivering its next message.
+before delivering its next message. A Pi that does not list its commands within ten
+seconds gets a failure reply, and the topic's later messages go through.
 
 ### Approvals
 
@@ -231,13 +234,15 @@ owner's approval (`sensitive.ts`):
 | Operation | Recognized as |
 |-----------|---------------|
 | Merge | `git merge`, `gh pr merge`, the `merge_this` tool |
-| Branch deletion | `git branch -d/-D/--delete`, `git push --delete`, `git push <remote> :<branch>` |
+| Branch deletion | `git branch -d/-D/--delete`, `git push --delete/--prune/--mirror`, `git push <remote> :<branch>`, `gh api -X DELETE …/git/refs/heads/…` |
 | Deployment | `gh release create`, `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`, `docker push`, `terraform apply`, `kubectl apply`, `helm upgrade`, a `deploy` subcommand, script, or task |
 | Privileged | `sudo`, `doas`, `pkexec`, `run0`, `su` |
 
-Recognition reads each command of a shell line; it prevents mistakes, not an agent
-set on hiding a merge inside a script. `/rc stop-agent` asks the same way before
-aborting a run.
+Recognition reads each command of a shell line, through wrappers such as `env`,
+`nice`, `timeout`, and `xargs` and into `bash -c` scripts and `eval`; it prevents
+mistakes, not an agent set on hiding a merge inside a script. `/rc stop-agent` asks
+the same way before aborting a run, and its confirmation applies only to the run it
+asked about: pressed after that run ended, it stops nothing.
 
 The approval is a message in the session topic with Approve and Deny buttons. For
 the current conversation it is also asked in the local Pi; the first answer wins and
@@ -251,10 +256,12 @@ withdraws the other. Every approval and every button selection is:
   the session disconnects, it no longer applies;
 - time-limited: after five minutes it expires, and a later press is refused.
 
-An approval that is denied, expires, or is withdrawn by `/rc stop`, `/rc logout`,
-or Pi shutdown counts as a denial: the tool call is blocked and Pi is told not to
-retry it. Agents inherit remote control's marker (`PI_REMOTE_CONTROL_AGENT`), so a
-subagent an agent starts, having no one to ask, has its sensitive operations blocked.
+An approval that is denied or expires counts as a denial: the tool call is blocked
+and Pi is told not to retry it. When Telegram decides nothing (the approval could not
+be posted, or `/rc stop`, `/rc logout`, or Pi shutdown withdrew it), an agent's tool
+call is blocked too, while the current conversation waits for its local answer.
+Agents inherit remote control's marker (`PI_REMOTE_CONTROL_AGENT`), so any Pi an
+agent starts in turn, having no one to ask, has its sensitive operations blocked.
 
 ### Tests
 

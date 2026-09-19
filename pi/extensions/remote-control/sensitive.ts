@@ -23,8 +23,27 @@ const SENSITIVE_TOOLS: Record<string, { kind: SensitiveKind; detail: string }> =
 };
 
 const PRIVILEGED = new Set(["sudo", "doas", "pkexec", "run0", "su"]);
-/** Prefixes that run the rest of the words as the command. */
-const WRAPPERS = new Set(["env", "command", "exec", "time", "nohup", "nice", "builtin"]);
+/**
+ * Commands that run the rest of their words as a command: the options that take a
+ * separate value, and how many operands come before the command, like timeout's duration.
+ */
+const WRAPPERS: Record<string, { valueOptions?: ReadonlySet<string>; operands?: number }> = {
+	env: { valueOptions: new Set(["-u", "--unset", "-C", "--chdir"]) },
+	nice: { valueOptions: new Set(["-n", "--adjustment"]) },
+	ionice: { valueOptions: new Set(["-c", "-n", "-p", "--class", "--classdata"]) },
+	timeout: { valueOptions: new Set(["-s", "--signal", "-k", "--kill-after"]), operands: 1 },
+	time: { valueOptions: new Set(["-f", "--format", "-o", "--output"]) },
+	xargs: { valueOptions: new Set(["-n", "-I", "-L", "-P", "-d", "-s", "-E", "-a", "--max-args", "--max-procs", "--delimiter", "--arg-file"]) },
+	exec: { valueOptions: new Set(["-a"]) },
+	command: {},
+	builtin: {},
+	nohup: {},
+	stdbuf: {},
+};
+/** Shells whose `-c` script is read as a command line of its own. */
+const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
+/** gh options that take a separate value before the subcommand. */
+const GH_VALUE_OPTIONS = new Set(["-R", "--repo", "--hostname"]);
 /** Task runners whose target names a deployment when it says so, like `npm run deploy`. */
 const RUNNERS = new Set(["npm", "pnpm", "yarn", "bun", "make", "just", "task", "mise", "rake"]);
 /** CLIs whose `deploy` subcommand deploys. */
@@ -50,9 +69,15 @@ export function sensitiveOperation(toolName: string, input: unknown): SensitiveO
 	if (toolName !== "bash") return undefined;
 	const command = (input as { command?: unknown } | undefined)?.command;
 	if (typeof command !== "string") return undefined;
-	for (const words of commands(command)) {
+	const kind = classifyLine(command);
+	return kind && { kind, title: TITLES[kind], detail: command.trim() };
+}
+
+/** The first sensitive operation among a shell line's commands. */
+function classifyLine(line: string): SensitiveKind | undefined {
+	for (const words of commands(line)) {
 		const kind = classify(words);
-		if (kind) return { kind, title: TITLES[kind], detail: command.trim() };
+		if (kind) return kind;
 	}
 	return undefined;
 }
@@ -116,17 +141,33 @@ function basename(word: string): string {
 	return word.split("/").pop() ?? word;
 }
 
+/** Skips a command's leading options, including the values of `valueOptions`, then `operands` operands. */
+function skipOptions(words: string[], valueOptions: ReadonlySet<string> = new Set(), operands = 0): string[] {
+	let index = 0;
+	while (index < words.length && words[index].startsWith("-") && words[index] !== "-") index += valueOptions.has(words[index]) ? 2 : 1;
+	return words.slice(index + operands);
+}
+
 function classify(words: string[]): SensitiveKind | undefined {
-	let start = 0;
-	while (start < words.length && (/^[A-Za-z_]\w*=/.test(words[start]) || WRAPPERS.has(basename(words[start])))) start++;
-	const [command = "", ...args] = words.slice(start).map((word, index) => (index === 0 ? basename(word) : word));
-	if (PRIVILEGED.has(command)) return "privileged";
-	if (command === "git") return classifyGit(args);
-	if (command === "gh") {
-		if (args[0] === "pr" && args[1] === "merge") return "merge";
-		if (args[0] === "release" && args[1] === "create") return "deployment";
-		return undefined;
+	let rest = words;
+	for (;;) {
+		while (rest.length && /^[A-Za-z_]\w*=/.test(rest[0])) rest = rest.slice(1);
+		const name = basename(rest[0] ?? "");
+		const wrapper = WRAPPERS[name];
+		if (!wrapper) break;
+		// `command -v sudo` looks a command up without running it.
+		if (name === "command" && rest.slice(1).some((word) => word === "-v" || word === "-V")) return undefined;
+		rest = skipOptions(rest.slice(1), wrapper.valueOptions, wrapper.operands);
 	}
+	const [command = "", ...args] = rest.map((word, index) => (index === 0 ? basename(word) : word));
+	if (PRIVILEGED.has(command)) return "privileged";
+	if (SHELLS.has(command)) {
+		const script = args.findIndex((arg) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg));
+		return script === -1 || args[script + 1] === undefined ? undefined : classifyLine(args[script + 1]);
+	}
+	if (command === "eval") return classifyLine(args.join(" "));
+	if (command === "git") return classifyGit(args);
+	if (command === "gh") return classifyGh(skipOptions(args, GH_VALUE_OPTIONS));
 	if (/deploy/i.test(command)) return "deployment";
 	const positional = args.filter((arg) => !arg.startsWith("-"));
 	if (PUBLISHERS.has(command) && positional[0] === "publish") return "deployment";
@@ -137,15 +178,25 @@ function classify(words: string[]): SensitiveKind | undefined {
 	return undefined;
 }
 
+function classifyGh(args: string[]): SensitiveKind | undefined {
+	const [group, action] = args;
+	if (group === "pr" && action === "merge") return "merge";
+	if (group === "release" && action === "create") return "deployment";
+	if (group === "api") {
+		const method = args.findIndex((arg) => arg === "-X" || arg === "--method");
+		const deletes = (method !== -1 && /^delete$/i.test(args[method + 1] ?? "")) || args.some((arg) => /^(-XDELETE|--method=DELETE)$/i.test(arg));
+		if (deletes && args.some((arg) => /git\/refs\/heads\//.test(arg))) return "branch-deletion";
+	}
+	return undefined;
+}
+
 function classifyGit(args: string[]): SensitiveKind | undefined {
-	let index = 0;
-	while (index < args.length && args[index].startsWith("-")) index += GIT_VALUE_OPTIONS.has(args[index]) ? 2 : 1;
-	const subcommand = args[index];
-	const rest = args.slice(index + 1);
+	const [subcommand, ...rest] = skipOptions(args, GIT_VALUE_OPTIONS);
 	if (subcommand === "merge") return rest.some((arg) => arg === "--abort" || arg === "--quit") ? undefined : "merge";
 	if (subcommand === "branch" && rest.some((arg) => arg === "--delete" || /^-[a-zA-Z]*[dD]/.test(arg))) return "branch-deletion";
 	if (subcommand === "push") {
-		if (rest.some((arg) => arg === "--delete" || arg === "-d")) return "branch-deletion";
+		// --prune and --mirror delete remote branches that have no local counterpart.
+		if (rest.some((arg) => ["--delete", "-d", "--prune", "--mirror"].includes(arg))) return "branch-deletion";
 		if (rest.filter((arg) => !arg.startsWith("-")).slice(1).some((refspec) => refspec.startsWith(":"))) return "branch-deletion";
 	}
 	return undefined;

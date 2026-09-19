@@ -77,9 +77,9 @@ test("Pi built-ins in the catalog run through the session, with their arguments 
 	t.after(() => h.coordinator.stop());
 	const { pi, topic } = await startWith(h);
 
-	assert.equal(await ask(h, topic, "/rc compact keep the test plan"), "ran /compact");
+	assert.equal(await ask(h, topic, "/rc compact keep the test plan"), "Compacted the context from 1000 to about 200 tokens.");
 	assert.match(await ask(h, topic, "/rc thinking loud"), /Usage: \/rc thinking <level>.*high/);
-	assert.equal(await ask(h, topic, "/rc thinking high"), "ran /thinking");
+	assert.equal(await ask(h, topic, "/rc thinking high"), "Thinking level set to high.");
 	assert.deepEqual(pi.builtins, [["compact", "keep the test plan"], ["thinking", "high"]]);
 	assert.deepEqual(pi.delivered, []);
 });
@@ -88,8 +88,19 @@ test("a failing built-in is reported in the topic", async (t) => {
 	const h = await harness();
 	t.after(() => h.coordinator.stop());
 	const { pi, topic } = await startWith(h);
-	pi.runBuiltin = async () => { throw new Error("Nothing to compact"); };
+	pi.compact = async () => { throw new Error("Nothing to compact"); };
 	assert.match(await ask(h, topic, "/rc compact"), /\/compact failed: Nothing to compact/);
+});
+
+test("a conversation that does not list its commands in time does not hold up the topic", async (t) => {
+	const h = await harness({ commandTimeoutMs: 30 });
+	t.after(() => h.coordinator.stop());
+	const { pi, topic } = await startWith(h);
+	pi.commands = () => new Promise(() => undefined);
+	assert.match(await ask(h, topic, "/rc commands"), /did not list its commands in time/);
+	h.telegram.push({ chat: GROUP, from: OWNER, threadId: topic, text: "carry on" });
+	await until(() => pi.delivered.length === 1);
+	assert.deepEqual(pi.delivered, [["prompt", "carry on"]]);
 });
 
 test("starting remote control adds /rc to the group's Telegram command menu", async (t) => {

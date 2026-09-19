@@ -2,9 +2,11 @@
  * Questions the owner answers with Telegram inline buttons: approvals of sensitive
  * operations and selections of a repository or agent session.
  *
- * Every question is single-use and expires. It is bound to the owner, the topic it
- * was asked in, and the operation it asks about: a press by anyone else, from
- * another topic or chat, or after the operation stopped applying is refused.
+ * Every question is single-use and expires. It is bound to the owner, the chat and
+ * topic it was asked in, and the operation it asks about: each question has its own
+ * token, so a button answers only its own question, and `stillValid` refuses a press
+ * once that operation no longer applies. A press by anyone else, or from another
+ * topic or chat, is refused.
  */
 import { randomBytes } from "node:crypto";
 import type { InlineButton } from "./coordinator.ts";
@@ -20,8 +22,6 @@ export type PromptBinding = {
 	chatId: number;
 	/** The topic the question was asked in; undefined for the General topic. */
 	threadId?: number;
-	/** What is approved or chosen, for the record of how the question ended. */
-	operation: string;
 	/** Checked when a button is pressed: false once the operation no longer applies, e.g. the agent session was rebound. */
 	stillValid?(): boolean;
 };
@@ -41,7 +41,8 @@ type Pending = {
 };
 
 const PREFIX = "rc:";
-const NO_LONGER_VALID = "This button is no longer valid.";
+const DATA = new RegExp(`^${PREFIX}([\\w-]+):(\\d+)$`);
+export const NO_LONGER_VALID = "This button is no longer valid.";
 const LABEL_LENGTH = 60;
 
 export class OwnerPrompts {
@@ -76,7 +77,7 @@ export class OwnerPrompts {
 
 	/** Validates a button press and answers the question it belongs to; returns the notice to show the presser. */
 	press(press: ButtonPress): string {
-		const [, token = "", choice = ""] = /^rc:([\w-]+):(\d+)$/.exec(press.data) ?? [];
+		const [, token = "", choice = ""] = DATA.exec(press.data) ?? [];
 		const pending = this.pending.get(token);
 		const index = Number(choice);
 		if (!pending || !pending.choices[index]) return NO_LONGER_VALID;

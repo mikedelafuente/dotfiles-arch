@@ -6,7 +6,7 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { builtinArgumentError, isBuiltin, renderCommands } from "./commands.ts";
+import { builtinArgumentError, extensionCommandRefusal, isBuiltin, REMOTE_BUILTINS, renderCommands, type ThinkingLevel } from "./commands.ts";
 import {
 	condenseForTelegram,
 	describeOpenIn,
@@ -23,7 +23,7 @@ import {
 	type ControlCommand,
 	type ToolProgress,
 } from "./messages.ts";
-import { OwnerPrompts, type PromptChoice } from "./owner-prompts.ts";
+import { NO_LONGER_VALID, OwnerPrompts, type PromptChoice, type PromptOutcome } from "./owner-prompts.ts";
 
 export type Repository = {
 	id: string;
@@ -294,8 +294,10 @@ export interface LivePiSession {
 	commands(): Promise<PiCommand[]>;
 	/** Aborts the current run. */
 	abort(): Promise<void>;
-	/** Runs one of the catalog's Pi built-ins (`commands.ts`); resolves with a short report. */
-	runBuiltin(name: string, args: string): Promise<string>;
+	/** Pi's `/compact` built-in; resolves with the token counts Pi reports. */
+	compact(instructions?: string): Promise<{ tokensBefore?: number; estimatedTokensAfter?: number }>;
+	/** Pi's `/thinking` built-in. */
+	setThinkingLevel(level: ThinkingLevel): Promise<void>;
 }
 
 /** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
@@ -329,6 +331,8 @@ export type CoordinatorOptions = {
 	progressIntervalMs?: number;
 	/** How long an approval or selection stays answerable. */
 	approvalTimeoutMs?: number;
+	/** How long a Pi session may take to list its commands before the topic moves on. */
+	commandTimeoutMs?: number;
 };
 
 export type RemoteControlStatus = {
@@ -390,6 +394,7 @@ const DEFAULT_PROGRESS_INTERVAL_MS = 5000;
 const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
 const DEFAULT_SESSION_NAME = "agent";
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
+const DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
 const APPROVE: PromptChoice[] = [{ label: "Approve", notice: "Approved" }, { label: "Deny", notice: "Denied" }];
 const STOP_RUN: PromptChoice[] = [{ label: "Stop run", notice: "Stopping the run" }, { label: "Keep running", notice: "Kept running" }];
 const CANCEL: PromptChoice = { label: "Cancel", notice: "Cancelled" };
@@ -412,6 +417,13 @@ function withConversation(session: AgentSession, conversation: PiConversation): 
 
 function conversationOf(session: AgentSession): PiConversation {
 	return { piSessionId: session.piSessionId, piSessionFile: session.piSessionFile, name: session.name, branch: session.branch };
+}
+
+/** Labels sessions by name, adding the repository when two share a name. */
+function sessionLabel(sessions: Pick<AgentSession, "name" | "repositoryPath">[]): (session: Pick<AgentSession, "name" | "repositoryPath">) => string {
+	return (session) => (sessions.filter((other) => other.name === session.name).length > 1
+		? `${session.name} (${nameFromPath(session.repositoryPath)})`
+		: session.name);
 }
 
 /** A session to attach: its current conversation, or one of its earlier ones. */
@@ -515,6 +527,8 @@ type Route = {
 	outbox: Promise<void>;
 	/** Serializes the owner's messages in this topic, so a command lookup never reorders them. */
 	inbox: Promise<void>;
+	/** Runs this topic's conversation finished, so a stop confirmed after its run ended stops nothing. */
+	settledRuns: number;
 	progress?: Progress;
 };
 
@@ -545,6 +559,7 @@ export class RemoteControlCoordinator {
 	private readonly now: () => Date;
 	private readonly progressIntervalMs: number;
 	private readonly approvalTimeoutMs: number;
+	private readonly commandTimeoutMs: number;
 	/** Approvals and selections waiting for the owner's button press. */
 	private readonly prompts: OwnerPrompts;
 
@@ -553,6 +568,7 @@ export class RemoteControlCoordinator {
 		this.now = now;
 		this.progressIntervalMs = options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
 		this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+		this.commandTimeoutMs = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
 		this.prompts = new OwnerPrompts(() => this.now().getTime());
 	}
 
@@ -684,9 +700,10 @@ export class RemoteControlCoordinator {
 				const current = agent();
 				if (current && !this.disconnectAgent(current, reason)) this.exitedBeforeConnect.set(current, reason);
 			},
+			// An agent has no one else to ask: anything but an approval is a denial.
 			confirm: async (dialog) => {
 				const current = agent();
-				return current ? this.requestApproval(current.id, dialog) : false;
+				return current !== undefined && (await this.requestApproval(current.id, dialog)) === true;
 			},
 			choose: async (dialog) => {
 				const current = agent();
@@ -727,7 +744,7 @@ export class RemoteControlCoordinator {
 		const threadId = Number(session.topicId);
 		const replaced = bridge.routes.get(threadId);
 		if (replaced) this.unroute(bridge, replaced);
-		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve() });
+		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve(), settledRuns: 0 });
 	}
 
 	/** Stops routing a topic; what its conversation was asking the owner no longer applies. */
@@ -1194,6 +1211,7 @@ export class RemoteControlCoordinator {
 		const bridge = this.bridge;
 		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi.id === piSessionId);
 		if (!bridge || !route) return;
+		if (activity.type === "settled") route.settledRuns++;
 
 		switch (activity.type) {
 			case "run-start": {
@@ -1301,7 +1319,7 @@ export class RemoteControlCoordinator {
 			case "followUp":
 				return this.send(bridge, route, input.text, input.kind);
 			case "commands":
-				return this.reply(bridge, route, renderCommands(await route.pi.commands()));
+				return this.reply(bridge, route, renderCommands(await this.commandsOf(route)));
 			case "stop-agent":
 				// Waiting for the owner's answer must not hold back the topic's later messages.
 				this.stopAgent(bridge, route, route.threadId).catch((error) => this.reply(bridge, route, `Failed: ${errorMessage(error)}`));
@@ -1326,61 +1344,76 @@ export class RemoteControlCoordinator {
 		if (isBuiltin(name)) {
 			const usage = builtinArgumentError(name, args);
 			if (usage) return this.reply(bridge, route, usage);
-			const report = await route.pi.runBuiltin(name, args).catch((error) => `/${name} failed: ${errorMessage(error)}`);
+			const report = await REMOTE_BUILTINS[name].run(route.pi, args).catch((error) => `/${name} failed: ${errorMessage(error)}`);
 			return this.reply(bridge, route, report);
 		}
-		const command = (await route.pi.commands()).find((candidate) => candidate.name === name);
+		const command = (await this.commandsOf(route)).find((candidate) => candidate.name === name);
 		if (!command) return this.reply(bridge, route, `Unknown command: /rc ${name}. ${SESSION_TOPIC_HELP}`);
-		if (command.source === "extension") {
-			return this.reply(bridge, route, `/${name} is an extension command, which runs only in a local Pi: remote control cannot approve what it does.`);
-		}
+		if (command.source === "extension") return this.reply(bridge, route, extensionCommandRefusal(name));
 		this.send(bridge, route, args ? `/${name} ${args}` : `/${name}`, "message");
 	}
 
-	/** Aborts a session's current run once the owner confirms, asking in `threadId`. */
+	/** The commands a topic's conversation discovered; a Pi that does not answer in time must not hold up the topic. */
+	private commandsOf(route: Route): Promise<PiCommand[]> {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeout = new Promise<never>((_, reject) => {
+			timer = setTimeout(() => reject(new Error(`${route.session.name} did not list its commands in time.`)), this.commandTimeoutMs);
+		});
+		return Promise.race([route.pi.commands(), timeout]).finally(() => clearTimeout(timer));
+	}
+
+	/**
+	 * Aborts a session's current run once the owner confirms, asking in `threadId`.
+	 * The confirmation is bound to that run: once it ends, a press stops nothing.
+	 */
 	private async stopAgent(bridge: Bridge, route: Route, threadId: number | undefined): Promise<void> {
 		const { name } = route.session;
 		const where = (text: string) => (threadId === route.threadId ? this.reply(bridge, route, text) : this.sendTo(bridge, threadId, text));
 		if (route.pi.isIdle()) return where(`${name} is not running anything to stop.`);
+		const run = route.settledRuns;
 		const outcome = await this.ask(bridge, {
 			threadId,
-			text: `Stop the current run of ${name} (${topicTitle(nameFromPath(route.session.repositoryPath), name, route.session.branch)})?`,
-			operation: `agent-stop ${route.session.id}`,
+			text: `Stop the current run of ${name} (${route.session.topicName})?`,
 			rows: [STOP_RUN],
-			stillValid: () => bridge.routes.get(route.threadId) === route,
+			stillValid: () => bridge.routes.get(route.threadId) === route && route.settledRuns === run,
 		});
-		if (outcome !== 0) return;
+		if (outcome.kind !== "answered" || outcome.choice !== 0) return;
 		await route.pi.abort();
 		where(`Stopped the current run of ${name}.`);
 	}
 
 	/**
 	 * Asks the owner to approve an operation in the session topic of a live Pi
-	 * conversation. False when the owner denies it, it expires, `signal` withdraws it,
-	 * or remote control is not routing that conversation.
+	 * conversation: true or false once the owner answers (an expired approval is
+	 * false). Undefined when the owner decided nothing: remote control is not routing
+	 * that conversation, the question could not be posted, `signal` withdrew it, or
+	 * the topic stopped being routed.
 	 */
-	async requestApproval(piSessionId: string, dialog: PiDialog, signal?: AbortSignal): Promise<boolean> {
-		const found = this.routeOf(piSessionId);
-		if (!found) return false;
-		const text = [`🔐 ${dialog.title}`, dialog.message, `Agent session: ${found.route.session.topicName}`].filter(Boolean).join("\n\n");
-		const outcome = await this.ask(found.bridge, {
-			threadId: found.route.threadId, text, operation: dialog.title, rows: [APPROVE], signal, timeoutMs: dialog.timeoutMs,
-			stillValid: () => found.bridge.routes.get(found.route.threadId) === found.route,
-		});
-		return outcome === 0;
+	async requestApproval(piSessionId: string, dialog: PiDialog, signal?: AbortSignal): Promise<boolean | undefined> {
+		const outcome = await this.askInSession(piSessionId, `🔐 ${dialog.title}`, dialog, [APPROVE], signal);
+		if (outcome?.kind === "answered") return outcome.choice === 0;
+		return outcome?.kind === "expired" ? false : undefined;
 	}
 
 	/** Asks the owner to pick one of `options` in a live Pi conversation's session topic; undefined when there is no answer. */
 	async requestChoice(piSessionId: string, dialog: PiDialog & { options: string[] }, signal?: AbortSignal): Promise<string | undefined> {
+		if (!dialog.options.length) return undefined;
+		const rows = [...dialog.options.map((option) => [{ label: option, notice: `Chose ${option}` }]), [CANCEL]];
+		const outcome = await this.askInSession(piSessionId, dialog.title, dialog, rows, signal);
+		return outcome?.kind === "answered" ? dialog.options[outcome.choice] : undefined;
+	}
+
+	/** Asks a dialog's question in a conversation's session topic, bound to that topic's current route; undefined when none routes it. */
+	private async askInSession(piSessionId: string, heading: string, dialog: PiDialog, rows: PromptChoice[][], signal?: AbortSignal): Promise<PromptOutcome | undefined> {
 		const found = this.routeOf(piSessionId);
-		if (!found || !dialog.options.length) return undefined;
-		const text = [dialog.title, dialog.message, `Agent session: ${found.route.session.topicName}`].filter(Boolean).join("\n\n");
-		const outcome = await this.ask(found.bridge, {
-			threadId: found.route.threadId, text, operation: dialog.title, signal, timeoutMs: dialog.timeoutMs,
-			rows: [...dialog.options.map((option) => [{ label: option, notice: `Chose ${option}` }]), [CANCEL]],
-			stillValid: () => found.bridge.routes.get(found.route.threadId) === found.route,
+		if (!found) return undefined;
+		const { bridge, route } = found;
+		return this.ask(bridge, {
+			threadId: route.threadId,
+			text: [heading, dialog.message, `Agent session: ${route.session.topicName}`].filter(Boolean).join("\n\n"),
+			rows, signal, timeoutMs: dialog.timeoutMs,
+			stillValid: () => bridge.routes.get(route.threadId) === route,
 		});
-		return outcome === undefined ? undefined : dialog.options[outcome];
 	}
 
 	/** Whether the running bridge routes a Pi conversation's session topic, so its sensitive operations need the owner's approval. */
@@ -1395,23 +1428,22 @@ export class RemoteControlCoordinator {
 	}
 
 	/**
-	 * Posts a question with buttons and waits for the owner's press. Resolves with the
-	 * chosen index, or undefined when it expired, was cancelled, or stopped applying.
-	 * The message is edited to show how it ended, without its buttons.
+	 * Posts a question with buttons and waits for the owner's press or for it to end
+	 * otherwise; a question that cannot be posted is cancelled. The message is then
+	 * edited to show how it ended, without its buttons. A press of Cancel is a cancellation.
 	 */
 	private async ask(bridge: Bridge, question: {
 		threadId?: number;
 		text: string;
-		operation: string;
 		rows: PromptChoice[][];
 		stillValid?(): boolean;
 		signal?: AbortSignal;
 		timeoutMs?: number;
-	}): Promise<number | undefined> {
+	}): Promise<PromptOutcome> {
 		const chatId = bridge.credentials.group.id;
 		const ttl = Math.min(this.approvalTimeoutMs, question.timeoutMs ?? Infinity);
 		const { buttons, answer, cancel } = this.prompts.open(
-			{ ownerId: bridge.credentials.owner.id, chatId, threadId: question.threadId, operation: question.operation, stillValid: question.stillValid },
+			{ ownerId: bridge.credentials.owner.id, chatId, threadId: question.threadId, stillValid: question.stillValid },
 			question.rows,
 			ttl,
 		);
@@ -1433,8 +1465,7 @@ export class RemoteControlCoordinator {
 				: "Withdrawn: nothing was done.";
 			await bridge.api.editMessageText({ chatId, messageId, text: `${question.text}\n\n${ending}`, buttons: [] }).catch(() => undefined);
 		}
-		const choice = outcome.kind === "answered" ? outcome.choice : undefined;
-		return choice !== undefined && question.rows.flat()[choice] !== CANCEL ? choice : undefined;
+		return outcome.kind === "answered" && question.rows.flat()[outcome.choice] === CANCEL ? { kind: "cancelled" } : outcome;
 	}
 
 	/** Answers an inline button press; presses of remote control's own buttons settle the question they belong to. */
@@ -1442,7 +1473,7 @@ export class RemoteControlCoordinator {
 		if (query.from.isBot) return;
 		const notice = OwnerPrompts.owns(query.data)
 			? this.prompts.press({ data: query.data!, userId: query.from.id, chatId: query.message?.chatId, threadId: query.message?.threadId })
-			: "This button is no longer valid.";
+			: NO_LONGER_VALID;
 		bridge.api.answerCallbackQuery({ id: query.id, text: notice }).catch((error) => bridge.options.onError?.(error));
 	}
 
@@ -1484,7 +1515,8 @@ export class RemoteControlCoordinator {
 				const connected = [...bridge.routes.values()];
 				if (command.session === undefined) {
 					if (!connected.length) return "No agent session is connected.";
-					this.pick(bridge, threadId, "Stop the current run of which agent session?", connected.map((route) => route.session), (session) => {
+					const sessions = connected.map((route) => route.session);
+					this.pick(bridge, threadId, "Stop the current run of which agent session?", sessions, sessionLabel(sessions), (session) => {
 						const route = [...bridge.routes.values()].find((candidate) => candidate.session.id === session.id);
 						return route ? this.stopAgent(bridge, route, threadId).then(() => undefined) : Promise.resolve(`${session.name} is no longer connected.`);
 					});
@@ -1514,36 +1546,29 @@ export class RemoteControlCoordinator {
 	private async pickRepository(bridge: Bridge, threadId: number | undefined, name: string): Promise<string | undefined> {
 		const repositories = await this.adapters.repositories.list();
 		if (!repositories.length) return "No repository is approved yet; run /rc in a repository locally.";
-		this.pick(bridge, threadId, `Start agent session "${name}" in which repository?`, repositories, (repository) => this.startedText(name, repository.path));
+		this.pick(bridge, threadId, `Start agent session "${name}" in which repository?`, repositories, (repository) => repository.name, (repository) => this.startedText(name, repository.path));
 		return undefined;
 	}
 
 	private async pickSessionToAttach(bridge: Bridge, threadId: number | undefined): Promise<string | undefined> {
 		const attachable = (await this.sessions()).flatMap((group) => group.sessions).filter((session) => session.status === "disconnected");
 		if (!attachable.length) return "No disconnected agent session to attach. List them with /rc sessions.";
-		this.pick(bridge, threadId, "Attach which agent session?", attachable, (session) => this.attachedText(session.id));
+		this.pick(bridge, threadId, "Attach which agent session?", attachable, sessionLabel(attachable), (session) => this.attachedText(session.id));
 		return undefined;
 	}
 
-	/**
-	 * Offers `items` as buttons in the control topic and, once the owner picks one,
-	 * runs `then` with it and posts its reply. Items are labelled by name, with their
-	 * repository added when two share a name.
-	 */
-	private pick<Item extends { name: string; path?: string; repositoryPath?: string }>(
+	/** Offers `items` as buttons, labelled by `label`, and once the owner picks one, runs `then` with it and posts its reply. */
+	private pick<Item>(
 		bridge: Bridge,
 		threadId: number | undefined,
 		text: string,
 		items: Item[],
+		label: (item: Item) => string,
 		then: (item: Item) => Promise<string | undefined>,
 	): void {
-		const label = (item: Item) => {
-			const shared = items.filter((other) => other.name === item.name).length > 1;
-			return shared ? `${item.name} (${nameFromPath(item.repositoryPath ?? item.path ?? "")})` : item.name;
-		};
 		const rows = [...items.map((item) => [{ label: label(item), notice: `Chose ${label(item)}` }]), [CANCEL]];
-		this.ask(bridge, { threadId, text, operation: text, rows, stillValid: () => this.bridge === bridge })
-			.then(async (choice) => (choice === undefined ? undefined : then(items[choice])))
+		this.ask(bridge, { threadId, text, rows, stillValid: () => this.bridge === bridge })
+			.then(async (outcome) => (outcome.kind === "answered" ? then(items[outcome.choice]) : undefined))
 			.catch((error) => `Failed: ${errorMessage(error)}`)
 			.then((reply) => { if (reply) this.sendTo(bridge, threadId, reply); });
 	}
