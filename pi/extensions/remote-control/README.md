@@ -61,7 +61,7 @@ waiting for its code.
 Owner `/rc` commands in the control topic (or the General topic) manage agent
 sessions (see [Agent sessions](#agent-sessions)); other owner messages there are
 shown as local notifications. Messages in a topic with no running session get one
-"not connected" reply.
+"not connected" reply. `/rc start` also adds `/rc` to the group's Telegram `/` menu.
 
 ### Current session
 
@@ -89,10 +89,15 @@ In the session topic:
 | Plain text while Pi is idle | A new prompt |
 | Plain text while Pi is working | Steering for the current run |
 | `/rc followup <message>` | A follow-up queued after the current run (a prompt if idle) |
-| Any other `/rc …` | A usage reply; nothing reaches Pi |
+| `/rc commands` (or `/rc`, `/rc help`) | Everything this topic accepts (see [Command discovery](#command-discovery)) |
+| `/rc stop-agent` | Aborts the current run once you confirm (see [Approvals](#approvals)) |
+| `/rc compact [instructions]`, `/rc thinking <level>` | Runs that Pi built-in |
+| `/rc <template or skill> [args]` | That prompt template or skill, as if typed as `/<name>` |
+| `/rc <extension command>` | Refused: extension commands run only in a local Pi |
+| Any other `/rc …` | An "unknown command" reply; nothing reaches Pi |
 
-Other `/` text is passed to Pi verbatim; prompt templates and skills are not
-expanded yet. Messages that arrive while a prompt is starting or Pi is compacting
+Other `/` text is passed to Pi as typed: prompt templates and skills are expanded,
+extension commands are not run. Messages that arrive while a prompt is starting or Pi is compacting
 are held and delivered in order once Pi can accept them (`pi-delivery.ts`), so a
 burst of messages is never lost to Pi rejecting a concurrent prompt. Replies in the
 General topic count as General, not as the topic of the message they reply to.
@@ -124,9 +129,10 @@ and session topic. Two sessions never share a workspace.
 | Command | Where | Effect |
 |---------|-------|--------|
 | `/rc new <name>` | Local Pi | On a feature branch or in a linked worktree: the current conversation becomes agent session `<name>` in its topic (renamed to match). On the main line or a detached HEAD in the main checkout: a new session, as below |
-| `/rc new <repository> <name>` | Control topic | A new session in an approved repository, named by its registry name or path |
+| `/rc new <repository> <name>` | Control topic | A new session in an approved repository, named by its registry name or path. With only `<name>`, pick the repository from buttons |
 | `/rc sessions` | Both | Sessions grouped by repository, with their status |
-| `/rc attach <session>` | Both | Reconnects a disconnected session by name or id, or an earlier conversation by Pi session id |
+| `/rc attach <session>` | Both | Reconnects a disconnected session by name or id, or an earlier conversation by Pi session id. In the control topic without `<session>`, pick a disconnected session from buttons |
+| `/rc stop-agent [session]` | Control topic | Aborts a connected session's current run once you confirm; without `[session]`, pick it from buttons |
 | `/rc help` | Control topic | The control-topic commands |
 
 A new session gets, together or not at all:
@@ -194,12 +200,68 @@ Leases only cover Pi processes on this machine that load this extension. A Pi
 without it, one started with extensions disabled, or one on another machine
 sharing the session files leaves no lease, and attach cannot see it.
 
-In an agent's topic, messages work as in [Current session](#current-session),
-except that skills and prompt templates are expanded (the agent receives them
-through Pi's RPC `prompt`). Extension commands are refused, and dialogs an extension
-opens are cancelled with a note in the topic, because remote approval does not
-exist yet. Extension warnings and errors are posted in the topic. If the agent's Pi
-exits, the topic says so and the session becomes disconnected.
+In an agent's topic, messages work as in [Current session](#current-session); the
+agent receives them through Pi's RPC `prompt`. Extension commands are refused. An
+extension's confirmation or selection dialog is asked in the topic with buttons (see
+[Approvals](#approvals)); a dialog that needs typed input is cancelled with a note.
+Extension warnings and errors are posted in the topic. If the agent's Pi exits, the
+topic says so and the session becomes disconnected.
+
+### Command discovery
+
+`/rc commands` in a session topic lists what that agent accepts, in one message:
+
+- remote control's own commands: `followup`, `stop-agent`, `commands`;
+- a maintained catalog of Pi built-ins that remote control runs itself, because
+  Pi's command discovery leaves built-ins out and they do nothing sent as a prompt:
+  `/rc compact [instructions]` and `/rc thinking <level>` (`commands.ts`). `/reload`
+  is not among them: RPC has no reload command, and reloading the local Pi would
+  stop the bridge with this extension;
+- the prompt templates and skills Pi discovered, usable as `/rc <name>` or `/<name>`;
+- extension commands, listed as local Pi only.
+
+Discovery is read from Pi on every request, so it follows a reload. An agent's Pi
+reports its reload to the Pi that started it, which re-reads that agent's commands
+before delivering its next message. A Pi that does not list its commands within ten
+seconds gets a failure reply, and the topic's later messages go through.
+
+### Approvals
+
+While a conversation is remote-controlled (its topic is routed by a running bridge,
+or it is an agent `/rc new` or `/rc attach` started), these tool calls wait for the
+owner's approval (`sensitive.ts`):
+
+| Operation | Recognized as |
+|-----------|---------------|
+| Merge | `git merge`, `gh pr merge`, the `merge_this` tool |
+| Branch deletion | `git branch -d/-D/--delete`, `git push --delete/--prune/--mirror`, `git push <remote> :<branch>`, `gh api -X DELETE …/git/refs/heads/…` |
+| Deployment | `gh release create`, `npm`/`pnpm`/`yarn`/`bun`/`cargo publish`, `docker push`, `terraform apply`, `kubectl apply`, `helm upgrade`, a `deploy` subcommand, script, or task |
+| Privileged | `sudo`, `doas`, `pkexec`, `run0`, `su` |
+
+Recognition reads each command of a shell line, through wrappers such as `env`,
+`nice`, `timeout`, and `xargs` and into `bash -c` scripts and `eval`; it prevents
+mistakes, not an agent set on hiding a merge inside a script. `/rc stop-agent` asks
+the same way before aborting a run, and its confirmation applies only to the run it
+asked about: pressed after that run ended, it stops nothing.
+
+The approval is a message in the session topic with Approve and Deny buttons. For
+the current conversation it is also asked in the local Pi; the first answer wins and
+withdraws the other. Every approval and every button selection is:
+
+- single-use: a second press, or a press on another choice of the same message, is
+  refused;
+- bound to the owner (other users are told they are not authorized, and the
+  approval stays open), to the topic and chat it was asked in, and to its agent
+  session and operation: once that topic is rebound to another conversation, or
+  the session disconnects, it no longer applies;
+- time-limited: after five minutes it expires, and a later press is refused.
+
+An approval that is denied or expires counts as a denial: the tool call is blocked
+and Pi is told not to retry it. When Telegram decides nothing (the approval could not
+be posted, or `/rc stop`, `/rc logout`, or Pi shutdown withdrew it), an agent's tool
+call is blocked too, while the current conversation waits for its local answer.
+Agents inherit remote control's marker (`PI_REMOTE_CONTROL_AGENT`), so any Pi an
+agent starts in turn, having no one to ask, has its sensitive operations blocked.
 
 ### Tests
 
@@ -210,7 +272,8 @@ node --test pi/extensions/remote-control/*.test.ts
 Sources use only erasable TypeScript and `.ts` import specifiers, so Node's
 built-in type stripping runs them directly. `git-workspaces.test.ts` needs `git`;
 `pi-rpc.test.ts` runs a scripted stand-in for `pi --mode rpc`, not Pi itself;
-`leases.test.ts` uses real lease files and processes.
+`leases.test.ts` uses real lease files and processes; `sensitive.test.ts` covers
+which commands need approval.
 
 ## Coordinator foundation
 
@@ -236,11 +299,16 @@ injected `TelegramBotApi` (`telegram.ts` is the fetch-based implementation).
 
 It also routes session-topic messages to an injected `LivePiSession` and turns
 `recordActivity()` reports (`index.ts` maps Pi's agent and tool events to them) into
-progress edits and responses. `messages.ts` holds the pure text formatting and parsing.
+progress edits and responses. `messages.ts` holds the pure text formatting and parsing,
+`commands.ts` the command catalog. Approvals and button selections go through
+`owner-prompts.ts`, which issues and checks their single-use, bound, expiring buttons;
+`index.ts` gates sensitive tool calls through `requestApproval()`.
 
 Adapter-backed tests: `coordinator.test.ts` covers creating, adopting, listing, and
 attaching agent sessions (including leased, unprompted, and earlier conversations),
 rollback and its leftovers, repository approval, and duplicate workspace rejection;
+`approvals.test.ts` covers approvals, selections, and `/rc stop-agent` (binding, expiry,
+single use, withdrawal); `commands.test.ts` covers command discovery and routing;
 `lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
 and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
 current conversation, topic rebinding, message routing, progress, response
@@ -280,6 +348,10 @@ _Avoid_: lock
 **Earlier conversation**:
 A Pi conversation that ran in a workspace before a later one took over its session topic; it stays attachable by its Pi session id.
 _Avoid_: old session, history
+
+**Approval**:
+The owner's answer, with a Telegram button, to a sensitive operation a remote-controlled conversation wants to perform: a merge, branch deletion, deployment, privileged command, or stopping an agent. It is single-use, expires, and is bound to the owner, the agent session, and the operation; anything but an explicit approval is a denial.
+_Avoid_: permission, consent
 
 **Control topic**:
 The private Telegram forum topic used for repository and session management rather than agent work.

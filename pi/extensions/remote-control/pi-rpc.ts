@@ -7,7 +7,8 @@
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { access } from "node:fs/promises";
-import type { AgentProcess, AgentSession, PiSessionAdapter, PiSessionEvents, Repository, Workspace } from "./coordinator.ts";
+import { extensionCommandRefusal, type ThinkingLevel } from "./commands.ts";
+import type { AgentProcess, AgentSession, PiCommand, PiDialog, PiSessionAdapter, PiSessionEvents, Repository, Workspace } from "./coordinator.ts";
 import { runResponse, type RunMessage } from "./messages.ts";
 
 export type RpcPiSessionsOptions = {
@@ -15,14 +16,23 @@ export type RpcPiSessionsOptions = {
 	command: string[];
 	env?: Record<string, string>;
 	startTimeoutMs?: number;
+	/** How long `get_commands` may take before the previous list is used. */
+	commandsTimeoutMs?: number;
 };
 
 const DEFAULT_START_TIMEOUT_MS = 30_000;
 /** How long a prompt may take to start a run before the session counts as idle again. */
 const RUN_START_TIMEOUT_MS = 30_000;
 const CLOSE_TIMEOUT_MS = 3000;
+const DEFAULT_COMMANDS_TIMEOUT_MS = 10_000;
 const STDERR_LIMIT = 4000;
-const DIALOG_METHODS = new Set(["select", "confirm", "input", "editor"]);
+/** Dialogs that need typed input, which remote control cannot give: they are cancelled. */
+const TEXT_DIALOGS = new Set(["input", "editor"]);
+
+/** Set in the environment of every agent Pi remote control starts, so this extension knows it is remote-controlled there. */
+export const AGENT_ENV = "PI_REMOTE_CONTROL_AGENT";
+/** The status key an agent's Pi sets after reloading its resources, so its discovered commands are read again. */
+export const COMMANDS_CHANGED_STATUS = "remote-control:commands";
 
 type RpcResponse = { id?: string; type: "response"; command: string; success: boolean; data?: unknown; error?: string };
 type RpcEvent = { type: string; [key: string]: unknown };
@@ -42,9 +52,13 @@ class RpcAgent implements AgentProcess {
 
 	private readonly child: ChildProcessWithoutNullStreams;
 	private readonly events: PiSessionEvents;
+	private readonly commandsTimeoutMs: number;
 	private readonly pending = new Map<string, { resolve(response: RpcResponse): void; reject(error: Error): void }>();
 	private readonly exited: Promise<void>;
-	private extensionCommands = new Set<string>();
+	/** What Pi discovered, as of the last `get_commands`. */
+	private commandList: PiCommand[] = [];
+	/** Settles once the latest `get_commands` answered; messages wait for it, so a reload is honoured. */
+	private commandsReady: Promise<void> = Promise.resolve();
 	private nextId = 1;
 	private stderr = "";
 	private closing = false;
@@ -61,8 +75,9 @@ class RpcAgent implements AgentProcess {
 		this.branch = location.branch;
 		this.repositoryPath = location.repositoryPath;
 		this.events = events;
+		this.commandsTimeoutMs = options.commandsTimeoutMs ?? DEFAULT_COMMANDS_TIMEOUT_MS;
 		const [command, ...prefix] = options.command;
-		this.child = spawn(command, [...prefix, "--mode", "rpc", ...args], { cwd, env: { ...process.env, ...options.env }, stdio: ["pipe", "pipe", "pipe"] });
+		this.child = spawn(command, [...prefix, "--mode", "rpc", ...args], { cwd, env: { ...process.env, ...options.env, [AGENT_ENV]: "1" }, stdio: ["pipe", "pipe", "pipe"] });
 		this.child.stderr.setEncoding("utf8").on("data", (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-STDERR_LIMIT); });
 		this.child.stdin.on("error", () => undefined);
 		let buffer = "";
@@ -103,11 +118,44 @@ class RpcAgent implements AgentProcess {
 		} finally {
 			clearTimeout(timeout);
 		}
-		const commands = await this.request({ type: "get_commands" }).then(
-			(response) => (response.data as { commands?: { name: string; source: string }[] }).commands ?? [],
-			() => [],
+		await this.refreshCommands();
+	}
+
+	async commands(): Promise<PiCommand[]> {
+		await this.refreshCommands();
+		return this.commandList.map((command) => ({ ...command }));
+	}
+
+	/**
+	 * Reads Pi's discovered commands again. On failure, or when Pi does not answer in
+	 * time, the previous list stays, so messages waiting for it are never held for good.
+	 */
+	private refreshCommands(): Promise<void> {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, this.commandsTimeoutMs); });
+		const listed = this.request({ type: "get_commands" }).then(
+			(response) => {
+				const commands = (response.data as { commands?: PiCommand[] }).commands ?? [];
+				this.commandList = commands.map(({ name, description, source }) => ({ name, description, source }));
+			},
+			() => undefined,
 		);
-		this.extensionCommands = new Set(commands.filter((command) => command.source === "extension").map((command) => command.name));
+		this.commandsReady = Promise.race([listed, timeout]).finally(() => clearTimeout(timer));
+		return this.commandsReady;
+	}
+
+	async abort(): Promise<void> {
+		await this.request({ type: "abort" });
+	}
+
+	async compact(instructions?: string): Promise<{ tokensBefore?: number; estimatedTokensAfter?: number }> {
+		const response = await this.request({ type: "compact", ...(instructions ? { customInstructions: instructions } : {}) });
+		const { tokensBefore, estimatedTokensAfter } = (response.data ?? {}) as { tokensBefore?: number; estimatedTokensAfter?: number };
+		return { tokensBefore, estimatedTokensAfter };
+	}
+
+	async setThinkingLevel(level: ThinkingLevel): Promise<void> {
+		await this.request({ type: "set_thinking_level", level });
 	}
 
 	isIdle(): boolean {
@@ -156,23 +204,34 @@ class RpcAgent implements AgentProcess {
 	/**
 	 * Uses RPC `prompt` for every message, so skills and prompt templates expand as
 	 * they do locally. Extension commands are refused: they would run immediately,
-	 * and remote approval of what they do does not exist yet.
+	 * outside the approvals that gate an agent's tool calls.
 	 */
 	private send(text: string, streamingBehavior: "steer" | "followUp"): void {
-		const command = /^\/(\S+)/.exec(text.trim())?.[1];
-		if (command && this.extensionCommands.has(command)) {
-			this.clearStarting();
-			this.events.activity({ type: "notice", text: `/${command} is an extension command, which is not available remotely yet. Run it in a local Pi.` });
-			return;
-		}
-		this.request({ type: "prompt", message: text, streamingBehavior }).then(
-			(response) => {
-				if (response.success) return;
+		this.commandsReady.then(() => {
+			const command = /^\/(\S+)/.exec(text.trim())?.[1];
+			if (command && this.commandList.some((candidate) => candidate.source === "extension" && candidate.name === command)) {
 				this.clearStarting();
-				this.events.activity({ type: "notice", text: `Pi did not accept the message: ${response.error ?? "unknown error"}` });
-			},
-			() => this.clearStarting(), // The process exited; `exited` reports it.
-		);
+				this.events.activity({ type: "notice", text: extensionCommandRefusal(command) });
+				return;
+			}
+			this.request({ type: "prompt", message: text, streamingBehavior }).then(
+				(response) => {
+					if (response.success) return;
+					this.clearStarting();
+					this.events.activity({ type: "notice", text: `Pi did not accept the message: ${response.error ?? "unknown error"}` });
+				},
+				() => this.clearStarting(), // The process exited; `exited` reports it.
+			);
+		});
+	}
+
+	/** Answers a Pi dialog once the owner has; a dialog left unanswered would block Pi forever. */
+	private answerDialog(id: unknown, answer: Promise<Record<string, unknown>>): void {
+		answer
+			.catch(() => ({ cancelled: true }))
+			.then((fields) => {
+				if (this.isRunning()) this.child.stdin.write(`${JSON.stringify({ type: "extension_ui_response", id, ...fields })}\n`);
+			});
 	}
 
 	private clearStarting(): void {
@@ -237,10 +296,22 @@ class RpcAgent implements AgentProcess {
 				return;
 			case "extension_ui_request": {
 				const method = String(event.method);
-				if (DIALOG_METHODS.has(method)) {
-					// An unanswered dialog would block Pi forever.
-					this.child.stdin.write(`${JSON.stringify({ type: "extension_ui_response", id: event.id, cancelled: true })}\n`);
-					report({ type: "notice", text: `Pi asked "${String(event.title ?? method)}", which remote control cannot answer yet, so it was cancelled.` });
+				const dialog: PiDialog = {
+					title: String(event.title ?? method),
+					...(event.message ? { message: String(event.message) } : {}),
+					...(typeof event.timeout === "number" ? { timeoutMs: event.timeout } : {}),
+				};
+				// Confirmations and selections go to the owner in the session topic.
+				if (method === "confirm") {
+					this.answerDialog(event.id, this.events.confirm(dialog).then((confirmed) => ({ confirmed })));
+				} else if (method === "select") {
+					const options = Array.isArray(event.options) ? event.options.map(String) : [];
+					this.answerDialog(event.id, this.events.choose({ ...dialog, options }).then((value) => (value === undefined ? { cancelled: true } : { value })));
+				} else if (TEXT_DIALOGS.has(method)) {
+					this.answerDialog(event.id, Promise.resolve({ cancelled: true }));
+					report({ type: "notice", text: `Pi asked "${dialog.title}", which needs typed input remote control cannot give yet, so it was cancelled.` });
+				} else if (method === "setStatus" && event.statusKey === COMMANDS_CHANGED_STATUS) {
+					void this.refreshCommands();
 				} else if (method === "notify" && (event.notifyType === "warning" || event.notifyType === "error")) {
 					report({ type: "notice", text: String(event.message) });
 				}

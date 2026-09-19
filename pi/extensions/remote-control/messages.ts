@@ -13,11 +13,15 @@ export function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-export const SESSION_TOPIC_HELP = "Send a message to prompt or steer this agent, or /rc followup <message> to queue work after the current run.";
+export const SESSION_TOPIC_HELP = "Send a message to prompt or steer this agent, /rc followup <message> to queue work after the current run, or /rc commands for everything else.";
 
 export type SessionTopicInput =
 	| { kind: "message"; text: string }
 	| { kind: "followUp"; text: string }
+	| { kind: "commands" }
+	| { kind: "stop-agent" }
+	/** `/rc <name> [args]` for any other name: a Pi built-in or a command Pi discovered, resolved by the coordinator. */
+	| { kind: "command"; name: string; args: string }
 	| { kind: "invalid"; reply: string };
 
 /** `/rc` or `/rc@bot`, with the rest of the message as group 1. */
@@ -28,10 +32,18 @@ export function parseSessionTopicInput(text: string): SessionTopicInput {
 	const command = RC_COMMAND.exec(text.trim());
 	if (!command) return { kind: "message", text };
 	const [, name = "", argument = ""] = /^(\S*)\s*([\s\S]*)$/.exec((command[1] ?? "").trim()) ?? [];
-	if (name.toLowerCase() === "followup") {
-		return argument.trim() ? { kind: "followUp", text: argument.trim() } : { kind: "invalid", reply: "Usage: /rc followup <message>" };
+	switch (name.toLowerCase()) {
+		case "followup":
+			return argument.trim() ? { kind: "followUp", text: argument.trim() } : { kind: "invalid", reply: "Usage: /rc followup <message>" };
+		case "":
+		case "commands":
+		case "help":
+			return { kind: "commands" };
+		case "stop-agent":
+			return { kind: "stop-agent" };
+		default:
+			return { kind: "command", name: name.replace(/^\//, ""), args: argument.trim() };
 	}
-	return { kind: "invalid", reply: `Unknown command in a session topic. ${SESSION_TOPIC_HELP}` };
 }
 
 function oneLine(text: string, max: number): string {
@@ -119,14 +131,20 @@ export function topicTitle(repositoryName: string, sessionName: string, branch: 
 export const CONTROL_TOPIC_HELP = [
 	"Remote control commands:",
 	"/rc sessions: agent sessions by repository",
-	"/rc new <repository> <name>: start an agent in a new worktree and branch",
-	"/rc attach <session>: reconnect a disconnected agent session",
+	"/rc new <repository> <name>: start an agent in a new worktree and branch; with only <name>, pick the repository",
+	"/rc attach <session>: reconnect a disconnected agent session; without <session>, pick one",
+	"/rc stop-agent <session>: abort an agent's current run, after you confirm; without <session>, pick one",
+	"In a session topic, /rc commands lists what that agent accepts.",
 ].join("\n");
 
 export type ControlCommand =
 	| { kind: "sessions" }
-	| { kind: "new"; repository: string; name: string }
-	| { kind: "attach"; session: string }
+	/** Without a repository, the owner picks one of the approved repositories. */
+	| { kind: "new"; repository?: string; name: string }
+	/** Without a session, the owner picks one of the attachable sessions. */
+	| { kind: "attach"; session?: string }
+	/** Without a session, the owner picks one of the connected sessions. */
+	| { kind: "stop-agent"; session?: string }
 	| { kind: "invalid"; reply: string };
 
 /** Parses an owner message in the control topic; undefined when it is not a `/rc` command. */
@@ -138,9 +156,12 @@ export function parseControlCommand(text: string): ControlCommand | undefined {
 		case "sessions":
 			return { kind: "sessions" };
 		case "new":
-			return args.length >= 2 ? { kind: "new", repository: args[0], name: args.slice(1).join(" ") } : { kind: "invalid", reply: "Usage: /rc new <repository> <name>" };
+			if (!args.length) return { kind: "invalid", reply: "Usage: /rc new <repository> <name>, or /rc new <name> to pick the repository" };
+			return args.length === 1 ? { kind: "new", name: args[0] } : { kind: "new", repository: args[0], name: args.slice(1).join(" ") };
 		case "attach":
-			return args.length ? { kind: "attach", session: args.join(" ") } : { kind: "invalid", reply: "Usage: /rc attach <session>" };
+			return { kind: "attach", session: args.join(" ") || undefined };
+		case "stop-agent":
+			return { kind: "stop-agent", session: args.join(" ") || undefined };
 		default:
 			return { kind: "invalid", reply: CONTROL_TOPIC_HELP };
 	}

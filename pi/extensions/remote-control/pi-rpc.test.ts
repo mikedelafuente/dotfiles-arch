@@ -3,13 +3,14 @@ import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import type { AgentSession, PiActivity, Repository } from "./coordinator.ts";
+import type { AgentSession, PiActivity, PiDialog, Repository } from "./coordinator.ts";
 import { RpcPiSessions } from "./pi-rpc.ts";
 import { until } from "./test-support.ts";
 
 /**
  * Stands in for `pi --mode rpc`: answers get_state/get_commands, runs a scripted
- * turn per prompt, asks one dialog, and exits when stdin closes.
+ * turn per prompt, asks one dialog, and exits when stdin closes. The prompt
+ * "reload" adds an extension command and signals it the way this extension does.
  */
 const FAKE_PI = String.raw`
 import { writeFileSync } from "node:fs";
@@ -20,6 +21,8 @@ const file = flag("--session") ?? process.cwd() + "/" + (flag("--session-id") ? 
 const id = process.env.FAKE_PI_ID ?? flag("--session-id") ?? file.split("/").pop().replace(".jsonl", "");
 const log = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 const answers = [];
+const received = [];
+let commands = [{ name: "merge-pr", source: "extension" }, { name: "skill:tdd", source: "skill", description: "Test-driven development" }];
 let buffer = "";
 process.stdin.on("data", (chunk) => {
 	buffer += chunk;
@@ -36,12 +39,30 @@ function handle(command) {
 	switch (command.type) {
 		case "get_state":
 			writeFileSync(process.cwd() + "/pid", String(process.pid));
-			writeFileSync(process.cwd() + "/state.json", JSON.stringify({ args }));
+			writeFileSync(process.cwd() + "/state.json", JSON.stringify({ args, agentFlag: process.env.PI_REMOTE_CONTROL_AGENT }));
 			if (process.env.FAKE_PI_FAIL_STATE) return respond(undefined, false, "no model available");
 			return respond({ sessionId: id, sessionFile: file, sessionName: flag("--name"), cwd: process.cwd(), args });
-		case "get_commands": return respond({ commands: [{ name: "merge-pr", source: "extension" }, { name: "skill:tdd", source: "skill" }] });
+		case "get_commands": if (process.env.FAKE_PI_HANG_COMMANDS) return; return respond({ commands });
 		case "extension_ui_response": answers.push(command); return;
+		case "abort": case "compact": case "set_thinking_level":
+			received.push(command);
+			writeFileSync(process.cwd() + "/received.json", JSON.stringify(received));
+			if (command.type === "set_thinking_level" && command.level === "loud") return respond(undefined, false, "Invalid thinking level");
+			return respond(command.type === "compact" ? { tokensBefore: 120000, estimatedTokensAfter: 30000 } : undefined);
 		case "prompt": {
+			if (command.message === "reload") {
+				commands = [...commands, { name: "deploy", source: "extension" }];
+				respond();
+				log({ type: "agent_start" });
+				log({ type: "extension_ui_request", id: "ui-reload", method: "setStatus", statusKey: "remote-control:commands", statusText: "reloaded" });
+				return log({ type: "agent_settled" });
+			}
+			if (command.message === "choose") {
+				respond();
+				log({ type: "extension_ui_request", id: "ui-2", method: "select", title: "Which base?", options: ["main", "release"] });
+				log({ type: "extension_ui_request", id: "ui-3", method: "input", title: "Commit message?" });
+				return;
+			}
 			if (command.message === "crash") { process.stderr.write("fatal: boom\n"); process.exit(3); }
 			if (command.message === "reject") return respond(undefined, false, "busy compacting");
 			respond();
@@ -66,12 +87,18 @@ async function setup(t: test.TestContext) {
 	const sessions = new RpcPiSessions({ command: [process.execPath, script] });
 	const activity: PiActivity[] = [];
 	const exits: string[] = [];
-	const events = { activity: (item: PiActivity) => activity.push(item), exited: (reason: string) => exits.push(reason) };
+	const dialogs: PiDialog[] = [];
+	const events = {
+		activity: (item: PiActivity) => activity.push(item),
+		exited: (reason: string) => exits.push(reason),
+		confirm: async (dialog: PiDialog) => { dialogs.push(dialog); return true; },
+		choose: async (dialog: PiDialog & { options: string[] }) => { dialogs.push(dialog); return dialog.options.at(-1); },
+	};
 	const repository: Repository = { id: "repo", path: root, name: "demo", registeredAt: "" };
-	return { root, sessions, activity, exits, events, repository };
+	return { root, sessions, activity, exits, events, dialogs, repository };
 }
 
-test("starts a named Pi session in its workspace and relays its run, never tool output", async (t) => {
+test("starts a named Pi session in its workspace, marked as a remote-control agent, and relays its run, never tool output", async (t) => {
 	const h = await setup(t);
 	const agent = await h.sessions.create({ name: "fix ci", repository: h.repository, workspace: { path: h.root, branch: "rc/fix-ci", created: true } }, h.events);
 	t.after(() => agent.close());
@@ -85,13 +112,15 @@ test("starts a named Pi session in its workspace and relays its run, never tool 
 	assert.equal(agent.isIdle(), false, "busy as soon as a prompt is sent");
 	await until(() => h.activity.some((item) => item.type === "settled"), 3000);
 	assert.equal(agent.isIdle(), true);
-	assert.deepEqual(h.activity.map((item) => item.type), ["run-start", "tool-start", "tool-end", "notice", "response", "settled"]);
+	assert.deepEqual(h.activity.map((item) => item.type), ["run-start", "tool-start", "tool-end", "response", "settled"]);
 	assert.deepEqual(h.activity[0], { type: "run-start", prompt: "go" });
-	assert.match((h.activity[3] as { text: string }).text, /Delete branch\?.*cancelled/);
-	const response = h.activity[4] as { text: string };
+	const response = h.activity[3] as { text: string };
 	assert.match(response.text, /^answer go steer /);
-	assert.match(response.text, /"id":"ui-1","cancelled":true/, "the dialog was answered, so Pi does not hang");
+	assert.deepEqual(h.dialogs, [{ title: "Delete branch?" }]);
+	assert.match(response.text, /"id":"ui-1","confirmed":true/, "the owner's answer reached Pi");
 	assert.ok(!JSON.stringify(h.activity).includes("SECRET"));
+	const state = JSON.parse(await readFile(join(h.root, "state.json"), "utf8")) as { agentFlag?: string };
+	assert.equal(state.agentFlag, "1");
 });
 
 test("follow-ups are queued after the run and extension commands are refused", async (t) => {
@@ -107,7 +136,7 @@ test("follow-ups are queued after the run and extension commands are refused", a
 	agent.prompt("/merge-pr now");
 	agent.steer("reject");
 	await until(() => h.activity.length === 2, 3000);
-	assert.match((h.activity[0] as { text: string }).text, /\/merge-pr.*not available remotely/);
+	assert.match((h.activity[0] as { text: string }).text, /\/merge-pr.*runs only in a local Pi/);
 	assert.match((h.activity[1] as { text: string }).text, /busy compacting/);
 	assert.equal(agent.isIdle(), true);
 });
@@ -180,4 +209,59 @@ test("a Pi that fails to report its state is stopped, not left running", async (
 	);
 	const pid = Number(await readFile(join(h.root, "pid"), "utf8"));
 	await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 3000);
+});
+
+test("select dialogs are answered by the owner; text dialogs are still cancelled", async (t) => {
+	const h = await setup(t);
+	const agent = await h.sessions.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events);
+	t.after(() => agent.close());
+	agent.prompt("choose");
+	await until(() => h.activity.some((item) => item.type === "notice"), 3000);
+	assert.deepEqual(h.dialogs, [{ title: "Which base?", options: ["main", "release"] }]);
+	assert.match((h.activity.find((item) => item.type === "notice") as { text: string }).text, /Commit message\?.*cancelled/);
+});
+
+test("discovered commands are refreshed after the agent's Pi reloads its resources", async (t) => {
+	const h = await setup(t);
+	const agent = await h.sessions.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events);
+	t.after(() => agent.close());
+	assert.deepEqual(await agent.commands(), [
+		{ name: "merge-pr", source: "extension", description: undefined },
+		{ name: "skill:tdd", source: "skill", description: "Test-driven development" },
+	]);
+
+	agent.prompt("reload");
+	await until(() => h.activity.some((item) => item.type === "settled"), 3000);
+	h.activity.length = 0;
+	agent.prompt("/deploy now");
+	await until(() => h.activity.some((item) => item.type === "notice"), 3000);
+	assert.match((h.activity[0] as { text: string }).text, /\/deploy is an extension command/);
+	assert.ok((await agent.commands()).some((command) => command.name === "deploy"));
+});
+
+test("abort and the catalog's built-ins are sent as their RPC commands", async (t) => {
+	const h = await setup(t);
+	const agent = await h.sessions.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events);
+	t.after(() => agent.close());
+	await agent.abort();
+	assert.deepEqual(await agent.compact("keep the plan"), { tokensBefore: 120000, estimatedTokensAfter: 30000 });
+	await agent.setThinkingLevel("high");
+	await assert.rejects(agent.setThinkingLevel("loud" as "high"), /Invalid thinking level/);
+	const received = JSON.parse(await readFile(join(h.root, "received.json"), "utf8")) as Record<string, unknown>[];
+	assert.deepEqual(received.map(({ id: _id, ...command }) => command), [
+		{ type: "abort" },
+		{ type: "compact", customInstructions: "keep the plan" },
+		{ type: "set_thinking_level", level: "high" },
+		{ type: "set_thinking_level", level: "loud" },
+	]);
+});
+
+test("a Pi that never lists its commands still starts and takes messages", async (t) => {
+	const h = await setup(t);
+	const hanging = new RpcPiSessions({ command: [process.execPath, join(h.root, "fake-pi.mjs")], env: { FAKE_PI_HANG_COMMANDS: "1" }, commandsTimeoutMs: 50 });
+	const agent = await hanging.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events);
+	t.after(() => agent.close());
+	assert.deepEqual(await agent.commands(), []);
+	agent.prompt("go");
+	await until(() => h.activity.some((item) => item.type === "settled"), 3000);
 });

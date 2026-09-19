@@ -7,9 +7,12 @@ import {
 	type AgentSession,
 	type AgentSessionStore,
 	type AuthorizedMessage,
+	type CoordinatorOptions,
+	type InlineButton,
 	type LeaseHolder,
 	type LivePiSession,
 	type PiActivity,
+	type PiCommand,
 	type PiSessionAdapter,
 	type PiSessionEvents,
 	type RemoteControlAdapters,
@@ -19,6 +22,7 @@ import {
 	type Workspace,
 	type WorkspaceAdapter,
 	type TelegramBotApi,
+	type TelegramCallbackQuery,
 	type TelegramChat,
 	type TelegramChatMember,
 	type TelegramMessage,
@@ -32,13 +36,17 @@ export const OWNER: TelegramUser = { id: 42, isBot: false, username: "owner" };
 export const STRANGER: TelegramUser = { id: 99, isBot: false, username: "stranger" };
 export const GROUP: TelegramChat = { id: -1001, type: "supergroup", title: "Pi", isForum: true };
 
-export type SentMessage = { chatId: number; threadId?: number; text: string; messageId: number };
+export type SentMessage = { chatId: number; threadId?: number; text: string; messageId: number; buttons?: InlineButton[][] };
 
 /** Scriptable Telegram Bot API: updates are delivered through long polling like the real API. */
 export class FakeTelegram implements TelegramBotApi {
 	updates: TelegramUpdate[] = [];
 	sent: SentMessage[] = [];
-	edits: { chatId: number; messageId: number; text: string }[] = [];
+	edits: { chatId: number; messageId: number; text: string; buttons?: InlineButton[][] }[] = [];
+	/** Callback query answers, in order. */
+	answers: { id: string; text?: string }[] = [];
+	/** Command menus set with setMyCommands. */
+	menus: { chatId: number; commands: { command: string; description: string }[] }[] = [];
 	topics: string[] = [];
 	deleted: number[] = [];
 	renamed: { threadId: number; name: string }[] = [];
@@ -61,6 +69,22 @@ export class FakeTelegram implements TelegramBotApi {
 		const id = this.nextId++;
 		this.updates.push({ updateId: id, message: { messageId: id, ...message } });
 		this.wake?.();
+	}
+
+	/** A press of an inline button on `message`, from `from`; `threadId` overrides the message's topic. */
+	press(message: SentMessage, label: string, from: TelegramUser = OWNER, threadId = message.threadId): string {
+		const button = message.buttons?.flat().find((candidate) => candidate.text === label);
+		assert.ok(button, `button "${label}" on: ${message.text}`);
+		const id = this.nextId++;
+		const callbackQuery: TelegramCallbackQuery = { id: `cb-${id}`, from, data: button.data, message: { messageId: message.messageId, chatId: message.chatId, threadId } };
+		this.updates.push({ updateId: id, callbackQuery });
+		this.wake?.();
+		return callbackQuery.id;
+	}
+
+	/** The answer to one callback query, once the bridge has given it. */
+	answerTo(callbackId: string): { id: string; text?: string } | undefined {
+		return this.answers.find((answer) => answer.id === callbackId);
 	}
 
 	/** Messages the bot posted into one topic. */
@@ -109,15 +133,23 @@ export class FakeTelegram implements TelegramBotApi {
 		this.renamed.push({ threadId: input.threadId, name: input.name });
 	}
 
-	async sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<{ messageId: number }> {
+	async sendMessage(input: { chatId: number; threadId?: number; text: string; buttons?: InlineButton[][] }): Promise<{ messageId: number }> {
 		if (input.threadId !== undefined && this.deletedTopics.has(input.threadId)) throw apiError(400, "Bad Request: message thread not found");
 		const messageId = this.nextMessageId++;
 		this.sent.push({ ...input, messageId });
 		return { messageId };
 	}
 
-	async editMessageText(input: { chatId: number; messageId: number; text: string }): Promise<void> {
+	async editMessageText(input: { chatId: number; messageId: number; text: string; buttons?: InlineButton[][] }): Promise<void> {
 		this.edits.push(input);
+	}
+
+	async answerCallbackQuery(input: { id: string; text?: string }): Promise<void> {
+		this.answers.push(input);
+	}
+
+	async setMyCommands(input: { chatId: number; commands: { command: string; description: string }[] }): Promise<void> {
+		this.menus.push(input);
 	}
 }
 
@@ -178,7 +210,21 @@ export class FakePiSession implements LivePiSession {
 	idle = true;
 	delivered: [kind: "prompt" | "steer" | "followUp", text: string][] = [];
 	renamedTo: string[] = [];
+	/** What Pi discovered: read on every request, like Pi's own list after a reload. */
+	commandList: PiCommand[] = [];
+	aborts = 0;
+	/** Built-ins run through this session, as [name, argument]. */
+	builtins: [name: string, args: string][] = [];
 	isIdle(): boolean { return this.idle; }
+	async commands(): Promise<PiCommand[]> { return structuredClone(this.commandList); }
+	async abort(): Promise<void> { this.aborts++; }
+	async compact(instructions?: string): Promise<{ tokensBefore?: number; estimatedTokensAfter?: number }> {
+		this.builtins.push(["compact", instructions ?? ""]);
+		return { tokensBefore: 1000, estimatedTokensAfter: 200 };
+	}
+	async setThinkingLevel(level: string): Promise<void> {
+		this.builtins.push(["thinking", level]);
+	}
 	prompt(text: string): void { this.delivered.push(["prompt", text]); }
 	steer(text: string): void { this.delivered.push(["steer", text]); }
 	followUp(text: string): void { this.delivered.push(["followUp", text]); }
@@ -284,7 +330,7 @@ export class FakeLeases implements SessionLeases {
 }
 
 /** A logged-in coordinator over fakes, ready to start. */
-export async function harness() {
+export async function harness(options: CoordinatorOptions = {}) {
 	const telegram = new FakeTelegram();
 	const stores = memoryStores();
 	const workspaces = new FakeWorkspaces();
@@ -300,7 +346,7 @@ export async function harness() {
 		telegramBot: () => telegram,
 	} satisfies RemoteControlAdapters;
 	let now = new Date("2026-01-01T00:00:00Z").getTime();
-	const coordinator = new RemoteControlCoordinator(adapters, () => new Date(now), { progressIntervalMs: 10 });
+	const coordinator = new RemoteControlCoordinator(adapters, () => new Date(now), { progressIntervalMs: 10, ...options });
 	await coordinator.login({
 		token: TOKEN,
 		onHandshakeCode: (code) => { setTimeout(() => telegram.push({ chat: GROUP, from: OWNER, text: code }), 5); },
