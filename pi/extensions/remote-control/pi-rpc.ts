@@ -51,8 +51,8 @@ class RpcAgent implements AgentProcess {
 	/** A start failure is reported by `start()`, not as an exit. */
 	private started = false;
 	private running = false;
-	/** Set from sending a prompt while idle until Pi reports the run started. */
-	private starting?: ReturnType<typeof setTimeout>;
+	/** Runs from sending a prompt while idle until Pi reports the run started. */
+	private runStartTimer?: ReturnType<typeof setTimeout>;
 	private runPrompt?: string;
 
 	constructor(options: RpcPiSessionsOptions, cwd: string, args: string[], location: Location, events: PiSessionEvents) {
@@ -77,8 +77,8 @@ class RpcAgent implements AgentProcess {
 		});
 		this.exited = new Promise((resolve) => {
 			const finish = (reason: string) => {
-				clearTimeout(this.starting);
-				const error = new Error(`Pi ${reason}${this.stderr.trim() ? `: ${lastLine(this.stderr)}` : ""}`);
+				clearTimeout(this.runStartTimer);
+				const error = this.failure(reason);
 				for (const request of this.pending.values()) request.reject(error);
 				this.pending.clear();
 				if (this.started && !this.closing) events.exited(error.message.replace(/^Pi /, ""));
@@ -96,6 +96,10 @@ class RpcAgent implements AgentProcess {
 			this.id = state.sessionId;
 			this.sessionFile = state.sessionFile;
 			this.started = true;
+		} catch (error) {
+			this.closing = true;
+			this.child.kill("SIGKILL");
+			throw error;
 		} finally {
 			clearTimeout(timeout);
 		}
@@ -107,15 +111,16 @@ class RpcAgent implements AgentProcess {
 	}
 
 	isIdle(): boolean {
-		return !this.running && !this.starting;
+		return !this.running && !this.runStartTimer;
 	}
 
 	prompt(text: string): void {
 		if (this.isIdle()) {
 			this.runPrompt = text;
-			this.starting = setTimeout(() => { this.starting = undefined; }, RUN_START_TIMEOUT_MS);
-			this.starting.unref?.();
+			this.runStartTimer = setTimeout(() => { this.runStartTimer = undefined; }, RUN_START_TIMEOUT_MS);
+			this.runStartTimer.unref?.();
 		}
+		// From idle, Pi starts a run and ignores the mode; one that just started is steered.
 		this.send(text, "steer");
 	}
 
@@ -127,15 +132,24 @@ class RpcAgent implements AgentProcess {
 		this.send(text, "followUp");
 	}
 
+	private isRunning(): boolean {
+		return this.child.exitCode === null && this.child.signalCode === null;
+	}
+
+	/** An error naming the last line Pi wrote to stderr, if any. */
+	private failure(reason: string): Error {
+		return new Error(`Pi ${reason}${this.stderr.trim() ? `: ${lastLine(this.stderr)}` : ""}`);
+	}
+
 	async close(): Promise<void> {
 		this.closing = true;
-		if (this.child.exitCode === null && this.child.signalCode === null) {
+		if (this.isRunning()) {
 			this.child.stdin.end();
-			const timer = setTimeout(() => this.child.kill("SIGTERM"), CLOSE_TIMEOUT_MS);
-			const killer = setTimeout(() => this.child.kill("SIGKILL"), CLOSE_TIMEOUT_MS * 2);
+			const terminate = setTimeout(() => this.child.kill("SIGTERM"), CLOSE_TIMEOUT_MS);
+			const kill = setTimeout(() => this.child.kill("SIGKILL"), CLOSE_TIMEOUT_MS * 2);
 			await this.exited;
-			clearTimeout(timer);
-			clearTimeout(killer);
+			clearTimeout(terminate);
+			clearTimeout(kill);
 		}
 	}
 
@@ -162,15 +176,15 @@ class RpcAgent implements AgentProcess {
 	}
 
 	private clearStarting(): void {
-		clearTimeout(this.starting);
-		this.starting = undefined;
+		clearTimeout(this.runStartTimer);
+		this.runStartTimer = undefined;
 	}
 
 	private request(command: Record<string, unknown>): Promise<RpcResponse> {
 		const id = `rc-${this.nextId++}`;
 		return new Promise((resolve, reject) => {
-			if (this.child.exitCode !== null || this.child.signalCode !== null) {
-				reject(new Error(`Pi exited${this.stderr.trim() ? `: ${lastLine(this.stderr)}` : ""}`));
+			if (!this.isRunning()) {
+				reject(this.failure("exited"));
 				return;
 			}
 			this.pending.set(id, { resolve, reject });

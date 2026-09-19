@@ -199,6 +199,7 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 	branches = new Map<string, string>([["/work/demo", "main"]]);
 	created: Workspace[] = [];
 	removed: string[] = [];
+	mainLineBranch = "main";
 	async create(repository: Repository, branch: string): Promise<Workspace> {
 		const path = `${repository.path}.worktrees/${branch.replace(/\//g, "-")}`;
 		if (this.branches.has(path)) throw new Error(`already exists: ${path}`);
@@ -211,6 +212,7 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 		this.branches.delete(workspace.path);
 		this.removed.push(workspace.path);
 	}
+	async mainLine(): Promise<string> { return this.mainLineBranch; }
 	async inspect(path: string): Promise<{ branch: string } | undefined> {
 		const branch = this.branches.get(path);
 		return branch === undefined ? undefined : { branch };

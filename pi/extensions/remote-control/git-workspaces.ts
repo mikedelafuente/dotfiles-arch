@@ -35,7 +35,7 @@ export async function gitWorkspace(cwd: string): Promise<{ workspace: string; br
 	return { workspace, branch: await currentBranch(cwd), repositoryPath: basename(commonDir) === ".git" ? dirname(commonDir) : commonDir };
 }
 
-/** The branch new work starts from: the remote's default branch when known, else main or master. */
+/** The branch new work starts from: the remote's default branch when known, else main or master, else HEAD. */
 async function mainLine(repository: string): Promise<string> {
 	const remoteHead = await git(repository, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"]).catch(() => "");
 	const candidates = [remoteHead.replace(/^origin\//, ""), "main", "master"].filter(Boolean);
@@ -56,6 +56,10 @@ export class GitWorkspaces implements WorkspaceAdapter {
 	async remove(workspace: Workspace, repository: Repository): Promise<void> {
 		await git(repository.path, ["worktree", "remove", "--force", workspace.path]);
 		await git(repository.path, ["branch", "-D", workspace.branch]);
+	}
+
+	mainLine(repositoryPath: string): Promise<string> {
+		return mainLine(repositoryPath);
 	}
 
 	async inspect(path: string): Promise<{ branch: string } | undefined> {

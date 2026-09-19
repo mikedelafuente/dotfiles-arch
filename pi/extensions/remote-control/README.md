@@ -121,7 +121,7 @@ and session topic. Two sessions never share a workspace.
 
 | Command | Where | Effect |
 |---------|-------|--------|
-| `/rc new <name>` | Local Pi | On a feature branch or in a linked worktree: the current conversation becomes agent session `<name>` in its topic (renamed to match). On `main`/`master` or a detached HEAD in the main checkout: a new session, as below |
+| `/rc new <name>` | Local Pi | On a feature branch or in a linked worktree: the current conversation becomes agent session `<name>` in its topic (renamed to match). On the main line or a detached HEAD in the main checkout: a new session, as below |
 | `/rc new <repository> <name>` | Control topic | A new session in an approved repository, named by its registry name or path |
 | `/rc sessions` | Both | Sessions grouped by repository, with their status |
 | `/rc attach <session>` | Both | Reconnects a disconnected session, by name or id |
@@ -130,8 +130,8 @@ and session topic. Two sessions never share a workspace.
 A new session gets, together or not at all:
 
 - a worktree at `<repository>.worktrees/rc-<name>` on a new branch `rc/<name>`,
-  started from the remote's default branch (else `main`, else `master`). An
-  existing branch of that name is refused rather than reused;
+  started from the main line: the remote's default branch, else `main`, else
+  `master`. An existing branch of that name is refused rather than reused;
 - a Pi conversation named `<name>`, running as a `pi --mode rpc` child of this Pi
   in that worktree, with the same extensions, skills, and session history as a
   local Pi;
@@ -140,14 +140,15 @@ A new session gets, together or not at all:
 If any step fails, the ones already done are undone: the topic is deleted, Pi is
 stopped, and the worktree and branch are removed. Remote requests can only use
 repositories already in the registry; running `/rc` locally is the only way to add
-one. A name already used in the same repository is refused, as is a workspace
-another session is assigned.
+one. A name that would give the same branch as another session in the repository
+is refused, as is a workspace another session is assigned. If a rollback step
+itself fails, what it could not remove is left in place.
 
 `/rc sessions` reports each session as:
 
 | Status | Meaning |
 |--------|---------|
-| connected | Its topic is routed to a running Pi |
+| running | Its Pi is running; its topic is routed while remote control runs |
 | disconnected | Not running, but its workspace and Pi history exist: `/rc attach` it |
 | stale | Its Pi history is gone (or was never written, as for a session that never got a prompt) |
 | missing workspace | Its worktree was removed |
@@ -155,8 +156,8 @@ another session is assigned.
 `/rc attach` resumes the stored Pi session file in its workspace, checks Pi really
 resumed that conversation, then posts `Reconnected` in the session topic (renamed
 if the branch changed, replaced if it was deleted). It refuses stale and
-missing-workspace sessions, and a name that matches more than one session asks for
-the id. Attach a session only when no other Pi has it open: two Pi processes
+missing-workspace sessions and sessions whose repository was removed from the
+registry, and a name that matches more than one session asks for the id. Attach a session only when no other Pi has it open: two Pi processes
 writing one session file corrupt it.
 
 In an agent's topic, messages work as in [Current session](#current-session),
@@ -200,7 +201,7 @@ injected `TelegramBotApi` (`telegram.ts` is the fetch-based implementation).
 
 It also routes session-topic messages to an injected `LivePiSession` and turns
 `recordActivity()` reports (`index.ts` maps Pi's agent and tool events to them) into
-progress edits and responses. `messages.ts` holds the pure text formatting.
+progress edits and responses. `messages.ts` holds the pure text formatting and parsing.
 
 Adapter-backed tests: `coordinator.test.ts` covers creating, adopting, listing, and
 attaching agent sessions, rollback, repository approval, and duplicate workspace

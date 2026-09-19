@@ -275,3 +275,55 @@ test("control-topic text that is not a /rc command still reaches the local notif
 	await until(() => seen.length === 1);
 	assert.deepEqual(seen, ["just saying hi"]);
 });
+
+test("the repository's default branch counts as the main line, whatever it is called", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	h.workspaces.mainLineBranch = "develop";
+	const current = new FakePiSession();
+	current.branch = "develop";
+	await startWith(h, current);
+
+	const { adopted, session } = await h.coordinator.newSession({ name: "fix-ci", current });
+	assert.equal(adopted, false);
+	assert.equal(session.branch, "rc/fix-ci");
+});
+
+test("names that would share a branch are duplicates", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { pi: current } = await startWith(h);
+	await h.coordinator.newSession({ name: "Fix bug", current });
+	await assert.rejects(h.coordinator.newSession({ name: "fix-bug", current }), { code: "duplicate-session" });
+	assert.equal(h.workspaces.created.length, 1);
+});
+
+test("attach refuses sessions whose repository is no longer approved", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { pi: current } = await startWith(h);
+	const { session } = await h.coordinator.newSession({ name: "fix-ci", current });
+	h.pi.last.events.exited("killed");
+	await h.stores.repositories.remove("/work/demo");
+	const started = h.pi.processes.length;
+
+	await assert.rejects(h.coordinator.attach(session.id), { code: "repository-not-approved" });
+	assert.equal(h.pi.processes.length, started);
+});
+
+test("a Pi that exits while attach is still binding its topic is not reported as connected", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { pi: current } = await startWith(h);
+	const { session } = await h.coordinator.newSession({ name: "fix-ci", current });
+	h.pi.last.events.exited("killed");
+	const send = h.telegram.sendMessage.bind(h.telegram);
+	h.telegram.sendMessage = async (input) => {
+		if (input.threadId === Number(session.topicId)) h.pi.last.events.exited("crashed on start");
+		return send(input);
+	};
+
+	await assert.rejects(h.coordinator.attach(session.id), /crashed on start/);
+	assert.deepEqual(h.coordinator.status().topics, ["demo / fix-flake / main"]);
+	assert.equal((await h.coordinator.sessions())[0].sessions[1].status, "disconnected");
+});

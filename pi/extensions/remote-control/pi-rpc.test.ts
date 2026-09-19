@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -12,6 +12,7 @@ import { until } from "./test-support.ts";
  * turn per prompt, asks one dialog, and exits when stdin closes.
  */
 const FAKE_PI = String.raw`
+import { writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); return i === -1 ? undefined : args[i + 1]; };
 const file = flag("--session") ?? process.cwd() + "/new-session.jsonl";
@@ -32,7 +33,10 @@ process.stdin.on("end", () => process.exit(0));
 function handle(command) {
 	const respond = (data, success = true, error) => log({ id: command.id, type: "response", command: command.type, success, data, error });
 	switch (command.type) {
-		case "get_state": return respond({ sessionId: id, sessionFile: file, sessionName: flag("--name"), cwd: process.cwd(), args });
+		case "get_state":
+			writeFileSync(process.cwd() + "/pid", String(process.pid));
+			if (process.env.FAKE_PI_FAIL_STATE) return respond(undefined, false, "no model available");
+			return respond({ sessionId: id, sessionFile: file, sessionName: flag("--name"), cwd: process.cwd(), args });
 		case "get_commands": return respond({ commands: [{ name: "merge-pr", source: "extension" }, { name: "skill:tdd", source: "skill" }] });
 		case "extension_ui_response": answers.push(command); return;
 		case "prompt": {
@@ -149,4 +153,15 @@ test("a Pi that cannot start is reported with its error output", async (t) => {
 		/No API key configured/,
 	);
 	assert.deepEqual(h.exits, []);
+});
+
+test("a Pi that fails to report its state is stopped, not left running", async (t) => {
+	const h = await setup(t);
+	const failing = new RpcPiSessions({ command: [process.execPath, join(h.root, "fake-pi.mjs")], env: { FAKE_PI_FAIL_STATE: "1" } });
+	await assert.rejects(
+		failing.create({ name: "x", repository: h.repository, workspace: { path: h.root, branch: "rc/x", created: true } }, h.events),
+		/no model available/,
+	);
+	const pid = Number(await readFile(join(h.root, "pid"), "utf8"));
+	await until(() => { try { process.kill(pid, 0); return false; } catch { return true; } }, 3000);
 });

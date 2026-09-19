@@ -93,6 +93,8 @@ export interface WorkspaceAdapter {
 	remove(workspace: Workspace, repository: Repository): Promise<void>;
 	/** The branch checked out in a workspace, or undefined when the workspace no longer exists. */
 	inspect(path: string): Promise<{ branch: string } | undefined>;
+	/** The branch new work in the repository starts from, such as `main`. */
+	mainLine(repositoryPath: string): Promise<string>;
 }
 
 export type PiSessionEvents = {
@@ -300,12 +302,9 @@ const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
 const DEFAULT_PROGRESS_INTERVAL_MS = 5000;
 const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
 const DEFAULT_SESSION_NAME = "agent";
-/** Branches `/rc new` never adopts: new work there gets its own worktree. */
-const MAIN_LINE_BRANCHES = new Set(["main", "master"]);
-
-function isAdoptable(live: LivePiSession): boolean {
-	if (live.workspace !== live.repositoryPath) return true;
-	return !MAIN_LINE_BRANCHES.has(live.branch) && !live.branch.startsWith("detached@");
+/** The last path segment, as a repository's display name. */
+function nameFromPath(path: string): string {
+	return path.split("/").filter(Boolean).pop() || path;
 }
 
 function connectedText(name: string, branch: string): string {
@@ -435,6 +434,8 @@ export class RemoteControlCoordinator {
 	private pendingLogin?: AbortController;
 	/** Pi processes remote control started, keyed by agent session id. They outlive `/rc stop` but not `shutdown()`. */
 	private readonly agents = new Map<string, { session: AgentSession; pi: AgentProcess }>();
+	/** Exits reported while an agent was still being connected, which must fail its creation or attach. */
+	private readonly exitedBeforeConnect = new WeakMap<AgentProcess, string>();
 
 	private readonly adapters: RemoteControlAdapters;
 	private readonly now: () => Date;
@@ -457,7 +458,7 @@ export class RemoteControlCoordinator {
 		return this.withCreationLock(() => this.registerRepositoryLocked(path, name));
 	}
 
-	private async registerRepositoryLocked(path: string, name = path.split("/").filter(Boolean).pop() || path): Promise<Repository> {
+	private async registerRepositoryLocked(path: string, name = nameFromPath(path)): Promise<Repository> {
 		const existing = await this.adapters.repositories.getByPath(path);
 		if (existing) return existing;
 		const repository: Repository = { id: id("repo"), path, name, registeredAt: this.now().toISOString() };
@@ -480,7 +481,7 @@ export class RemoteControlCoordinator {
 			const name = input.name.trim();
 			if (!name) throw new RemoteControlError("invalid-session-name", "An agent session name is required.");
 			const current = input.current;
-			if (current && isAdoptable(current)) {
+			if (current && (await this.isAdoptable(current))) {
 				const session = await this.exposeLocked(bridge, current, name);
 				current.rename?.(name);
 				return { session, adopted: true };
@@ -490,6 +491,13 @@ export class RemoteControlCoordinator {
 				: await this.approvedRepository(input.repository ?? "");
 			return { session: await this.createLocked(bridge, repository, name), adopted: false };
 		});
+	}
+
+	/** A linked worktree, or a named branch other than the main line: `/rc new` works there instead of in a new worktree. */
+	private async isAdoptable(live: LivePiSession): Promise<boolean> {
+		if (live.workspace !== live.repositoryPath) return true;
+		if (live.branch.startsWith("detached@")) return false;
+		return live.branch !== (await this.adapters.workspaces.mainLine(live.repositoryPath));
 	}
 
 	private requireBridge(): Bridge {
@@ -511,8 +519,9 @@ export class RemoteControlCoordinator {
 		const branch = sessionBranch(name);
 		if (!branch) throw new RemoteControlError("invalid-session-name", `Use letters or digits in the session name: ${name}`);
 		const existing = await this.adapters.sessions.list();
-		if (existing.some((session) => session.repositoryPath === repository.path && session.name.toLowerCase() === name.toLowerCase())) {
-			throw new RemoteControlError("duplicate-session", `${repository.name} already has an agent session named ${name}; use /rc attach ${name}.`);
+		const namesake = existing.find((session) => session.repositoryPath === repository.path && sessionBranch(session.name) === branch);
+		if (namesake) {
+			throw new RemoteControlError("duplicate-session", `${repository.name} already has an agent session named ${namesake.name}; use /rc attach ${namesake.name}.`);
 		}
 
 		const workspace = await this.adapters.workspaces.create(repository, branch);
@@ -538,7 +547,7 @@ export class RemoteControlCoordinator {
 		} catch (error) {
 			if (threadId !== undefined) await bridge.api.deleteForumTopic({ chatId, threadId }).catch(() => undefined);
 			await agent?.close().catch(() => undefined);
-			await this.adapters.workspaces.remove(workspace, repository).catch(() => undefined);
+			if (workspace.created) await this.adapters.workspaces.remove(workspace, repository).catch(() => undefined);
 			throw error;
 		}
 	}
@@ -552,13 +561,15 @@ export class RemoteControlCoordinator {
 			},
 			exited: (reason) => {
 				const current = agent();
-				if (current) this.disconnectAgent(current, reason);
+				if (current && !this.disconnectAgent(current, reason)) this.exitedBeforeConnect.set(current, reason);
 			},
 		};
 	}
 
 	/** Keeps a running agent and routes its topic while the bridge runs, including after a restart. */
 	private connectAgent(session: AgentSession, agent: AgentProcess): void {
+		const exit = this.exitedBeforeConnect.get(agent);
+		if (exit !== undefined) throw new Error(`Pi ${exit}`);
 		this.agents.set(session.id, { session, pi: agent });
 		const bridge = this.bridge;
 		if (bridge) this.route(bridge, session, agent);
@@ -575,16 +586,18 @@ export class RemoteControlCoordinator {
 		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve() });
 	}
 
-	private disconnectAgent(agent: AgentProcess, reason: string): void {
+	/** Returns false for an agent that was never connected. */
+	private disconnectAgent(agent: AgentProcess, reason: string): boolean {
 		const entry = [...this.agents].find(([, candidate]) => candidate.pi === agent);
-		if (!entry) return;
+		if (!entry) return false;
 		this.agents.delete(entry[0]);
 		const bridge = this.bridge;
 		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi === agent);
-		if (!bridge || !route) return;
+		if (!bridge || !route) return true;
 		bridge.routes.delete(route.threadId);
 		clearTimeout(route.progress?.timer);
-		this.reply(bridge, route, `Disconnected: the Pi agent exited (${reason}). Reconnect with /rc attach ${route.session.name}.`);
+		this.reply(bridge, route, `Disconnected: the Pi agent ${reason}. Reconnect with /rc attach ${route.session.name}.`);
+		return true;
 	}
 
 	/** Agent sessions grouped by repository, each with its computed status. */
@@ -596,7 +609,7 @@ export class RemoteControlCoordinator {
 		for (const session of await this.adapters.sessions.list()) {
 			let group = groups.get(session.repositoryPath);
 			if (!group) {
-				group = { repository: { name: session.repositoryPath.split("/").filter(Boolean).pop() || session.repositoryPath, path: session.repositoryPath }, sessions: [] };
+				group = { repository: { name: nameFromPath(session.repositoryPath), path: session.repositoryPath }, sessions: [] };
 				groups.set(session.repositoryPath, group);
 			}
 			group.sessions.push({ ...session, status: connected.has(session.id) ? "active" : await this.health(session) });
@@ -640,6 +653,10 @@ export class RemoteControlCoordinator {
 			const bridge = this.requireBridge();
 			const session = await this.findSession(reference);
 			if (this.connectedSessionIds().has(session.id)) return { session, alreadyConnected: true };
+			const repository = await this.adapters.repositories.getByPath(session.repositoryPath);
+			if (!repository) {
+				throw new RemoteControlError("repository-not-approved", `The repository of ${session.name} is no longer approved for remote control: ${session.repositoryPath}`);
+			}
 			const workspace = await this.adapters.workspaces.inspect(session.workspace);
 			if (!workspace) {
 				throw new RemoteControlError("missing-workspace", `The workspace of ${session.name} no longer exists: ${session.workspace}`);
@@ -652,7 +669,7 @@ export class RemoteControlCoordinator {
 			agent = await this.adapters.pi.resume(session, this.agentEvents(() => agent));
 			try {
 				if (agent.id !== session.piSessionId) throw new Error(`Pi resumed session ${agent.id} instead of ${session.piSessionId}.`);
-				const title = topicTitle(await this.repositoryName(session), session.name, workspace.branch);
+				const title = topicTitle(repository.name, session.name, workspace.branch);
 				const threadId = await this.bindTopic(bridge, session, title, `Reconnected to Pi session "${session.name}" on ${workspace.branch}. ${SESSION_TOPIC_HELP}`);
 				const attached: AgentSession = {
 					...session, branch: workspace.branch, topicId: String(threadId), topicName: title,
@@ -666,11 +683,6 @@ export class RemoteControlCoordinator {
 				throw error;
 			}
 		});
-	}
-
-	private async repositoryName(session: AgentSession): Promise<string> {
-		const repository = await this.adapters.repositories.getByPath(session.repositoryPath);
-		return repository?.name ?? (session.repositoryPath.split("/").filter(Boolean).pop() || session.repositoryPath);
 	}
 
 	/**

@@ -1,4 +1,5 @@
-/** Pure text formatting for session topics: commands in, progress and responses out. */
+/** Pure text formatting for session and control topics: commands in, progress, responses, and listings out. */
+import type { RepositorySessions, SessionStatus } from "./coordinator.ts";
 
 /** Room left under Telegram's 4096-character message limit for the truncation note. */
 const RESPONSE_BUDGET = 3500;
@@ -147,21 +148,19 @@ export function sessionBranch(name: string): string | undefined {
 	return slug ? `rc/${slug}` : undefined;
 }
 
-type SessionListing = { repository: { name: string; path: string }; sessions: { name: string; branch: string; status: string }[] };
-
-const STATUS_TEXT: Record<string, string> = {
-	active: "connected",
+const STATUS_TEXT: Record<SessionStatus, string> = {
+	active: "running",
 	disconnected: "disconnected",
 	stale: "stale: Pi history not found",
 	"missing-workspace": "missing workspace",
 };
 
 /** Agent sessions grouped by repository, in one Telegram message. */
-export function renderSessions(groups: SessionListing[]): string {
+export function renderSessions(groups: RepositorySessions[]): string {
 	if (!groups.length) return "No agent sessions yet. Start one with /rc new <repository> <name>.";
 	const lines = groups.flatMap((group) => [
 		`${group.repository.name} (${group.repository.path})`,
-		...group.sessions.map((session) => `• ${session.name} · ${session.branch} · ${STATUS_TEXT[session.status] ?? session.status}`),
+		...group.sessions.map((session) => `• ${session.name} · ${session.branch} · ${STATUS_TEXT[session.status]}`),
 		"",
 	]);
 	lines.push("Reconnect a disconnected session with /rc attach <session>.");
