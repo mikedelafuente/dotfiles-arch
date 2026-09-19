@@ -77,3 +77,13 @@ test("the unlisted replace-runtime subcommand runs Pi's /new and /reload", async
 	await rc.handler("replace-runtime reload", ctx);
 	assert.deepEqual(calls, ["newSession", "reload"]);
 });
+
+test("local /rc archive and /rc cleanup explain their usage, and need a session to act on", async () => {
+	const { rc, ctx, notified } = load();
+	await rc.handler("cleanup workspace", ctx);
+	assert.match(notified.at(-1)![0], /Usage: \/rc cleanup history <session>/);
+	await rc.handler("archive", ctx);
+	assert.match(notified.at(-1)![0], /Usage: \/rc archive <session>/);
+	await rc.handler("cleanup history nobody", ctx);
+	assert.match(notified.at(-1)![0], /\/rc cleanup failed: Agent session not found: nobody/);
+});

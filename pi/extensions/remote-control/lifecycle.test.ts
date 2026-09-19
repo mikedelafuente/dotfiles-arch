@@ -12,7 +12,7 @@ function harness() {
 	const tokens: string[] = [];
 	const adapters = {
 		repositories: { getByPath: async () => undefined, list: async () => [], register: async () => undefined, remove: async () => undefined },
-		sessions: { list: async () => [], get: async () => undefined, save: async () => undefined, update: async () => undefined },
+		sessions: { list: async () => [], get: async () => undefined, save: async () => undefined, update: async () => undefined, remove: async () => undefined },
 		workspaces: new FakeWorkspaces(),
 		pi: new FakePiSessions(),
 		leases: new FakeLeases(),

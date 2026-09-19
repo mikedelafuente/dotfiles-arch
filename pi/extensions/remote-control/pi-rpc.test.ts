@@ -197,6 +197,18 @@ test("resumes the persisted session file and refuses a different conversation", 
 	await assert.rejects(mismatched.resume(session, h.events), /other.*instead of abc/);
 });
 
+test("deleting a conversation's history removes its session file, and reports one already gone", async (t) => {
+	const h = await setup(t);
+	const file = join(h.root, "abc.jsonl");
+	await writeFile(file, "{}\n");
+	const session = { piSessionId: "abc", piSessionFile: file, name: "x", workspace: h.root, branch: "rc/x", repositoryPath: h.root } as AgentSession;
+
+	assert.equal(await h.sessions.deleteHistory(session), true);
+	assert.equal(await h.sessions.hasHistory(session), false);
+	assert.equal(await h.sessions.deleteHistory(session), false);
+	assert.equal(await h.sessions.deleteHistory({ ...session, piSessionFile: undefined }), false);
+});
+
 test("an unprompted session without history restarts under its own id; a prompted one is refused", async (t) => {
 	const h = await setup(t);
 	const missing = join(h.root, "never-written.jsonl");

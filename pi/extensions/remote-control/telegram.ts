@@ -117,6 +117,12 @@ export function createTelegramBotApi(token: string, fetchImpl: typeof fetch = fe
 		async editForumTopic({ chatId, threadId, name }) {
 			await call("editForumTopic", { chat_id: chatId, message_thread_id: threadId, name });
 		},
+		async closeForumTopic({ chatId, threadId }) {
+			await call("closeForumTopic", { chat_id: chatId, message_thread_id: threadId });
+		},
+		async reopenForumTopic({ chatId, threadId }) {
+			await call("reopenForumTopic", { chat_id: chatId, message_thread_id: threadId });
+		},
 		async sendMessage({ chatId, threadId, text, buttons }) {
 			const message = await call<{ message_id: number }>("sendMessage", {
 				chat_id: chatId, message_thread_id: threadId, text, ...(buttons ? { reply_markup: keyboard(buttons) } : {}),

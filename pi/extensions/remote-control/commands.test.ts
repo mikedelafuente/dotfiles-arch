@@ -169,7 +169,7 @@ test("the group's Telegram command menu lists every command, with names Telegram
 	assert.equal(h.telegram.menus.length, 1, "set once, not once per route");
 	assert.equal(h.telegram.menus[0].chatId, GROUP.id);
 	assert.deepEqual(menu(h), [
-		"rc", "commands", "followup", "stop_agent", "compact", "thinking", "model", "name", "session", "new", "reload",
+		"rc", "commands", "followup", "stop_agent", "status", "archive", "compact", "thinking", "model", "name", "session", "new", "reload",
 		"merge_pr", "fix_tests", "skill_tdd",
 	]);
 	for (const command of h.telegram.menus[0].commands) {

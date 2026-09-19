@@ -84,6 +84,11 @@ export class JsonAgentSessionStore implements AgentSessionStore {
 			state.sessions[index] = session;
 		});
 	}
+	async remove(id: string): Promise<void> {
+		await this.store.update((state) => {
+			state.sessions = state.sessions.filter((item) => item.id !== id);
+		});
+	}
 }
 
 export class JsonCredentialStore implements CredentialStore {

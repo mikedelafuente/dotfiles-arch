@@ -38,4 +38,8 @@ test("agent sessions update in place but never share a workspace", async (t) => 
 	await assert.rejects(store.update(session("one", "/two")), { code: "duplicate-workspace" });
 	await assert.rejects(store.update(session("missing", "/three")), { code: "session-not-found" });
 	assert.equal((await store.list()).length, 2);
+
+	await store.remove("one");
+	await store.remove("missing");
+	assert.deepEqual((await store.list()).map((item) => item.id), ["two"]);
 });
