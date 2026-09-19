@@ -43,7 +43,7 @@ test("/rc commands lists remote-control commands, runnable Pi built-ins, and the
 
 	const listing = await ask(h, topic, "/rc commands");
 	for (const expected of [
-		"/rc followup <message>", "/rc stop-agent", "/rc compact", "/rc thinking <level>", "/rc model <provider/model>", "/rc name <name>",
+		"/rc followup <message>", "/rc stop-agent", "/rc compact", "/rc thinking <level>", "/rc model [provider/model]", "/rc name <name>",
 		"/rc session", "/rc new", "/rc reload", "/rc fix-tests", "Fix failing tests", "/rc skill:tdd",
 	]) {
 		assert.ok(listing.includes(expected), `lists ${expected}:\n${listing}`);
@@ -309,4 +309,26 @@ test("a session command picked from the menu in the control topic is pointed at 
 	h.telegram.push({ chat: GROUP, from: OWNER, threadId: CONTROL_TOPIC, text: "hello" });
 	await until(() => notified.length === 1);
 	assert.deepEqual(notified, ["hello"]);
+});
+
+test("/rc name refuses the name of another session in the same repository", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { current, agent, topic } = await withAgent(h);
+	assert.match(await ask(h, topic, `/rc name ${current.session.name.toUpperCase()}`), /\/name failed: .*already has an agent session named fix-flake/);
+	assert.deepEqual(agent.renamedTo, []);
+});
+
+test("an extension command gone by the time the owner approves it is not sent to Pi", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.stop());
+	const { pi, topic } = await startWith(h);
+	pi.commandList = DISCOVERED;
+	h.telegram.push({ chat: GROUP, from: OWNER, threadId: topic, text: "/rc merge-pr" });
+	const approval = await buttonsIn(h, topic);
+	pi.commandList = DISCOVERED.filter((command) => command.name !== "merge-pr");
+	h.telegram.press(approval, "Approve");
+	await until(() => h.telegram.inTopic(topic).some((message) => /no longer has \/merge-pr/.test(message.text)));
+	assert.deepEqual(pi.extensionCommands, []);
+	assert.deepEqual(pi.delivered, []);
 });

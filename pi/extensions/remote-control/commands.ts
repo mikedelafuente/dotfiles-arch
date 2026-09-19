@@ -69,7 +69,7 @@ export const REMOTE_BUILTINS: Record<BuiltinName, Builtin> = {
 	},
 	model: {
 		name: "model",
-		usage: "/rc model <provider/model>",
+		usage: "/rc model [provider/model]",
 		description: "Set the model; without one, list the models",
 		async run({ pi }, args) {
 			if (!args) {

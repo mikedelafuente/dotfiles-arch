@@ -205,8 +205,8 @@ without it, one started with extensions disabled, or one on another machine
 sharing the session files leaves no lease, and attach cannot see it.
 
 In an agent's topic, messages work as in [Current session](#current-session); the
-agent receives them through Pi's RPC `prompt`. An extension command reaches it only
-through `/rc <name>` once you approve it; sent any other way, it is refused. An
+agent receives them through Pi's RPC `prompt`. An extension command, as `/rc <name>`
+or `/<name>`, reaches it only once you approve it. An
 extension's confirmation or selection dialog is asked in the topic with buttons (see
 [Approvals](#approvals)); a dialog that needs typed input is cancelled with a note.
 Extension warnings and errors are posted in the topic. If the agent's Pi exits, the
@@ -295,7 +295,11 @@ withdraws the other. Every approval and every button selection is:
 with its arguments: Pi runs extension commands outside the tool-call approvals, so
 approving it approves everything that command does. The approval is bound to the
 conversation it was asked for, and waiting for it does not hold back the topic's
-other messages; anything but Approve runs nothing.
+other messages; anything but Approve runs nothing, and neither does a command the
+conversation no longer has once you approve. Pi reports what the command does, and
+how it fails, where it runs: in the agent's topic, or in the local Pi for the
+current conversation. A command that itself starts a new session or reloads Pi
+stops remote control there, like `/new` and `/reload`.
 
 An approval that is denied or expires counts as a denial: the tool call is blocked
 and Pi is told not to retry it. When Telegram decides nothing (the approval could not

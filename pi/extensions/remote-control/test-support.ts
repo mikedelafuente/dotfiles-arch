@@ -11,6 +11,7 @@ import {
 	type InlineButton,
 	type LeaseHolder,
 	type LivePiSession,
+	type NextConversation,
 	type PiActivity,
 	type PiCommand,
 	type PiSessionAdapter,
@@ -269,7 +270,7 @@ export class FakeAgentProcess extends FakePiSession implements AgentProcess {
 	}
 	reloads = 0;
 	/** Pi's `/new`: the next conversation has no history until its first response. */
-	async newConversation(): Promise<{ id: string; sessionFile?: string } | undefined> {
+	async newConversation(): Promise<NextConversation | undefined> {
 		this.id = `${this.id}-next`;
 		this.sessionFile = `/sessions/${this.id}.jsonl`;
 		this.name = "";

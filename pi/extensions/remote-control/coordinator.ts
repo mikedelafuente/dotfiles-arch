@@ -804,12 +804,12 @@ export class RemoteControlCoordinator {
 	 */
 	private route(bridge: Bridge, session: AgentSession, pi: LivePiSession): void {
 		const threadId = Number(session.topicId);
-		const kept = bridge.routes.get(threadId);
-		const same = kept?.session.id === session.id && kept.pi.id === pi.id ? kept : undefined;
+		const current = bridge.routes.get(threadId);
+		const sameConversation = current?.session.id === session.id && current.pi.id === pi.id ? current : undefined;
 		for (const route of bridge.routes.values()) {
-			if (route !== same && (route.session.id === session.id || route.pi === pi || route.threadId === threadId)) this.unroute(bridge, route);
+			if (route !== sameConversation && (route.session.id === session.id || route.pi === pi || route.threadId === threadId)) this.unroute(bridge, route);
 		}
-		if (same) Object.assign(same, { session, pi });
+		if (sameConversation) Object.assign(sameConversation, { session, pi });
 		else bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve(), settledRuns: 0 });
 		this.refreshMenu(bridge);
 	}
@@ -1467,6 +1467,12 @@ export class RemoteControlCoordinator {
 			stillValid: () => bridge.routes.get(route.threadId) === route && route.pi.id === conversation,
 		});
 		if (outcome.kind !== "answered" || outcome.choice !== 0) return;
+		// A reload while the owner decided may have removed it; Pi would then send it to the model as a prompt.
+		const name = text.slice(1).split(" ")[0];
+		const discovered = await this.commandsOf(route);
+		if (!discovered.some((command) => command.source === "extension" && command.name === name)) {
+			return this.reply(bridge, route, `${route.session.name} no longer has /${name}, so nothing was run.`);
+		}
 		await route.pi.runExtensionCommand(text);
 	}
 
@@ -1489,8 +1495,14 @@ export class RemoteControlCoordinator {
 	/** Pi's `/name`: renames the conversation and its agent session, and retitles the session topic. */
 	private renameSession(bridge: Bridge, route: Route, name: string): Promise<string> {
 		return this.withCreationLock(async () => {
-			await route.pi.rename(name);
 			const current = (await this.adapters.sessions.get(route.session.id)) ?? route.session;
+			// Names find sessions for /rc attach, so two in one repository would be ambiguous.
+			const namesake = (await this.adapters.sessions.list()).find((session) =>
+				session.id !== current.id && session.repositoryPath === current.repositoryPath && session.name.toLowerCase() === name.toLowerCase());
+			if (namesake) {
+				throw new RemoteControlError("duplicate-session", `${nameFromPath(current.repositoryPath)} already has an agent session named ${namesake.name}.`);
+			}
+			await route.pi.rename(name);
 			const repository = await this.adapters.repositories.getByPath(current.repositoryPath);
 			const topicName = topicTitle(repository?.name ?? nameFromPath(current.repositoryPath), name, current.branch);
 			const renamed: AgentSession = { ...current, name, topicName };
