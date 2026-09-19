@@ -42,9 +42,9 @@ The bridge is a long-polling task inside the running Pi process, not a daemon.
 It stops on `/rc stop`, `/rc logout`, or `session_shutdown` (quit, reload, and
 session switches), so nothing outlives the Pi process. After `/new` or `/reload`,
 typed locally or sent from the session topic, it starts again on its own (see
-[Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)). `session_shutdown` also
-stops the agent processes `/rc new` and `/rc attach` started; `/rc stop` leaves
-them running and `/rc start` routes their topics again. `/rc start` re-validates
+[Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)).
+`session_shutdown` also stops the agent processes `/rc new` and `/rc attach`
+started; `/rc stop` leaves them running and `/rc start` routes their topics again. `/rc start` re-validates
 the token and group permissions and discards updates that arrived while it was
 stopped. While it runs:
 
@@ -265,8 +265,9 @@ topic says so and the session becomes disconnected.
   extension's `/rc reload` in its own Pi, which calls `ctx.reload()`. The current
   conversation runs them in the local Pi, which replaces its extension runtime:
   remote control stops and reconnects on its own (see
-  [Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)). The other built-ins need Pi's terminal, local files or the
-  clipboard, a provider login, or another session, and are left out;
+  [Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)).
+  The other built-ins need Pi's terminal, local files or the clipboard, a provider
+  login, or another session, and are left out;
 - the prompt templates and skills Pi discovered, usable as `/rc <name>` or `/<name>`;
 - the extension commands Pi discovered, which run once you approve them (see
   [Approvals](#approvals)). `/rc` itself is never run from Telegram.
@@ -328,7 +329,8 @@ other messages; anything but Approve runs nothing, and neither does a command th
 conversation no longer has once you approve. Pi reports what the command does, and
 how it fails, where it runs: in the agent's topic, or in the local Pi for the
 current conversation. A command that itself starts a new session or reloads Pi
-stops remote control there, which then reconnects like after `/new` and `/reload`.
+stops remote control there, which then reconnects as after `/new` and `/reload`; one
+that forks or switches sessions leaves it stopped.
 
 An approval that is denied or expires counts as a denial: the tool call is blocked
 and Pi is told not to retry it. When Telegram decides nothing (the approval could not

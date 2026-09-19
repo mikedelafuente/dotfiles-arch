@@ -7,7 +7,7 @@
  * the interactive TUI and do nothing when sent as a prompt. The catalog below lists
  * the built-ins remote control runs itself, through RPC or the extension API.
  */
-import type { LivePiSession, PiCommand, PiSessionInfo } from "./coordinator.ts";
+import type { LivePiSession, PiCommand, PiSessionInfo, RuntimeReplacement } from "./coordinator.ts";
 import { condenseForTelegram } from "./messages.ts";
 
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -116,7 +116,7 @@ export const REMOTE_BUILTINS: Record<BuiltinName, Builtin> = {
 };
 
 /** Posted before the current conversation's Pi replaces its runtime, which stops remote control until it reconnects. */
-export function runtimeReplacementNotice(command: "new" | "reload"): string {
+export function runtimeReplacementNotice(command: RuntimeReplacement): string {
 	return command === "new"
 		? "Starting a new conversation in Pi. Remote control stops and reconnects on its own, routing this topic to the new conversation; the current one stays attachable while its history exists."
 		: "Reloading Pi's extensions, skills, prompts, and context files. Remote control stops and reconnects on its own.";

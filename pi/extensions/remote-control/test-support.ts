@@ -20,6 +20,7 @@ import {
 	type RemoteControlAdapters,
 	type Repository,
 	type RepositoryRegistry,
+	type RuntimeReplacement,
 	type SessionLeases,
 	type Workspace,
 	type WorkspaceAdapter,
@@ -258,7 +259,7 @@ export class FakePiSession implements LivePiSession {
 	runtimeReplacements: string[] = [];
 	/** Called as Pi would start replacing its runtime. */
 	onReplaceRuntime?: () => void;
-	async replaceRuntime(command: "new" | "reload"): Promise<void> {
+	async replaceRuntime(command: RuntimeReplacement): Promise<void> {
 		this.onReplaceRuntime?.();
 		this.runtimeReplacements.push(command);
 	}

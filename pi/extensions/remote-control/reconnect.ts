@@ -8,11 +8,10 @@
  * on an object that outlives the module, `globalThis` in Pi.
  */
 
-/** Why Pi shut the runtime down (`SessionShutdownEvent["reason"]`). */
-export type ShutdownReason = "quit" | "reload" | "new" | "resume" | "fork";
+import type { SessionShutdownEvent, SessionStartEvent } from "@earendil-works/pi-coding-agent";
 
-/** Why Pi started a runtime (`SessionStartEvent["reason"]`). */
-export type StartReason = "startup" | "reload" | "new" | "resume" | "fork";
+type ShutdownReason = SessionShutdownEvent["reason"];
+type StartReason = SessionStartEvent["reason"];
 
 const KEY = Symbol.for("pi-remote-control.reconnect");
 

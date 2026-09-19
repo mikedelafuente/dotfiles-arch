@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { rememberForReconnect, takeReconnect } from "./reconnect.ts";
-import { until } from "./test-support.ts";
+import { tick, until } from "./test-support.ts";
 
 type Handler = (event: any, ctx: any) => Promise<unknown>;
 type Command = { handler: (args: string, ctx: any) => Promise<void>; getArgumentCompletions(prefix: string): { value: string }[] | null };
@@ -51,7 +51,7 @@ test("/new or a quit while remote control is stopped does not start it in the ne
 		await before.emit("session_shutdown", { reason });
 		const after = load();
 		await after.emit("session_start", { reason: reason === "quit" ? "startup" : reason });
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await tick();
 		assert.deepEqual(after.notified.filter(([text]) => /Remote control/.test(text)), [], reason);
 	}
 });

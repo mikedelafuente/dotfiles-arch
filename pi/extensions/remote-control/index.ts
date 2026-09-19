@@ -339,7 +339,7 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			case AGENT_RELOAD: {
 				// Remote control reloads an agent's Pi through this command, since RPC has none.
 				if (!isAgent) {
-					ctx.ui.notify("Use /reload; it stops remote control, so run /rc again afterwards.", "info");
+					ctx.ui.notify("Use /reload; remote control reconnects afterwards if it was running.", "info");
 					return;
 				}
 				await ctx.reload();

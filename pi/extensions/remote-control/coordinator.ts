@@ -295,6 +295,9 @@ export type PiSessionInfo = {
 	context?: { tokens: number | null; window: number; percent: number | null };
 };
 
+/** The built-ins that replace the current conversation's Pi runtime. */
+export type RuntimeReplacement = "new" | "reload";
+
 /** A Pi conversation that took over a workspace from the one before it. */
 export type NextConversation = { id: string; sessionFile?: string };
 
@@ -355,7 +358,7 @@ export interface LivePiSession {
 	 * this extension's runtime, stopping remote control; the next runtime starts it again
 	 * and rebinds the session topic (see `reconnect.ts`), so nothing is stored here.
 	 */
-	replaceRuntime?(command: "new" | "reload"): Promise<void>;
+	replaceRuntime?(command: RuntimeReplacement): Promise<void>;
 }
 
 /** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
@@ -1566,7 +1569,7 @@ export class RemoteControlCoordinator {
 	 * The current conversation's `/new` or `/reload`: tells the topic first, since the
 	 * bridge stops with the runtime Pi replaces, then has the local Pi run it.
 	 */
-	private async replaceRuntime(bridge: Bridge, route: Route, command: "new" | "reload"): Promise<undefined> {
+	private async replaceRuntime(bridge: Bridge, route: Route, command: RuntimeReplacement): Promise<undefined> {
 		if (!route.pi.replaceRuntime) throw new Error(`${route.session.name} cannot run /${command}.`);
 		this.reply(bridge, route, runtimeReplacementNotice(command));
 		await route.outbox;
