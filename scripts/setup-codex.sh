@@ -69,18 +69,25 @@ CODEX_HOOKS_FILE="$CODEX_CONFIG_DIR/hooks.json"
 mkdir -p "$CODEX_CONFIG_DIR"
 [ -f "$CODEX_CONFIG_TOML" ] || : > "$CODEX_CONFIG_TOML"
 
-if grep -qE '^\s*codex_hooks\s*=\s*true\b' "$CODEX_CONFIG_TOML" 2>/dev/null; then
+# Codex renamed the flag [features].codex_hooks -> [features].hooks and warns
+# on the old key, so rewrite a legacy line in place before checking.
+if grep -qE '^\s*codex_hooks\s*=' "$CODEX_CONFIG_TOML" 2>/dev/null; then
+  sed -i -E 's/^\s*codex_hooks\s*=.*/hooks = true/' "$CODEX_CONFIG_TOML"
+  print_success_message "Renamed deprecated codex_hooks to hooks in $CODEX_CONFIG_TOML"
+fi
+
+if grep -qE '^\s*hooks\s*=\s*true\b' "$CODEX_CONFIG_TOML" 2>/dev/null; then
   : # already enabled
 elif grep -q '^\[features\]' "$CODEX_CONFIG_TOML" 2>/dev/null; then
-  sed -i '/^\[features\]/a codex_hooks = true' "$CODEX_CONFIG_TOML"
-  print_success_message "Enabled codex_hooks in $CODEX_CONFIG_TOML"
+  sed -i '/^\[features\]/a hooks = true' "$CODEX_CONFIG_TOML"
+  print_success_message "Enabled hooks in $CODEX_CONFIG_TOML"
 else
   {
     echo ""
     echo "[features]"
-    echo "codex_hooks = true"
+    echo "hooks = true"
   } >> "$CODEX_CONFIG_TOML"
-  print_success_message "Enabled codex_hooks in $CODEX_CONFIG_TOML"
+  print_success_message "Enabled hooks in $CODEX_CONFIG_TOML"
 fi
 
 ensure_json_hook_registered "$CODEX_HOOKS_FILE" '{"hooks": {}}' \
