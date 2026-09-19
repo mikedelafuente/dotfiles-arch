@@ -20,6 +20,7 @@ import {
 	type RemoteControlAdapters,
 	type Repository,
 	type RepositoryRegistry,
+	type RuntimeReplacement,
 	type SessionLeases,
 	type Workspace,
 	type WorkspaceAdapter,
@@ -254,6 +255,14 @@ export class FakePiSession implements LivePiSession {
 	steer(text: string): void { this.delivered.push(["steer", text]); }
 	followUp(text: string): void { this.delivered.push(["followUp", text]); }
 	async rename(name: string): Promise<void> { this.renamedTo.push(name); this.name = name; }
+	/** The local `/new` and `/reload` this conversation was asked to run, in order. */
+	runtimeReplacements: string[] = [];
+	/** Called as Pi would start replacing its runtime. */
+	onReplaceRuntime?: () => void;
+	async replaceRuntime(command: RuntimeReplacement): Promise<void> {
+		this.onReplaceRuntime?.();
+		this.runtimeReplacements.push(command);
+	}
 }
 
 /** A Pi conversation running in its own process, started by remote control. */

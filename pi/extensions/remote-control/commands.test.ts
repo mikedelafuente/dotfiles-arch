@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PiCommand } from "./coordinator.ts";
-import { CONTROL_TOPIC, FakePiSession, GROUP, harness, OWNER, startWith, until, type Harness, type SentMessage } from "./test-support.ts";
+import { CONTROL_TOPIC, FakePiSession, GROUP, harness, OWNER, startWith, tick, until, type Harness, type SentMessage } from "./test-support.ts";
 
 const DISCOVERED: PiCommand[] = [
 	{ name: "merge-pr", description: "Merge this branch", source: "extension" },
@@ -283,17 +283,57 @@ test("/rc new starts a new conversation in an agent's workspace and rebinds its 
 	await until(() => h.telegram.inTopic(topic).some((message) => message.text.includes("start over")));
 });
 
-test("/rc reload reloads an agent's Pi; the current conversation's /new and /reload stay local", async (t) => {
+test("/rc reload reloads an agent's Pi over RPC", async (t) => {
 	const h = await harness();
 	t.after(() => h.coordinator.shutdown());
-	const { agent, topic, current } = await withAgent(h);
+	const { agent, topic } = await withAgent(h);
 	assert.match(await ask(h, topic, "/rc reload"), /Reloaded/);
 	assert.equal(agent.reloads, 1);
+	assert.deepEqual(agent.runtimeReplacements, []);
+});
 
-	for (const name of ["new", "reload"]) {
-		assert.match(await ask(h, current.topic, `/rc ${name}`), new RegExp(`/${name}[^]*locally[^]*stops remote control`, "i"));
-	}
-	assert.equal(h.stores.sessions.items.find((item) => item.id === current.session.id)!.piSessionId, "pi-current");
+test("the current conversation's /new and /reload say remote control reconnects, then run in the local Pi", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { pi, topic, session } = await startWith(h);
+	const repliesBefore: string[] = [];
+	pi.onReplaceRuntime = () => repliesBefore.push(h.telegram.inTopic(topic).at(-1)!.text);
+
+	assert.match(await ask(h, topic, "/rc new"), /new conversation[^]*reconnect/i);
+	await until(() => pi.runtimeReplacements.length === 1);
+	assert.match(await ask(h, topic, "/reload"), /reload[^]*reconnect/i);
+	await until(() => pi.runtimeReplacements.length === 2);
+
+	assert.deepEqual(pi.runtimeReplacements, ["new", "reload"]);
+	assert.equal(repliesBefore.length, 2);
+	assert.match(repliesBefore[0]!, /new conversation/i, "the topic is told before Pi replaces its runtime");
+	assert.match(repliesBefore[1]!, /reload/i);
+	// The reconnect's /rc start rebinds the topic; nothing is stored for the new conversation here.
+	assert.deepEqual(h.stores.sessions.items.find((item) => item.id === session.id), session);
+	assert.deepEqual(pi.renamedTo, []);
+	await tick();
+	assert.equal(h.telegram.inTopic(topic).at(-1)!.text, repliesBefore[1], "nothing is replied after the runtime is replaced");
+});
+
+test("after the current conversation's /new, the next runtime's start routes the same topic to the new conversation", async () => {
+	const h = await harness();
+	const { pi, topic, session } = await startWith(h);
+	// Pi tears the runtime down while the topic's command is still being handled.
+	let shutdown: Promise<void> | undefined;
+	pi.onReplaceRuntime = () => { shutdown = h.coordinator.shutdown(); };
+	h.telegram.push({ chat: GROUP, from: OWNER, threadId: topic, text: "/new" });
+	await until(() => shutdown !== undefined);
+	await shutdown;
+	const texts = h.telegram.inTopic(topic).map((message) => message.text);
+	assert.ok(texts.findIndex((text) => /new conversation/i.test(text)) < texts.findIndex((text) => /Disconnected/.test(text)));
+
+	const next = Object.assign(new FakePiSession(), { id: "pi-next", name: "", sessionFile: "/sessions/pi-next.jsonl" });
+	const reconnected = await startWith(h, next);
+	await h.coordinator.shutdown();
+	assert.equal(reconnected.topic, topic);
+	assert.equal(reconnected.session.id, session.id);
+	assert.equal(reconnected.session.name, "fix-flake");
+	assert.deepEqual(reconnected.session.earlierConversations?.map((conversation) => conversation.piSessionId), ["pi-current"]);
 });
 
 test("a session command picked from the menu in the control topic is pointed at the session topics", async (t) => {
