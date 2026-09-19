@@ -14,6 +14,7 @@ import {
 	type RemoteControlAdapters,
 	type Repository,
 	type RepositoryRegistry,
+	type SessionLeases,
 	type Workspace,
 	type WorkspaceAdapter,
 	type TelegramBotApi,
@@ -186,11 +187,20 @@ export class FakePiSession implements LivePiSession {
 /** A Pi conversation running in its own process, started by remote control. */
 export class FakeAgentProcess extends FakePiSession implements AgentProcess {
 	closed = false;
+	/** Makes close() fail, leaving the process running. */
+	closeFailure?: Error;
 	readonly events: PiSessionEvents;
-	constructor(events: PiSessionEvents) { super(); this.events = events; }
-	async close(): Promise<void> { this.closed = true; }
-	/** Reports Pi activity the way the real process adapter does. */
-	report(activity: PiActivity): void { this.events.activity(activity); }
+	private readonly histories: Set<string>;
+	constructor(events: PiSessionEvents, histories: Set<string>) { super(); this.events = events; this.histories = histories; }
+	async close(): Promise<void> {
+		if (this.closeFailure) throw this.closeFailure;
+		this.closed = true;
+	}
+	/** Reports Pi activity the way the real process adapter does. Like Pi, the first response writes the history file. */
+	report(activity: PiActivity): void {
+		if (activity.type === "response" && this.sessionFile) this.histories.add(this.sessionFile);
+		this.events.activity(activity);
+	}
 }
 
 /** Git worktrees as a set of paths, each with its checked-out branch. */
@@ -200,6 +210,8 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 	created: Workspace[] = [];
 	removed: string[] = [];
 	mainLineBranch = "main";
+	/** Makes remove() fail, leaving the worktree and branch behind. */
+	removeFailure?: Error;
 	async create(repository: Repository, branch: string): Promise<Workspace> {
 		const path = `${repository.path}.worktrees/${branch.replace(/\//g, "-")}`;
 		if (this.branches.has(path)) throw new Error(`already exists: ${path}`);
@@ -209,6 +221,7 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 		return workspace;
 	}
 	async remove(workspace: Workspace): Promise<void> {
+		if (this.removeFailure) throw this.removeFailure;
 		this.branches.delete(workspace.path);
 		this.removed.push(workspace.path);
 	}
@@ -219,7 +232,10 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 	}
 }
 
-/** Starts and resumes fake Pi processes; histories are the session files that "exist". */
+/**
+ * Starts and resumes fake Pi processes; histories are the session files that
+ * "exist". As in Pi, a new conversation has no file until its first response.
+ */
 export class FakePiSessions implements PiSessionAdapter {
 	processes: FakeAgentProcess[] = [];
 	histories = new Set<string>(["/sessions/pi-current.jsonl"]);
@@ -228,17 +244,17 @@ export class FakePiSessions implements PiSessionAdapter {
 	private next = 1;
 	async create(input: { name: string; repository: Repository; workspace: Workspace }, events: PiSessionEvents): Promise<AgentProcess> {
 		this.throwIfFailing();
-		const process = new FakeAgentProcess(events);
+		const process = new FakeAgentProcess(events, this.histories);
 		process.id = `pi-new-${this.next++}`;
 		Object.assign(process, { name: input.name, workspace: input.workspace.path, branch: input.workspace.branch, repositoryPath: input.repository.path });
 		process.sessionFile = `/sessions/${process.id}.jsonl`;
-		this.histories.add(process.sessionFile);
 		this.processes.push(process);
 		return process;
 	}
 	async resume(session: AgentSession, events: PiSessionEvents): Promise<AgentProcess> {
 		this.throwIfFailing();
-		const process = new FakeAgentProcess(events);
+		if (!(await this.hasHistory(session)) && !session.unprompted) throw new Error(`The Pi history of ${session.name} was not found.`);
+		const process = new FakeAgentProcess(events, this.histories);
 		Object.assign(process, {
 			id: session.piSessionId, name: session.name, workspace: session.workspace, branch: session.branch,
 			repositoryPath: session.repositoryPath, sessionFile: session.piSessionFile,
@@ -258,17 +274,25 @@ export class FakePiSessions implements PiSessionAdapter {
 	}
 }
 
+/** Live Pi processes holding each conversation; stale leases are the file adapter's concern. */
+export class FakeLeases implements SessionLeases {
+	held = new Map<string, number[]>();
+	async holders(piSessionId: string): Promise<number[]> { return this.held.get(piSessionId) ?? []; }
+}
+
 /** A logged-in coordinator over fakes, ready to start. */
 export async function harness() {
 	const telegram = new FakeTelegram();
 	const stores = memoryStores();
 	const workspaces = new FakeWorkspaces();
 	const pi = new FakePiSessions();
+	const leases = new FakeLeases();
 	let stored: unknown;
 	const adapters = {
 		...stores,
 		workspaces,
 		pi,
+		leases,
 		credentials: { read: async () => stored, write: async (value: unknown) => { stored = structuredClone(value); }, clear: async () => { stored = undefined; } },
 		telegramBot: () => telegram,
 	} satisfies RemoteControlAdapters;
@@ -280,7 +304,7 @@ export async function harness() {
 	});
 	assert.equal(telegram.topics.length, 1, "control topic");
 	telegram.sent = [];
-	return { telegram, stores, workspaces, pi, coordinator, advance: (ms: number) => { now += ms; } };
+	return { telegram, stores, workspaces, pi, leases, coordinator, advance: (ms: number) => { now += ms; } };
 }
 
 export type Harness = Awaited<ReturnType<typeof harness>>;

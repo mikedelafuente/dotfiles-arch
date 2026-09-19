@@ -9,7 +9,7 @@
 | `/rc status` | Show login and bridge state, and the session topics being routed |
 | `/rc new <name>` | Adopt this branch or worktree as agent session `<name>`, or start one in a new worktree |
 | `/rc sessions` | List agent sessions by repository, with their status |
-| `/rc attach <session>` | Reconnect a disconnected agent session |
+| `/rc attach <session>` | Reconnect a disconnected agent session, or an earlier conversation by Pi session id |
 | `/rc login` | Link a BotFather token, the owner, and a private forum group |
 | `/rc logout` | Stop the bridge and delete local credentials |
 
@@ -75,7 +75,9 @@ agent session before it starts polling:
   `agent`. The branch is read once, at `/rc` time.
 - A workspace keeps one session topic. A later Pi conversation in the same
   workspace takes that topic over: the stored agent session is rebound to the new
-  conversation, and the topic is renamed if the name or branch changed. A topic
+  conversation, and the topic is renamed if the name or branch changed. The
+  conversation it replaced is kept as an earlier conversation of that session,
+  attachable by its Pi session id, as long as its Pi history exists. A topic
   deleted in Telegram is replaced with a new one.
 
 Outside a Git repository the bridge still starts, but no session is exposed.
@@ -124,7 +126,7 @@ and session topic. Two sessions never share a workspace.
 | `/rc new <name>` | Local Pi | On a feature branch or in a linked worktree: the current conversation becomes agent session `<name>` in its topic (renamed to match). On the main line or a detached HEAD in the main checkout: a new session, as below |
 | `/rc new <repository> <name>` | Control topic | A new session in an approved repository, named by its registry name or path |
 | `/rc sessions` | Both | Sessions grouped by repository, with their status |
-| `/rc attach <session>` | Both | Reconnects a disconnected session, by name or id |
+| `/rc attach <session>` | Both | Reconnects a disconnected session by name or id, or an earlier conversation by Pi session id |
 | `/rc help` | Control topic | The control-topic commands |
 
 A new session gets, together or not at all:
@@ -142,23 +144,54 @@ stopped, and the worktree and branch are removed. Remote requests can only use
 repositories already in the registry; running `/rc` locally is the only way to add
 one. A name that would give the same branch as another session in the repository
 is refused, as is a workspace another session is assigned. If a rollback step
-itself fails, what it could not remove is left in place.
+itself fails, the rest still run, and the error names what was left behind: the
+topic, the Pi process, or the worktree and branch.
 
 `/rc sessions` reports each session as:
 
 | Status | Meaning |
 |--------|---------|
 | running | Its Pi is running; its topic is routed while remote control runs |
-| disconnected | Not running, but its workspace and Pi history exist: `/rc attach` it |
-| stale | Its Pi history is gone (or was never written, as for a session that never got a prompt) |
+| disconnected | Not running, but its workspace exists and it can be resumed: `/rc attach` it |
+| open in this Pi / another Pi (process N) | A Pi remote control is not routing has it open; close it there before attaching |
+| stale | Its Pi history is gone |
 | missing workspace | Its worktree was removed |
+
+Earlier conversations are listed under their session with the same statuses and
+the `/rc attach <Pi session id>` that reconnects them.
 
 `/rc attach` resumes the stored Pi session file in its workspace, checks Pi really
 resumed that conversation, then posts `Reconnected` in the session topic (renamed
-if the branch changed, replaced if it was deleted). It refuses stale and
-missing-workspace sessions and sessions whose repository was removed from the
-registry, and a name that matches more than one session asks for the id. Attach a session only when no other Pi has it open: two Pi processes
-writing one session file corrupt it.
+if the name or branch changed, replaced if it was deleted). It refuses stale and
+missing-workspace sessions, sessions whose repository was removed from the
+registry, and conversations another Pi has open (see [Session leases](#session-leases)),
+naming that Pi's process. A name that matches more than one session asks for the id.
+
+A session `/rc new` created that never got a response has no Pi history yet,
+because Pi writes the session file with its first response. It is attachable, not
+stale: Pi restarts it under the same session id (`--session-id`). Once it has
+answered, a missing history makes it stale.
+
+Attaching an earlier conversation makes it the session's current one again, in the
+same topic, and keeps the one it replaces as an earlier conversation. It is refused
+while the session's current conversation is connected or open in another Pi, since
+two conversations never share a workspace.
+
+### Session leases
+
+Pi does not lock session files: it only creates one exclusively when it first
+writes it, and two Pi processes appending to one file corrupt it. So every Pi
+running this extension, including ones that never run `/rc` and the agents `/rc
+new` starts, records a lease for its current conversation on `session_start` and
+removes it on `session_shutdown`:
+`${XDG_STATE_HOME:-~/.local/state}/pi-remote-control/leases/<Pi session id>/<pid>`,
+one file per process, so one Pi releasing its lease never hides another's. A lease
+whose process is gone (or whose PID now belongs to a process that started later) is
+stale: it is removed and ignored, so a crashed Pi never blocks attach.
+
+Leases only cover Pi processes on this machine that load this extension. A Pi
+without it, one started with extensions disabled, or one on another machine
+sharing the session files leaves no lease, and attach cannot see it.
 
 In an agent's topic, messages work as in [Current session](#current-session),
 except that skills and prompt templates are expanded (the agent receives them
@@ -175,16 +208,17 @@ node --test pi/extensions/remote-control/*.test.ts
 
 Sources use only erasable TypeScript and `.ts` import specifiers, so Node's
 built-in type stripping runs them directly. `git-workspaces.test.ts` needs `git`;
-`pi-rpc.test.ts` runs a scripted stand-in for `pi --mode rpc`, not Pi itself.
+`pi-rpc.test.ts` runs a scripted stand-in for `pi --mode rpc`, not Pi itself;
+`leases.test.ts` uses real lease files and processes.
 
 ## Coordinator foundation
 
 `coordinator.ts` is the high-level seam for remote control. It owns the approved
 repository allowlist and the durable relationship between a repository, workspace,
 branch, Pi session, and Telegram session topic. Telegram, Pi processes, Git
-workspaces, credentials, and persistence are injected adapters; coordinator tests
-use fakes and do not import vendor SDKs. `git-workspaces.ts` and `pi-rpc.ts` are the
-real workspace and Pi adapters.
+workspaces, session leases, credentials, and persistence are injected adapters;
+coordinator tests use fakes and do not import vendor SDKs. `git-workspaces.ts`,
+`pi-rpc.ts`, and `leases.ts` are the real workspace, Pi, and lease adapters.
 
 `state.ts` contains optional machine-local JSON adapters. Keep their files under
 `~/.config` or `~/.local/state` and never place them under the synced `pi/` tree:
@@ -204,8 +238,8 @@ It also routes session-topic messages to an injected `LivePiSession` and turns
 progress edits and responses. `messages.ts` holds the pure text formatting and parsing.
 
 Adapter-backed tests: `coordinator.test.ts` covers creating, adopting, listing, and
-attaching agent sessions, rollback, repository approval, and duplicate workspace
-rejection;
+attaching agent sessions (including leased, unprompted, and earlier conversations),
+rollback and its leftovers, repository approval, and duplicate workspace rejection;
 `lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
 and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
 current conversation, topic rebinding, message routing, progress, response
@@ -237,6 +271,14 @@ _Avoid_: arbitrary path
 **Session topic**:
 A private Telegram forum topic representing one agent session. It carries prompts, progress, approvals, and results for that session.
 _Avoid_: channel, thread
+
+**Session lease**:
+A machine-local record that a Pi process has a conversation open, kept by every Pi running this extension, so remote control never resumes a conversation another Pi is writing.
+_Avoid_: lock
+
+**Earlier conversation**:
+A Pi conversation that ran in a workspace before a later one took over its session topic; it stays attachable by its Pi session id.
+_Avoid_: old session, history
 
 **Control topic**:
 The private Telegram forum topic used for repository and session management rather than agent work.

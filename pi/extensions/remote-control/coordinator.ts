@@ -8,6 +8,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import {
 	condenseForTelegram,
+	describeOpenIn,
 	describeTool,
 	failureText,
 	parseControlCommand,
@@ -41,16 +42,41 @@ export type AgentSession = {
 	topicId: string;
 	topicName: string;
 	createdAt: string;
+	/** Started by `/rc new` and not answered yet: Pi writes no history file before the first response. */
+	unprompted?: boolean;
+	/** Conversations this workspace ran before a later one took over its topic; attachable by Pi session id. */
+	earlierConversations?: EarlierConversation[];
+};
+
+/** A Pi conversation an agent session ran before a later conversation took over its workspace and topic. */
+export type EarlierConversation = {
+	piSessionId: string;
+	piSessionFile?: string;
+	name: string;
+	branch: string;
+	replacedAt: string;
 };
 
 /**
  * How an agent session stands, computed rather than stored: `active` sessions are
- * routed by the running bridge, `disconnected` ones can be attached, `stale` ones
- * lost their Pi history, and `missing-workspace` ones lost their worktree.
+ * routed by the running bridge, `disconnected` ones can be attached, `open` ones are
+ * held by a Pi remote control is not routing, `stale` ones lost their Pi history,
+ * and `missing-workspace` ones lost their worktree.
  */
-export type SessionStatus = "active" | "disconnected" | "stale" | "missing-workspace";
+export type SessionStatus = "active" | "disconnected" | "open" | "stale" | "missing-workspace";
 
-export type SessionOverview = AgentSession & { status: SessionStatus };
+/** A live Pi process holding a conversation; `here` is this Pi. */
+export type LeaseHolder = { pid: number; here: boolean };
+
+type Health = { status: Exclude<SessionStatus, "active">; openIn?: LeaseHolder[] };
+
+export type EarlierConversationOverview = EarlierConversation & Health;
+
+export type SessionOverview = Omit<AgentSession, "earlierConversations"> & {
+	status: SessionStatus;
+	openIn?: LeaseHolder[];
+	earlierConversations: EarlierConversationOverview[];
+};
 
 export type RepositorySessions = { repository: { name: string; path: string }; sessions: SessionOverview[] };
 
@@ -89,7 +115,10 @@ export interface AgentSessionStore {
 export interface WorkspaceAdapter {
 	/** Creates a worktree on a new branch from the repository's main line. */
 	create(repository: Repository, branch: string): Promise<Workspace>;
-	/** Removes a worktree `create` made, and its branch; only used to roll back a failed creation. */
+	/**
+	 * Removes a worktree `create` made, and its branch; only used to roll back a
+	 * failed creation. Rejects with an error naming what it could not remove.
+	 */
 	remove(workspace: Workspace, repository: Repository): Promise<void>;
 	/** The branch checked out in a workspace, or undefined when the workspace no longer exists. */
 	inspect(path: string): Promise<{ branch: string } | undefined>;
@@ -111,10 +140,23 @@ export interface AgentProcess extends LivePiSession {
 export interface PiSessionAdapter {
 	/** Starts a new, named Pi conversation in the workspace. */
 	create(input: { name: string; repository: Repository; workspace: Workspace }, events: PiSessionEvents): Promise<AgentProcess>;
-	/** Starts Pi on the session's persisted conversation; rejects rather than start a different one. */
+	/**
+	 * Starts Pi on the session's persisted conversation; rejects rather than start a
+	 * different one. An `unprompted` session without history restarts under its own id.
+	 */
 	resume(session: AgentSession, events: PiSessionEvents): Promise<AgentProcess>;
 	/** Whether the session's Pi history still exists to resume. */
 	hasHistory(session: AgentSession): Promise<boolean>;
+}
+
+/**
+ * Which processes have a Pi conversation open. Pi does not lock session files, so
+ * every Pi running this extension leases its current conversation; two Pi
+ * processes appending to one session file corrupt it.
+ */
+export interface SessionLeases {
+	/** Process IDs of live Pi processes holding the conversation, including this one; stale leases are dropped. */
+	holders(piSessionId: string): Promise<number[]>;
 }
 
 export interface CredentialStore {
@@ -245,6 +287,8 @@ export type StartOptions = {
 export type CoordinatorOptions = {
 	/** Minimum time between edits of a progress message; Telegram rate-limits edits. */
 	progressIntervalMs?: number;
+	/** This Pi's process ID, so its own leases read as open here rather than elsewhere. */
+	processId?: number;
 };
 
 export type RemoteControlStatus = {
@@ -260,6 +304,7 @@ export type RemoteControlAdapters = {
 	sessions: AgentSessionStore;
 	workspaces: WorkspaceAdapter;
 	pi: PiSessionAdapter;
+	leases: SessionLeases;
 	credentials: CredentialStore;
 	telegramBot(token: string): TelegramBotApi;
 };
@@ -273,6 +318,8 @@ export class RemoteControlError extends Error {
 		| "ambiguous-session"
 		| "missing-workspace"
 		| "stale-session"
+		| "session-in-use"
+		| "rollback-incomplete"
 		| "not-running"
 		| "invalid-session-name"
 		| "invalid-token"
@@ -283,8 +330,8 @@ export class RemoteControlError extends Error {
 		| "bridge-conflict"
 		| "not-logged-in";
 
-	constructor(code: RemoteControlError["code"], message: string) {
-		super(message);
+	constructor(code: RemoteControlError["code"], message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = "RemoteControlError";
 		this.code = code;
 	}
@@ -314,6 +361,15 @@ function connectedText(name: string, branch: string): string {
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
+
+/** A stored session as it would be with `conversation` as its current Pi conversation. */
+function withConversation(session: AgentSession, conversation: EarlierConversation): AgentSession {
+	const { earlierConversations: _earlier, unprompted: _unprompted, ...rest } = session;
+	return { ...rest, name: conversation.name, branch: conversation.branch, piSessionId: conversation.piSessionId, piSessionFile: conversation.piSessionFile };
+}
+
+/** A session to attach: its current conversation, or one of its earlier ones. */
+type AttachTarget = { session: AgentSession; earlier?: EarlierConversation };
 
 const ANONYMOUS_OWNER_MESSAGE = "Anonymous admin messages cannot be verified; turn off Remain anonymous for your account in this group.";
 
@@ -440,11 +496,13 @@ export class RemoteControlCoordinator {
 	private readonly adapters: RemoteControlAdapters;
 	private readonly now: () => Date;
 	private readonly progressIntervalMs: number;
+	private readonly processId: number;
 
 	constructor(adapters: RemoteControlAdapters, now = () => new Date(), options: CoordinatorOptions = {}) {
 		this.adapters = adapters;
 		this.now = now;
 		this.progressIntervalMs = options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
+		this.processId = options.processId ?? process.pid;
 	}
 
 	private withCreationLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -526,6 +584,7 @@ export class RemoteControlCoordinator {
 
 		const workspace = await this.adapters.workspaces.create(repository, branch);
 		const chatId = bridge.credentials.group.id;
+		const title = topicTitle(repository.name, name, workspace.branch);
 		let agent: AgentProcess | undefined;
 		let threadId: number | undefined;
 		try {
@@ -533,22 +592,26 @@ export class RemoteControlCoordinator {
 				throw new RemoteControlError("duplicate-workspace", `Workspace is already assigned: ${workspace.path}`);
 			}
 			agent = await this.adapters.pi.create({ name, repository, workspace }, this.agentEvents(() => agent));
-			const title = topicTitle(repository.name, name, workspace.branch);
 			threadId = (await bridge.api.createForumTopic(chatId, title)).threadId;
 			await bridge.api.sendMessage({ chatId, threadId, text: connectedText(name, workspace.branch) });
 			const session: AgentSession = {
 				id: id("session"), name, repositoryId: repository.id, repositoryPath: repository.path,
 				workspace: workspace.path, branch: workspace.branch, piSessionId: agent.id, piSessionFile: agent.sessionFile,
-				topicId: String(threadId), topicName: title, createdAt: this.now().toISOString(),
+				topicId: String(threadId), topicName: title, createdAt: this.now().toISOString(), unprompted: true,
 			};
 			await this.adapters.sessions.save(session);
 			this.connectAgent(session, agent);
 			return session;
 		} catch (error) {
-			if (threadId !== undefined) await bridge.api.deleteForumTopic({ chatId, threadId }).catch(() => undefined);
-			await agent?.close().catch(() => undefined);
-			if (workspace.created) await this.adapters.workspaces.remove(workspace, repository).catch(() => undefined);
-			throw error;
+			// Undo every step even when one fails, and name what could not be undone.
+			const leftovers: string[] = [];
+			const undo = (what: string, step: () => Promise<void>) =>
+				step().catch((failure) => { leftovers.push(what ? `${what}: ${errorMessage(failure)}` : errorMessage(failure)); });
+			if (threadId !== undefined) await undo(`session topic "${title}" (${threadId})`, () => bridge.api.deleteForumTopic({ chatId, threadId: threadId! }));
+			if (agent) await undo(`Pi process of ${name}`, () => agent!.close());
+			if (workspace.created) await undo("", () => this.adapters.workspaces.remove(workspace, repository));
+			if (!leftovers.length) throw error;
+			throw new RemoteControlError("rollback-incomplete", `${errorMessage(error).replace(/\.?$/, ".")} Rollback left behind: ${leftovers.join("; ")}.`, { cause: error });
 		}
 	}
 
@@ -557,13 +620,28 @@ export class RemoteControlCoordinator {
 		return {
 			activity: (activity) => {
 				const current = agent();
-				if (current) this.recordActivity(current.id, activity);
+				if (!current) return;
+				if (activity.type === "response") this.markPrompted(current);
+				this.recordActivity(current.id, activity);
 			},
 			exited: (reason) => {
 				const current = agent();
 				if (current && !this.disconnectAgent(current, reason)) this.exitedBeforeConnect.set(current, reason);
 			},
 		};
+	}
+
+	/** An agent's first response wrote its Pi history, so from now on a missing history means it was lost. */
+	private markPrompted(agent: AgentProcess): void {
+		const entry = [...this.agents.values()].find((candidate) => candidate.pi === agent);
+		if (!entry?.session.unprompted) return;
+		delete entry.session.unprompted;
+		this.withCreationLock(async () => {
+			const stored = await this.adapters.sessions.get(entry.session.id);
+			if (!stored?.unprompted || stored.piSessionId !== agent.id) return;
+			delete stored.unprompted;
+			await this.adapters.sessions.update(stored);
+		}).catch((error) => this.bridge?.options.onError?.(error));
 	}
 
 	/** Keeps a running agent and routes its topic while the bridge runs, including after a restart. */
@@ -612,7 +690,17 @@ export class RemoteControlCoordinator {
 				group = { repository: { name: nameFromPath(session.repositoryPath), path: session.repositoryPath }, sessions: [] };
 				groups.set(session.repositoryPath, group);
 			}
-			group.sessions.push({ ...session, status: connected.has(session.id) ? "active" : await this.health(session) });
+			const { earlierConversations = [], ...current } = session;
+			const exists = (await this.adapters.workspaces.inspect(session.workspace)) !== undefined;
+			const health = (conversation: AgentSession): Promise<Health> =>
+				exists ? this.conversationHealth(conversation) : Promise.resolve({ status: "missing-workspace" });
+			const earlier: EarlierConversationOverview[] = [];
+			for (const conversation of earlierConversations) earlier.push({ ...conversation, ...(await health(withConversation(session, conversation))) });
+			group.sessions.push({
+				...current,
+				...(connected.has(session.id) ? { status: "active" as const } : await health(session)),
+				earlierConversations: earlier,
+			});
 		}
 		return [...groups.values()].filter((group) => group.sessions.length);
 	}
@@ -621,38 +709,93 @@ export class RemoteControlCoordinator {
 		return new Set([...this.agents.keys(), ...[...this.bridge?.routes.values() ?? []].map((route) => route.session.id)]);
 	}
 
-	/** Why a session that is not connected can or cannot be attached. */
-	private async health(session: AgentSession): Promise<Exclude<SessionStatus, "active">> {
-		if (!(await this.adapters.workspaces.inspect(session.workspace))) return "missing-workspace";
-		if (!(await this.adapters.pi.hasHistory(session))) return "stale";
-		return "disconnected";
+	/** Why a conversation in an existing workspace, not connected here, can or cannot be attached. */
+	private async conversationHealth(conversation: AgentSession): Promise<Health> {
+		const openIn = await this.openIn(conversation.piSessionId);
+		if (openIn.length) return { status: "open", openIn };
+		if (!conversation.unprompted && !(await this.adapters.pi.hasHistory(conversation))) return { status: "stale" };
+		return { status: "disconnected" };
 	}
 
-	/** Finds a stored session by id, id prefix, or unique name. */
-	private async findSession(reference: string): Promise<AgentSession> {
+	private async openIn(piSessionId: string): Promise<LeaseHolder[]> {
+		return (await this.adapters.leases.holders(piSessionId)).map((pid) => ({ pid, here: pid === this.processId }));
+	}
+
+	/** Refuses a conversation another Pi has open: two Pi processes writing one session file corrupt it. */
+	private async assertNotOpen(conversation: AgentSession, what: string): Promise<void> {
+		const openIn = await this.openIn(conversation.piSessionId);
+		if (!openIn.length) return;
+		throw new RemoteControlError(
+			"session-in-use",
+			`${what} is open in ${describeOpenIn(openIn)}; close it there first, since two Pi processes writing one session file corrupt it.`,
+		);
+	}
+
+	/**
+	 * Finds a stored session by id, name, or id prefix, or one of its conversations
+	 * by Pi session id or prefix. Earlier conversations can only be reached by Pi session id.
+	 */
+	private async findSession(reference: string): Promise<AttachTarget> {
 		const wanted = reference.trim();
 		const sessions = await this.adapters.sessions.list();
+		const conversations: AttachTarget[] = sessions.flatMap((session) => [
+			{ session },
+			...(session.earlierConversations ?? []).map((earlier) => ({ session, earlier })),
+		]);
+		const piSessionId = (target: AttachTarget) => target.earlier?.piSessionId ?? target.session.piSessionId;
 		const byId = sessions.find((session) => session.id === wanted || session.id === `session-${wanted}`);
-		if (byId) return byId;
-		const byName = sessions.filter((session) => session.name.toLowerCase() === wanted.toLowerCase());
-		const matches = byName.length ? byName : wanted.length >= 4 ? sessions.filter((session) => session.id.replace(/^session-/, "").startsWith(wanted)) : [];
+		if (byId) return { session: byId };
+		const byPiSessionId = conversations.find((target) => piSessionId(target) === wanted);
+		if (byPiSessionId) return byPiSessionId;
+		const byName: AttachTarget[] = sessions.filter((session) => session.name.toLowerCase() === wanted.toLowerCase()).map((session) => ({ session }));
+		const byPrefix = () => conversations.filter((target) =>
+			piSessionId(target).startsWith(wanted) || (!target.earlier && target.session.id.replace(/^session-/, "").startsWith(wanted)));
+		const matches = byName.length ? byName : wanted.length >= 4 ? byPrefix() : [];
 		if (matches.length === 1) return matches[0];
 		if (matches.length > 1) {
-			const choices = matches.map((session) => `${session.id} (${session.repositoryPath}, ${session.branch})`).join("; ");
+			const choices = matches.map(({ session, earlier }) => earlier
+				? `${earlier.piSessionId} (earlier conversation of ${session.name})`
+				: `${session.id} (${session.repositoryPath}, ${session.branch})`).join("; ");
 			throw new RemoteControlError("ambiguous-session", `More than one agent session matches ${wanted}; attach one by id: ${choices}.`);
 		}
 		throw new RemoteControlError("session-not-found", `Agent session not found: ${wanted}. List them with /rc sessions.`);
 	}
 
 	/**
+	 * A session's earlier conversations once `next` becomes its current one: the
+	 * displaced conversation joins them, and any without Pi history are dropped.
+	 */
+	private async earlierConversationsAfter(session: AgentSession, next: string): Promise<EarlierConversation[] | undefined> {
+		if (session.piSessionId === next) return session.earlierConversations;
+		const displaced: EarlierConversation = {
+			piSessionId: session.piSessionId, piSessionFile: session.piSessionFile, name: session.name, branch: session.branch,
+			replacedAt: this.now().toISOString(),
+		};
+		const kept: EarlierConversation[] = [];
+		for (const conversation of [...(session.earlierConversations ?? []), displaced]) {
+			if (conversation.piSessionId === next) continue;
+			if (await this.adapters.pi.hasHistory(withConversation(session, conversation))) kept.push(conversation);
+		}
+		return kept.length ? kept : undefined;
+	}
+
+	/**
 	 * Reconnects a persisted agent session: resumes its Pi conversation in its
 	 * workspace and routes its topic again. Connected sessions are left as they are.
+	 * Attaching an earlier conversation makes it the session's current one again.
+	 * A conversation another Pi has open is refused.
 	 */
 	attach(reference: string): Promise<{ session: AgentSession; alreadyConnected: boolean }> {
 		return this.withCreationLock(async () => {
 			const bridge = this.requireBridge();
-			const session = await this.findSession(reference);
-			if (this.connectedSessionIds().has(session.id)) return { session, alreadyConnected: true };
+			const { session, earlier } = await this.findSession(reference);
+			if (this.connectedSessionIds().has(session.id)) {
+				if (!earlier) return { session, alreadyConnected: true };
+				throw new RemoteControlError(
+					"session-in-use",
+					`The workspace of ${session.name} is in use by its connected conversation; two conversations never share a workspace.`,
+				);
+			}
 			const repository = await this.adapters.repositories.getByPath(session.repositoryPath);
 			if (!repository) {
 				throw new RemoteControlError("repository-not-approved", `The repository of ${session.name} is no longer approved for remote control: ${session.repositoryPath}`);
@@ -661,19 +804,23 @@ export class RemoteControlCoordinator {
 			if (!workspace) {
 				throw new RemoteControlError("missing-workspace", `The workspace of ${session.name} no longer exists: ${session.workspace}`);
 			}
-			if (!(await this.adapters.pi.hasHistory(session))) {
-				throw new RemoteControlError("stale-session", `The Pi history of ${session.name} was not found, so it cannot be resumed.`);
+			const target = earlier ? withConversation(session, earlier) : session;
+			if (earlier) await this.assertNotOpen(session, `The current conversation of ${session.name}`);
+			await this.assertNotOpen(target, earlier ? `Conversation ${earlier.piSessionId} of ${session.name}` : session.name);
+			if (!target.unprompted && !(await this.adapters.pi.hasHistory(target))) {
+				throw new RemoteControlError("stale-session", `The Pi history of ${target.name} was not found, so it cannot be resumed.`);
 			}
 
 			let agent: AgentProcess | undefined;
-			agent = await this.adapters.pi.resume(session, this.agentEvents(() => agent));
+			agent = await this.adapters.pi.resume(target, this.agentEvents(() => agent));
 			try {
-				if (agent.id !== session.piSessionId) throw new Error(`Pi resumed session ${agent.id} instead of ${session.piSessionId}.`);
-				const title = topicTitle(repository.name, session.name, workspace.branch);
-				const threadId = await this.bindTopic(bridge, session, title, `Reconnected to Pi session "${session.name}" on ${workspace.branch}. ${SESSION_TOPIC_HELP}`);
+				if (agent.id !== target.piSessionId) throw new Error(`Pi resumed session ${agent.id} instead of ${target.piSessionId}.`);
+				const title = topicTitle(repository.name, target.name, workspace.branch);
+				const threadId = await this.bindTopic(bridge, session, title, `Reconnected to Pi session "${target.name}" on ${workspace.branch}. ${SESSION_TOPIC_HELP}`);
 				const attached: AgentSession = {
-					...session, branch: workspace.branch, topicId: String(threadId), topicName: title,
-					piSessionFile: agent.sessionFile ?? session.piSessionFile,
+					...target, branch: workspace.branch, topicId: String(threadId), topicName: title,
+					piSessionFile: agent.sessionFile ?? target.piSessionFile,
+					earlierConversations: await this.earlierConversationsAfter(session, target.piSessionId),
 				};
 				await this.adapters.sessions.update(attached);
 				this.connectAgent(attached, agent);
@@ -880,6 +1027,8 @@ export class RemoteControlCoordinator {
 		const title = topicTitle(repository.name, name, live.branch);
 		const threadId = await this.bindTopic(bridge, existing, title, connectedText(name, live.branch));
 
+		// A different conversation takes the topic over; the one it replaces stays attachable.
+		const earlierConversations = existing && (await this.earlierConversationsAfter(existing, live.id));
 		const session: AgentSession = {
 			id: existing?.id ?? id("session"),
 			name,
@@ -892,6 +1041,8 @@ export class RemoteControlCoordinator {
 			topicId: String(threadId),
 			topicName: title,
 			createdAt: existing?.createdAt ?? this.now().toISOString(),
+			...(existing?.piSessionId === live.id && existing.unprompted ? { unprompted: true } : {}),
+			...(earlierConversations ? { earlierConversations } : {}),
 		};
 		if (existing) await this.adapters.sessions.update(session);
 		else await this.adapters.sessions.save(session);

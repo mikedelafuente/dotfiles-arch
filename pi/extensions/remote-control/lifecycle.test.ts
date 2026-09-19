@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RemoteControlCoordinator, type AuthorizedMessage, type RemoteControlAdapters, type TelegramChat, type TelegramUser } from "./coordinator.ts";
-import { apiError, BOT, FakePiSessions, FakeTelegram, FakeWorkspaces, GROUP, OWNER, STRANGER, TOKEN, until } from "./test-support.ts";
+import { apiError, BOT, FakeLeases, FakePiSessions, FakeTelegram, FakeWorkspaces, GROUP, OWNER, STRANGER, TOKEN, until } from "./test-support.ts";
 
 const ANONYMOUS_ADMIN: TelegramUser = { id: 1087968824, isBot: true, username: "GroupAnonymousBot" };
 
@@ -15,6 +15,7 @@ function harness() {
 		sessions: { list: async () => [], get: async () => undefined, save: async () => undefined, update: async () => undefined },
 		workspaces: new FakeWorkspaces(),
 		pi: new FakePiSessions(),
+		leases: new FakeLeases(),
 		credentials: {
 			read: async () => { if (corrupt) throw new SyntaxError("Unexpected token in JSON"); return stored; },
 			write: async (value: unknown) => { stored = structuredClone(value); },

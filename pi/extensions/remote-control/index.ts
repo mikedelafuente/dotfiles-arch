@@ -12,6 +12,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity } from "./coordinator.ts";
 import { GitWorkspaces, gitWorkspace } from "./git-workspaces.ts";
+import { SessionLeaseFiles } from "./leases.ts";
 import { renderSessions, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
 import { RpcPiSessions } from "./pi-rpc.ts";
@@ -39,13 +40,14 @@ function piCommand(): string[] {
 	return process.argv[1] ? [process.execPath, process.argv[1]] : ["pi"];
 }
 
-function createCoordinator(): RemoteControlCoordinator {
+function createCoordinator(leases: SessionLeaseFiles): RemoteControlCoordinator {
 	const state = new JsonStateStore(join(stateDir, "state.json"));
 	return new RemoteControlCoordinator({
 		repositories: new JsonRepositoryRegistry(state),
 		sessions: new JsonAgentSessionStore(state),
 		workspaces: new GitWorkspaces(),
 		pi: new RpcPiSessions({ command: piCommand() }),
+		leases,
 		credentials: new JsonCredentialStore(join(configDir, "credentials.json")),
 		telegramBot: (token) => createTelegramBotApi(token),
 	});
@@ -56,7 +58,16 @@ function describe(error: unknown): string {
 }
 
 export default function remoteControlExtension(pi: ExtensionAPI): void {
-	const coordinator = createCoordinator();
+	const leases = new SessionLeaseFiles(join(stateDir, "leases"));
+	const coordinator = createCoordinator(leases);
+
+	// Every Pi running this extension leases its conversation, whether or not it runs /rc,
+	// so /rc attach never resumes a conversation another Pi is writing.
+	let leased: string | undefined;
+	pi.on("session_start", async (_event, ctx) => {
+		leased = ctx.sessionManager.getSessionId();
+		await leases.acquire(leased).catch((error) => ctx.ui.notify(`Remote control could not record this session's lease: ${describe(error)}`, "warning"));
+	});
 
 	async function login(ctx: ExtensionCommandContext): Promise<void> {
 		if (!ctx.hasUI) {
@@ -274,5 +285,6 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	pi.on("session_shutdown", async () => {
 		await coordinator.shutdown();
 		delivery?.dispose();
+		if (leased) await leases.release(leased).catch(() => undefined);
 	});
 }
