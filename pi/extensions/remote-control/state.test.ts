@@ -28,7 +28,7 @@ test("agent sessions update in place but never share a workspace", async (t) => 
 	const store = new JsonAgentSessionStore(new JsonStateStore(join(root, "state.json")));
 	const session = (id: string, workspace: string): AgentSession => ({
 		id, name: id, repositoryId: "repo", repositoryPath: "/repo", workspace, branch: "main",
-		piSessionId: `pi-${id}`, topicId: "1", topicName: id, createdAt: "2026-01-01T00:00:00Z", status: "active",
+		piSessionId: `pi-${id}`, topicId: "1", topicName: id, createdAt: "2026-01-01T00:00:00Z",
 	});
 	await store.save(session("one", "/one"));
 	await store.save(session("two", "/two"));

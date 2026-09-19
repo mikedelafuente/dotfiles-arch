@@ -1,4 +1,5 @@
-/** Pure text formatting for session topics: commands in, progress and responses out. */
+/** Pure text formatting for session and control topics: commands in, progress, responses, and listings out. */
+import type { RepositorySessions, SessionStatus } from "./coordinator.ts";
 
 /** Room left under Telegram's 4096-character message limit for the truncation note. */
 const RESPONSE_BUDGET = 3500;
@@ -15,9 +16,12 @@ export type SessionTopicInput =
 	| { kind: "followUp"; text: string }
 	| { kind: "invalid"; reply: string };
 
+/** `/rc` or `/rc@bot`, with the rest of the message as group 1. */
+const RC_COMMAND = /^\/rc(?:@\w+)?(?:\s+([\s\S]*))?$/i;
+
 /** Parses an owner message in a session topic. Only `/rc` is reserved; other text goes to Pi verbatim. */
 export function parseSessionTopicInput(text: string): SessionTopicInput {
-	const command = /^\/rc(?:@\w+)?(?:\s+([\s\S]*))?$/i.exec(text.trim());
+	const command = RC_COMMAND.exec(text.trim());
 	if (!command) return { kind: "message", text };
 	const [, name = "", argument = ""] = /^(\S*)\s*([\s\S]*)$/.exec((command[1] ?? "").trim()) ?? [];
 	if (name.toLowerCase() === "followup") {
@@ -106,4 +110,74 @@ export function failureText(error: string): string {
 export function topicTitle(repositoryName: string, sessionName: string, branch: string): string {
 	const title = `${repositoryName} / ${sessionName} / ${branch}`;
 	return title.length > 128 ? `${title.slice(0, 127)}…` : title;
+}
+
+export const CONTROL_TOPIC_HELP = [
+	"Remote control commands:",
+	"/rc sessions: agent sessions by repository",
+	"/rc new <repository> <name>: start an agent in a new worktree and branch",
+	"/rc attach <session>: reconnect a disconnected agent session",
+].join("\n");
+
+export type ControlCommand =
+	| { kind: "sessions" }
+	| { kind: "new"; repository: string; name: string }
+	| { kind: "attach"; session: string }
+	| { kind: "invalid"; reply: string };
+
+/** Parses an owner message in the control topic; undefined when it is not a `/rc` command. */
+export function parseControlCommand(text: string): ControlCommand | undefined {
+	const command = RC_COMMAND.exec(text.trim());
+	if (!command) return undefined;
+	const [name = "", ...args] = (command[1] ?? "").trim().split(/\s+/).filter(Boolean);
+	switch (name.toLowerCase()) {
+		case "sessions":
+			return { kind: "sessions" };
+		case "new":
+			return args.length >= 2 ? { kind: "new", repository: args[0], name: args.slice(1).join(" ") } : { kind: "invalid", reply: "Usage: /rc new <repository> <name>" };
+		case "attach":
+			return args.length ? { kind: "attach", session: args.join(" ") } : { kind: "invalid", reply: "Usage: /rc attach <session>" };
+		default:
+			return { kind: "invalid", reply: CONTROL_TOPIC_HELP };
+	}
+}
+
+/** The branch a new agent session works on: `rc/<name>`, reduced to characters Git and shells never trip over. */
+export function sessionBranch(name: string): string | undefined {
+	const slug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 60).replace(/[-.]+$/, "");
+	return slug ? `rc/${slug}` : undefined;
+}
+
+const STATUS_TEXT: Record<SessionStatus, string> = {
+	active: "running",
+	disconnected: "disconnected",
+	stale: "stale: Pi history not found",
+	"missing-workspace": "missing workspace",
+};
+
+/** Agent sessions grouped by repository, in one Telegram message. */
+export function renderSessions(groups: RepositorySessions[]): string {
+	if (!groups.length) return "No agent sessions yet. Start one with /rc new <repository> <name>.";
+	const lines = groups.flatMap((group) => [
+		`${group.repository.name} (${group.repository.path})`,
+		...group.sessions.map((session) => `• ${session.name} · ${session.branch} · ${STATUS_TEXT[session.status]}`),
+		"",
+	]);
+	lines.push("Reconnect a disconnected session with /rc attach <session>.");
+	return condenseForTelegram(lines.join("\n"));
+}
+
+type TextBlock = { type: string; text?: string };
+export type RunMessage = { role: string; content?: string | TextBlock[]; stopReason?: string; errorMessage?: string };
+
+/** The final assistant message of a run, as the session topic's response. */
+export function runResponse(messages: RunMessage[]): { text: string; error?: string; aborted?: boolean } | undefined {
+	const last = messages.findLast((message) => message.role === "assistant");
+	if (!last) return undefined;
+	const text = typeof last.content === "string"
+		? last.content
+		: (last.content ?? []).filter((block) => block.type === "text").map((block) => block.text ?? "").join("\n");
+	if (last.stopReason === "aborted") return { text, aborted: true };
+	if (last.stopReason === "error") return { text, error: last.errorMessage || "unknown error" };
+	return { text };
 }

@@ -1,11 +1,21 @@
 /** Shared fakes for remote-control tests. Not a test file itself: `node --test *.test.ts` skips it. */
 import assert from "node:assert/strict";
 import {
+	RemoteControlCoordinator,
 	RemoteControlError,
+	type AgentProcess,
 	type AgentSession,
 	type AgentSessionStore,
+	type AuthorizedMessage,
+	type LivePiSession,
+	type PiActivity,
+	type PiSessionAdapter,
+	type PiSessionEvents,
+	type RemoteControlAdapters,
 	type Repository,
 	type RepositoryRegistry,
+	type Workspace,
+	type WorkspaceAdapter,
 	type TelegramBotApi,
 	type TelegramChat,
 	type TelegramChatMember,
@@ -28,6 +38,7 @@ export class FakeTelegram implements TelegramBotApi {
 	sent: SentMessage[] = [];
 	edits: { chatId: number; messageId: number; text: string }[] = [];
 	topics: string[] = [];
+	deleted: number[] = [];
 	renamed: { threadId: number; name: string }[] = [];
 	/** Topics deleted in Telegram: posting into them fails like the real API. */
 	deletedTopics = new Set<number>();
@@ -84,6 +95,11 @@ export class FakeTelegram implements TelegramBotApi {
 	async createForumTopic(_chatId: number, name: string): Promise<{ threadId: number }> {
 		this.topics.push(name);
 		return { threadId: 500 + this.topics.length };
+	}
+
+	async deleteForumTopic(input: { chatId: number; threadId: number }): Promise<void> {
+		this.deleted.push(input.threadId);
+		this.deletedTopics.add(input.threadId);
 	}
 
 	async editForumTopic(input: { chatId: number; threadId: number; name: string }): Promise<void> {
@@ -148,3 +164,133 @@ export async function until(condition: () => boolean, timeoutMs = 1000): Promise
 }
 
 export const tick = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A Pi conversation, recording what the bridge delivers to it. */
+export class FakePiSession implements LivePiSession {
+	id = "pi-current";
+	name = "fix-flake";
+	workspace = "/work/demo";
+	branch = "main";
+	repositoryPath = "/work/demo";
+	sessionFile?: string = "/sessions/pi-current.jsonl";
+	idle = true;
+	delivered: [kind: "prompt" | "steer" | "followUp", text: string][] = [];
+	renamedTo: string[] = [];
+	isIdle(): boolean { return this.idle; }
+	prompt(text: string): void { this.delivered.push(["prompt", text]); }
+	steer(text: string): void { this.delivered.push(["steer", text]); }
+	followUp(text: string): void { this.delivered.push(["followUp", text]); }
+	rename(name: string): void { this.renamedTo.push(name); this.name = name; }
+}
+
+/** A Pi conversation running in its own process, started by remote control. */
+export class FakeAgentProcess extends FakePiSession implements AgentProcess {
+	closed = false;
+	readonly events: PiSessionEvents;
+	constructor(events: PiSessionEvents) { super(); this.events = events; }
+	async close(): Promise<void> { this.closed = true; }
+	/** Reports Pi activity the way the real process adapter does. */
+	report(activity: PiActivity): void { this.events.activity(activity); }
+}
+
+/** Git worktrees as a set of paths, each with its checked-out branch. */
+export class FakeWorkspaces implements WorkspaceAdapter {
+	/** Existing workspaces and their branches. */
+	branches = new Map<string, string>([["/work/demo", "main"]]);
+	created: Workspace[] = [];
+	removed: string[] = [];
+	mainLineBranch = "main";
+	async create(repository: Repository, branch: string): Promise<Workspace> {
+		const path = `${repository.path}.worktrees/${branch.replace(/\//g, "-")}`;
+		if (this.branches.has(path)) throw new Error(`already exists: ${path}`);
+		this.branches.set(path, branch);
+		const workspace = { path, branch, created: true };
+		this.created.push(workspace);
+		return workspace;
+	}
+	async remove(workspace: Workspace): Promise<void> {
+		this.branches.delete(workspace.path);
+		this.removed.push(workspace.path);
+	}
+	async mainLine(): Promise<string> { return this.mainLineBranch; }
+	async inspect(path: string): Promise<{ branch: string } | undefined> {
+		const branch = this.branches.get(path);
+		return branch === undefined ? undefined : { branch };
+	}
+}
+
+/** Starts and resumes fake Pi processes; histories are the session files that "exist". */
+export class FakePiSessions implements PiSessionAdapter {
+	processes: FakeAgentProcess[] = [];
+	histories = new Set<string>(["/sessions/pi-current.jsonl"]);
+	/** Makes the next create or resume fail. */
+	failNext?: Error;
+	private next = 1;
+	async create(input: { name: string; repository: Repository; workspace: Workspace }, events: PiSessionEvents): Promise<AgentProcess> {
+		this.throwIfFailing();
+		const process = new FakeAgentProcess(events);
+		process.id = `pi-new-${this.next++}`;
+		Object.assign(process, { name: input.name, workspace: input.workspace.path, branch: input.workspace.branch, repositoryPath: input.repository.path });
+		process.sessionFile = `/sessions/${process.id}.jsonl`;
+		this.histories.add(process.sessionFile);
+		this.processes.push(process);
+		return process;
+	}
+	async resume(session: AgentSession, events: PiSessionEvents): Promise<AgentProcess> {
+		this.throwIfFailing();
+		const process = new FakeAgentProcess(events);
+		Object.assign(process, {
+			id: session.piSessionId, name: session.name, workspace: session.workspace, branch: session.branch,
+			repositoryPath: session.repositoryPath, sessionFile: session.piSessionFile,
+		});
+		this.processes.push(process);
+		return process;
+	}
+	async hasHistory(session: AgentSession): Promise<boolean> {
+		return session.piSessionFile !== undefined && this.histories.has(session.piSessionFile);
+	}
+	/** The most recently started process. */
+	get last(): FakeAgentProcess { return this.processes.at(-1)!; }
+	private throwIfFailing(): void {
+		const failure = this.failNext;
+		this.failNext = undefined;
+		if (failure) throw failure;
+	}
+}
+
+/** A logged-in coordinator over fakes, ready to start. */
+export async function harness() {
+	const telegram = new FakeTelegram();
+	const stores = memoryStores();
+	const workspaces = new FakeWorkspaces();
+	const pi = new FakePiSessions();
+	let stored: unknown;
+	const adapters = {
+		...stores,
+		workspaces,
+		pi,
+		credentials: { read: async () => stored, write: async (value: unknown) => { stored = structuredClone(value); }, clear: async () => { stored = undefined; } },
+		telegramBot: () => telegram,
+	} satisfies RemoteControlAdapters;
+	let now = new Date("2026-01-01T00:00:00Z").getTime();
+	const coordinator = new RemoteControlCoordinator(adapters, () => new Date(now), { progressIntervalMs: 10 });
+	await coordinator.login({
+		token: TOKEN,
+		onHandshakeCode: (code) => { setTimeout(() => telegram.push({ chat: GROUP, from: OWNER, text: code }), 5); },
+	});
+	assert.equal(telegram.topics.length, 1, "control topic");
+	telegram.sent = [];
+	return { telegram, stores, workspaces, pi, coordinator, advance: (ms: number) => { now += ms; } };
+}
+
+export type Harness = Awaited<ReturnType<typeof harness>>;
+
+/** The control topic `harness()` creates at login. */
+export const CONTROL_TOPIC = 501;
+
+/** Starts remote control with `pi` as the current conversation. */
+export async function startWith(h: Harness, pi = new FakePiSession(), onMessage?: (message: AuthorizedMessage) => Promise<void>) {
+	const result = await h.coordinator.start({ session: pi, onMessage });
+	assert.ok(result.session, "current Pi session exposed");
+	return { pi, session: result.session, topic: Number(result.session.topicId) };
+}

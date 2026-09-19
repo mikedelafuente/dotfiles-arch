@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RemoteControlCoordinator, type AuthorizedMessage, type RemoteControlAdapters, type TelegramChat, type TelegramUser } from "./coordinator.ts";
-import { apiError, BOT, FakeTelegram, GROUP, OWNER, STRANGER, TOKEN, until } from "./test-support.ts";
+import { apiError, BOT, FakePiSessions, FakeTelegram, FakeWorkspaces, GROUP, OWNER, STRANGER, TOKEN, until } from "./test-support.ts";
 
 const ANONYMOUS_ADMIN: TelegramUser = { id: 1087968824, isBot: true, username: "GroupAnonymousBot" };
 
@@ -13,12 +13,8 @@ function harness() {
 	const adapters = {
 		repositories: { getByPath: async () => undefined, list: async () => [], register: async () => undefined, remove: async () => undefined },
 		sessions: { list: async () => [], get: async () => undefined, save: async () => undefined, update: async () => undefined },
-		workspaces: {
-			create: async (_repository, branch) => ({ path: `/tmp/${branch}`, branch, created: true }),
-			adopt: async (path, branch = "main") => ({ path, branch, created: false }),
-		},
-		pi: { create: async () => ({ id: "pi" }) },
-		telegram: { createSessionTopic: async () => ({ id: "topic" }) },
+		workspaces: new FakeWorkspaces(),
+		pi: new FakePiSessions(),
 		credentials: {
 			read: async () => { if (corrupt) throw new SyntaxError("Unexpected token in JSON"); return stored; },
 			write: async (value: unknown) => { stored = structuredClone(value); },

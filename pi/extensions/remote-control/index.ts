@@ -4,25 +4,28 @@
  * `/rc` explicitly starts a Telegram bridge inside this Pi process. It stops with
  * `/rc stop`, `/rc logout`, or Pi shutdown; there is no background daemon.
  * Inside a Git repository, the current conversation is exposed in a session topic.
+ * Agent sessions `/rc new` or `/rc attach` start run as `pi --mode rpc` children.
  */
 
-import { execFile } from "node:child_process";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
-import { promisify } from "node:util";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity } from "./coordinator.ts";
+import { GitWorkspaces, gitWorkspace } from "./git-workspaces.ts";
+import { renderSessions, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
+import { RpcPiSessions } from "./pi-rpc.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
 import { createTelegramBotApi } from "./telegram.ts";
-
-const execFileAsync = promisify(execFile);
 
 const STATUS_KEY = "rc";
 const SUBCOMMANDS = [
 	{ value: "start", description: "Start remote control (default)" },
 	{ value: "stop", description: "Stop accepting Telegram messages" },
 	{ value: "status", description: "Show login and bridge state" },
+	{ value: "new", description: "new <name>: adopt this branch/worktree, or start an agent in a new worktree" },
+	{ value: "sessions", description: "List agent sessions by repository" },
+	{ value: "attach", description: "attach <session>: reconnect a disconnected agent session" },
 	{ value: "login", description: "Link a BotFather token, owner, and forum group" },
 	{ value: "logout", description: "Stop remote control and remove local credentials" },
 ];
@@ -31,8 +34,9 @@ const SUBCOMMANDS = [
 const configDir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "pi-remote-control");
 const stateDir = join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "pi-remote-control");
 
-function unavailable(feature: string): never {
-	throw new Error(`${feature} is not available in remote control yet.`);
+/** Agents run the same Pi as this process: its runtime and its entry script. */
+function piCommand(): string[] {
+	return process.argv[1] ? [process.execPath, process.argv[1]] : ["pi"];
 }
 
 function createCoordinator(): RemoteControlCoordinator {
@@ -40,9 +44,8 @@ function createCoordinator(): RemoteControlCoordinator {
 	return new RemoteControlCoordinator({
 		repositories: new JsonRepositoryRegistry(state),
 		sessions: new JsonAgentSessionStore(state),
-		workspaces: { create: () => unavailable("Workspace creation"), adopt: () => unavailable("Workspace adoption") },
-		pi: { create: () => unavailable("Agent session creation") },
-		telegram: { createSessionTopic: () => unavailable("Session topic creation") },
+		workspaces: new GitWorkspaces(),
+		pi: new RpcPiSessions({ command: piCommand() }),
 		credentials: new JsonCredentialStore(join(configDir, "credentials.json")),
 		telegramBot: (token) => createTelegramBotApi(token),
 	});
@@ -50,40 +53,6 @@ function createCoordinator(): RemoteControlCoordinator {
 
 function describe(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
-}
-
-async function git(cwd: string, args: string[]): Promise<string> {
-	const result = await execFileAsync("git", ["-C", cwd, ...args], { encoding: "utf8" });
-	return result.stdout.trim();
-}
-
-/** The worktree, branch, and main repository `cwd` belongs to, or undefined outside Git. */
-async function gitWorkspace(cwd: string): Promise<{ workspace: string; branch: string; repositoryPath: string } | undefined> {
-	let workspace: string;
-	try {
-		workspace = await git(cwd, ["rev-parse", "--show-toplevel"]);
-	} catch {
-		return undefined;
-	}
-	const commonDir = await git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-	const branch = await git(cwd, ["branch", "--show-current"])
-		|| `detached@${await git(cwd, ["rev-parse", "--short", "HEAD"]).catch(() => "unborn")}`;
-	return { workspace, branch, repositoryPath: basename(commonDir) === ".git" ? dirname(commonDir) : commonDir };
-}
-
-type TextBlock = { type: string; text?: string };
-type RunMessage = { role: string; content?: string | TextBlock[]; stopReason?: string; errorMessage?: string };
-
-/** The final assistant message of a run, as the session topic's response. */
-function runResponse(messages: RunMessage[]): { text: string; error?: string; aborted?: boolean } | undefined {
-	const last = messages.findLast((message) => message.role === "assistant");
-	if (!last) return undefined;
-	const text = typeof last.content === "string"
-		? last.content
-		: (last.content ?? []).filter((block) => block.type === "text").map((block) => block.text ?? "").join("\n");
-	if (last.stopReason === "aborted") return { text, aborted: true };
-	if (last.stopReason === "error") return { text, error: last.errorMessage || "unknown error" };
-	return { text };
 }
 
 export default function remoteControlExtension(pi: ExtensionAPI): void {
@@ -123,22 +92,55 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	// Holds Telegram messages while a prompt is starting or Pi is compacting.
 	let delivery: PiDelivery | undefined;
 
-	/** The current conversation as remote control drives it. */
+	/** The current conversation as remote control drives it, with the branch it is on now. */
 	async function liveSession(ctx: ExtensionCommandContext): Promise<LivePiSession | undefined> {
 		const workspace = await gitWorkspace(ctx.cwd);
 		if (!workspace) return undefined;
-		delivery?.dispose();
-		const current = new PiDelivery({ send: (text, deliverAs) => pi.sendUserMessage(text, { deliverAs }), isIdle: () => ctx.isIdle() });
-		delivery = current;
+		// One delivery queue per conversation: its route may be rebuilt, but held messages must not be lost.
+		const current = delivery ??= new PiDelivery({ send: (text, deliverAs) => pi.sendUserMessage(text, { deliverAs }), isIdle: () => ctx.isIdle() });
 		return {
 			id: ctx.sessionManager.getSessionId(),
 			name: pi.getSessionName() ?? "",
+			sessionFile: ctx.sessionManager.getSessionFile(),
 			...workspace,
 			isIdle: () => ctx.isIdle() && current.isReady(),
 			prompt: (text) => current.prompt(text),
 			steer: (text) => current.steer(text),
 			followUp: (text) => current.followUp(text),
+			rename: (name) => pi.setSessionName(name),
 		};
+	}
+
+	async function newSession(name: string, ctx: ExtensionCommandContext): Promise<void> {
+		if (!name) {
+			ctx.ui.notify("Usage: /rc new <name>", "error");
+			return;
+		}
+		const current = await liveSession(ctx);
+		if (!current) {
+			ctx.ui.notify("Run /rc new inside a Git repository.", "error");
+			return;
+		}
+		ctx.ui.notify(`Starting agent session "${name}"…`, "info");
+		const { session, adopted } = await coordinator.newSession({ name, current });
+		ctx.ui.notify(
+			adopted
+				? `This conversation is now agent session "${session.name}" on ${session.branch}, in topic "${session.topicName}".`
+				: `Started agent session "${session.name}" on ${session.branch} in ${session.workspace}, in topic "${session.topicName}".`,
+			"info",
+		);
+	}
+
+	async function attach(reference: string, ctx: ExtensionCommandContext): Promise<void> {
+		if (!reference) {
+			ctx.ui.notify("Usage: /rc attach <session>", "error");
+			return;
+		}
+		const { session, alreadyConnected } = await coordinator.attach(reference);
+		ctx.ui.notify(
+			alreadyConnected ? `"${session.name}" is already connected in topic "${session.topicName}".` : `Reconnected "${session.name}" in topic "${session.topicName}".`,
+			"info",
+		);
 	}
 
 	async function start(ctx: ExtensionCommandContext): Promise<void> {
@@ -179,26 +181,33 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	}
 
 	pi.registerCommand("rc", {
-		description: "Telegram remote control: start, stop, status, login, logout",
+		description: "Telegram remote control: start, stop, status, new, sessions, attach, login, logout",
 		getArgumentCompletions: (prefix) => {
 			const items = SUBCOMMANDS.filter((item) => item.value.startsWith(prefix.trim()))
 				.map((item) => ({ value: item.value, label: item.value, description: item.description }));
 			return items.length ? items : null;
 		},
 		handler: async (args, ctx) => {
-			const subcommand = args.trim().split(/\s+/)[0] || "start";
+			const [, subcommand = "start", rest = ""] = /^(\S*)\s*([\s\S]*)$/.exec(args.trim()) ?? [];
 			try {
-				await run(subcommand, ctx);
+				await run(subcommand || "start", rest.trim(), ctx);
 			} catch (error) {
 				ctx.ui.notify(`/rc ${subcommand} failed: ${describe(error)}`, "error");
 			}
 		},
 	});
 
-	async function run(subcommand: string, ctx: ExtensionCommandContext): Promise<void> {
+	async function run(subcommand: string, rest: string, ctx: ExtensionCommandContext): Promise<void> {
 		switch (subcommand) {
 			case "start":
 				return start(ctx);
+			case "new":
+				return newSession(rest, ctx);
+			case "sessions":
+				ctx.ui.notify(renderSessions(await coordinator.sessions()), "info");
+				return;
+			case "attach":
+				return attach(rest, ctx);
 			case "stop": {
 				const wasRunning = await coordinator.stop();
 				ctx.ui.setStatus(STATUS_KEY, undefined);
@@ -261,9 +270,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	});
 
 	// Pi tears down this extension instance on quit, reload, and session switches;
-	// the bridge must never outlive it. This also cancels a pending login.
+	// neither the bridge nor the agent processes may outlive it. This also cancels a pending login.
 	pi.on("session_shutdown", async () => {
-		await coordinator.stop();
+		await coordinator.shutdown();
 		delivery?.dispose();
 	});
 }

@@ -1,58 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RemoteControlCoordinator, type AuthorizedMessage, type LivePiSession, type RemoteControlAdapters } from "./coordinator.ts";
-import { FakeTelegram, GROUP, memoryStores, OWNER, TOKEN, tick, until } from "./test-support.ts";
-
-const CONTROL_TOPIC = 501;
-
-/** The Pi conversation running in this process, recording what the bridge delivers to it. */
-class FakePiSession implements LivePiSession {
-	id = "pi-current";
-	name = "fix-flake";
-	workspace = "/work/demo";
-	branch = "main";
-	repositoryPath = "/work/demo";
-	idle = true;
-	delivered: [kind: "prompt" | "steer" | "followUp", text: string][] = [];
-	isIdle(): boolean { return this.idle; }
-	prompt(text: string): void { this.delivered.push(["prompt", text]); }
-	steer(text: string): void { this.delivered.push(["steer", text]); }
-	followUp(text: string): void { this.delivered.push(["followUp", text]); }
-}
-
-async function harness() {
-	const telegram = new FakeTelegram();
-	const stores = memoryStores();
-	let stored: unknown;
-	const adapters = {
-		...stores,
-		workspaces: {
-			create: async (_repository, branch) => ({ path: `/tmp/${branch}`, branch, created: true }),
-			adopt: async (path, branch = "main") => ({ path, branch, created: false }),
-		},
-		pi: { create: async () => ({ id: "pi" }) },
-		telegram: { createSessionTopic: async () => ({ id: "topic" }) },
-		credentials: { read: async () => stored, write: async (value: unknown) => { stored = structuredClone(value); }, clear: async () => { stored = undefined; } },
-		telegramBot: () => telegram,
-	} satisfies RemoteControlAdapters;
-	let now = new Date("2026-01-01T00:00:00Z").getTime();
-	const coordinator = new RemoteControlCoordinator(adapters, () => new Date(now), { progressIntervalMs: 10 });
-	await coordinator.login({
-		token: TOKEN,
-		onHandshakeCode: (code) => { setTimeout(() => telegram.push({ chat: GROUP, from: OWNER, text: code }), 5); },
-	});
-	assert.equal(telegram.topics.length, 1, "control topic");
-	telegram.sent = [];
-	return { telegram, stores, coordinator, advance: (ms: number) => { now += ms; } };
-}
-
-type Harness = Awaited<ReturnType<typeof harness>>;
-
-async function startWith(h: Harness, pi = new FakePiSession(), onMessage?: (message: AuthorizedMessage) => Promise<void>) {
-	const result = await h.coordinator.start({ session: pi, onMessage });
-	assert.ok(result.session, "current Pi session exposed");
-	return { pi, session: result.session, topic: Number(result.session.topicId) };
-}
+import type { AuthorizedMessage } from "./coordinator.ts";
+import { CONTROL_TOPIC, FakePiSession, GROUP, harness, OWNER, startWith, tick, until } from "./test-support.ts";
 
 test("starting inside a repository registers it and exposes the current conversation in a named session topic", async (t) => {
 	const h = await harness();
