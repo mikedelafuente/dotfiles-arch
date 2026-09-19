@@ -285,3 +285,20 @@ test("a rebound topic invalidates approvals asked by the conversation it replace
 	assert.match(await answered(h, stale), /no longer valid/i);
 	await h.coordinator.shutdown();
 });
+
+test("re-routing a conversation to its own topic keeps the approvals it has open", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const current = new FakePiSession();
+	current.branch = "feat/parser";
+	const { topic } = await startWith(h, current);
+	const answer = h.coordinator.requestApproval(current.id, { title: "Approve merge?" });
+	const approval = await buttonsIn(h, topic);
+
+	// Adopting the conversation as a named agent session routes its topic again.
+	const { session, adopted } = await h.coordinator.newSession({ name: "parser", current });
+	assert.equal(adopted, true);
+	assert.equal(Number(session.topicId), topic);
+	h.telegram.press(approval, "Approve");
+	assert.equal(await answer, true, "the owner's answer still decides");
+});

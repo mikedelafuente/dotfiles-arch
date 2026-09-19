@@ -6,7 +6,22 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { builtinArgumentError, extensionCommandRefusal, isBuiltin, REMOTE_BUILTINS, renderCommands, type ThinkingLevel } from "./commands.ts";
+import {
+	buildMenu,
+	builtinArgumentError,
+	extensionCommandQuestion,
+	isBuiltin,
+	localOnlyBuiltin,
+	OWN_COMMAND_REFUSAL,
+	REMOTE_BUILTINS,
+	REMOTE_CONTROL_COMMAND,
+	renderCommands,
+	resolveTyped,
+	type BuiltinName,
+	type BuiltinTarget,
+	type MenuCommand,
+	type ThinkingLevel,
+} from "./commands.ts";
 import {
 	condenseForTelegram,
 	describeOpenIn,
@@ -265,6 +280,24 @@ export type LoginOptions = {
 /** A command Pi discovered: an extension command, a prompt template, or a skill (`skill:<name>`). */
 export type PiCommand = { name: string; description?: string; source: "extension" | "prompt" | "skill" };
 
+/** What Pi's `/session` shows: the conversation and its usage. */
+export type PiSessionInfo = {
+	id: string;
+	file?: string;
+	name?: string;
+	/** `provider/model`. */
+	model?: string;
+	thinkingLevel?: string;
+	messages: { user: number; assistant: number; toolCalls: number };
+	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	cost: number;
+	/** Null tokens and percent when Pi cannot estimate them yet, e.g. right after compaction. */
+	context?: { tokens: number | null; window: number; percent: number | null };
+};
+
+/** A Pi conversation that took over a workspace from the one before it. */
+export type NextConversation = { id: string; sessionFile?: string };
+
 /**
  * The Pi conversation running in this process. Remote control exposes it as an
  * agent session and delivers its session topic's messages to it.
@@ -288,16 +321,35 @@ export interface LivePiSession {
 	steer(text: string): void;
 	/** Queues a user message for after the current run. */
 	followUp(text: string): void;
-	/** Sets the Pi session name, when an adopted conversation is renamed. */
-	rename?(name: string): void;
+	/** Sets the Pi session name: Pi's `/name`, and when an adopted conversation is renamed. */
+	rename(name: string): Promise<void>;
 	/** The commands Pi discovered, read fresh on every call so a reload of Pi's resources is reflected. */
 	commands(): Promise<PiCommand[]>;
+	/**
+	 * Runs an extension command, which Pi executes at once, even during a run.
+	 * Nothing it does passes remote control's approvals, so only run it once the owner approved.
+	 */
+	runExtensionCommand(text: string): Promise<void>;
 	/** Aborts the current run. */
 	abort(): Promise<void>;
 	/** Pi's `/compact` built-in; resolves with the token counts Pi reports. */
 	compact(instructions?: string): Promise<{ tokensBefore?: number; estimatedTokensAfter?: number }>;
 	/** Pi's `/thinking` built-in. */
 	setThinkingLevel(level: ThinkingLevel): Promise<void>;
+	/** Pi's `/session` built-in. */
+	info(): Promise<PiSessionInfo>;
+	/** The model in use and the models that can be set, as `provider/model`. */
+	models(): Promise<{ current?: string; available: string[] }>;
+	/** Pi's `/model <provider/model>`; rejects for a model Pi does not have or cannot use. */
+	setModel(provider: string, modelId: string): Promise<void>;
+	/**
+	 * Pi's `/new`: resolves with the new conversation, or undefined when an extension
+	 * cancelled it. Absent for the current conversation: replacing it tears down this
+	 * extension, and remote control with it.
+	 */
+	newConversation?(): Promise<NextConversation | undefined>;
+	/** Pi's `/reload`. Absent for the current conversation, for the same reason as `newConversation`. */
+	reload?(): Promise<void>;
 }
 
 /** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
@@ -309,7 +361,9 @@ export type PiActivity =
 	/** Pi will not continue on its own: no retry, compaction, or queued follow-up is left. */
 	| { type: "settled" }
 	/** Something the owner should know that is not part of a run, posted as is. */
-	| { type: "notice"; text: string };
+	| { type: "notice"; text: string }
+	/** Pi discovered different commands, e.g. after a reload. */
+	| { type: "commands-changed" };
 
 export type StartOptions = {
 	/** The current Pi conversation to expose; omitted outside a Git repository. */
@@ -398,8 +452,6 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
 const APPROVE: PromptChoice[] = [{ label: "Approve", notice: "Approved" }, { label: "Deny", notice: "Denied" }];
 const STOP_RUN: PromptChoice[] = [{ label: "Stop run", notice: "Stopping the run" }, { label: "Keep running", notice: "Kept running" }];
 const CANCEL: PromptChoice = { label: "Cancel", notice: "Cancelled" };
-/** The Telegram `/` menu entry for remote control; everything else is listed by `/rc commands` and `/rc help`. */
-const MENU = [{ command: "rc", description: "Remote control: /rc commands in a session topic, /rc help in the control topic" }];
 /** The last path segment, as a repository's display name. */
 function nameFromPath(path: string): string {
 	return path.split("/").filter(Boolean).pop() || path;
@@ -428,6 +480,9 @@ function sessionLabel(sessions: Pick<AgentSession, "name" | "repositoryPath">[])
 
 /** A session to attach: its current conversation, or one of its earlier ones. */
 type AttachTarget = { session: AgentSession; earlier?: EarlierConversation };
+
+/** The reply to a session command, picked from the group's `/` menu, outside a session topic. */
+const SESSION_COMMAND_ELSEWHERE = "That command runs in an agent's session topic, on its conversation. Here, /rc help lists the control commands.";
 
 const ANONYMOUS_OWNER_MESSAGE = "Anonymous admin messages cannot be verified; turn off Remain anonymous for your account in this group.";
 
@@ -542,6 +597,12 @@ type Bridge = {
 	routes: Map<number, Route>;
 	/** Serializes control-topic commands so their replies stay in order. */
 	control: Promise<void>;
+	/** Serializes updates of the group's command menu. */
+	menu: Promise<void>;
+	/** A menu update is queued and has not started, so another request can join it. */
+	menuQueued: boolean;
+	/** The menu Telegram has, so an unchanged one is not set again. */
+	menuShown?: MenuCommand[];
 };
 
 /** The single authority for repository and agent-session invariants. */
@@ -608,7 +669,7 @@ export class RemoteControlCoordinator {
 			const current = input.current;
 			if (current && (await this.isAdoptable(current))) {
 				const session = await this.exposeLocked(bridge, current, name);
-				current.rename?.(name);
+				await current.rename(name);
 				return { session, adopted: true };
 			}
 			const repository = current
@@ -737,14 +798,20 @@ export class RemoteControlCoordinator {
 		if (bridge) this.route(bridge, session, agent);
 	}
 
+	/**
+	 * Routes a session topic to a live conversation. The same conversation routed to
+	 * its own topic again keeps its route, so what it is asking the owner stays open.
+	 */
 	private route(bridge: Bridge, session: AgentSession, pi: LivePiSession): void {
-		for (const [threadId, route] of bridge.routes) {
-			if (route.session.id === session.id || route.pi === pi) this.unroute(bridge, route);
-		}
 		const threadId = Number(session.topicId);
-		const replaced = bridge.routes.get(threadId);
-		if (replaced) this.unroute(bridge, replaced);
-		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve(), settledRuns: 0 });
+		const current = bridge.routes.get(threadId);
+		const sameConversation = current?.session.id === session.id && current.pi.id === pi.id ? current : undefined;
+		for (const route of bridge.routes.values()) {
+			if (route !== sameConversation && (route.session.id === session.id || route.pi === pi || route.threadId === threadId)) this.unroute(bridge, route);
+		}
+		if (sameConversation) Object.assign(sameConversation, { session, pi });
+		else bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve(), settledRuns: 0 });
+		this.refreshMenu(bridge);
 	}
 
 	/** Stops routing a topic; what its conversation was asking the owner no longer applies. */
@@ -752,6 +819,7 @@ export class RemoteControlCoordinator {
 		clearTimeout(route.progress?.timer);
 		bridge.routes.delete(route.threadId);
 		this.prompts.cancelWhere((binding) => binding.threadId === route.threadId);
+		this.refreshMenu(bridge);
 	}
 
 	/** Returns false for an agent that was never connected. */
@@ -1081,11 +1149,11 @@ export class RemoteControlCoordinator {
 			}
 			await verifyGroup(api, chat, bot.id, credentials.owner.id);
 			const offset = await drainUpdates(api);
-			await api.setMyCommands({ chatId: credentials.group.id, commands: MENU }).catch((error) => options.onError?.(error));
 
 			const live = options.session;
 			const bridge: Bridge = {
 				abort: new AbortController(), done: Promise.resolve(), credentials, api, options, routes: new Map(), control: Promise.resolve(),
+				menu: Promise.resolve(), menuQueued: false,
 			};
 			const session = await this.withCreationLock(async () => {
 				const exposed = live ? await this.exposeLocked(bridge, live) : undefined;
@@ -1094,6 +1162,7 @@ export class RemoteControlCoordinator {
 					this.reply(bridge, bridge.routes.get(Number(agent.session.topicId))!, `Remote control resumed. ${SESSION_TOPIC_HELP}`);
 				}
 				this.bridge = bridge;
+				this.refreshMenu(bridge);
 				return exposed;
 			});
 			bridge.done = this.poll(bridge, offset);
@@ -1251,6 +1320,10 @@ export class RemoteControlCoordinator {
 				this.reply(bridge, route, condenseForTelegram(activity.text));
 				return;
 			}
+			case "commands-changed": {
+				this.refreshMenu(bridge);
+				return;
+			}
 			case "settled": {
 				const progress = route.progress;
 				if (!progress) return;
@@ -1315,10 +1388,15 @@ export class RemoteControlCoordinator {
 		switch (input.kind) {
 			case "invalid":
 				return this.reply(bridge, route, input.reply);
-			case "message":
+			case "message": {
+				const command = await this.typedCommand(bridge, route, input.text);
+				if (command) return this.handleTopicInput(bridge, route, command);
+				return this.send(bridge, route, input.text, input.kind);
+			}
 			case "followUp":
 				return this.send(bridge, route, input.text, input.kind);
 			case "commands":
+				this.refreshMenu(bridge);
 				return this.reply(bridge, route, renderCommands(await this.commandsOf(route)));
 			case "stop-agent":
 				// Waiting for the owner's answer must not hold back the topic's later messages.
@@ -1339,18 +1417,159 @@ export class RemoteControlCoordinator {
 		this.reply(bridge, route, "Steering the current run.");
 	}
 
-	/** `/rc <name> [args]`: a catalog built-in, or a prompt template or skill Pi discovered. Extension commands stay local. */
+	/**
+	 * `/<name> [args]` naming a command the topic accepts, by its name or its Telegram
+	 * menu name, as its `/rc` form. Anything else, such as a path, goes to Pi as is.
+	 */
+	private async typedCommand(bridge: Bridge, route: Route, text: string): Promise<string | undefined> {
+		const [, typed, args] = /^\/(\S+)\s*([\s\S]*)$/.exec(text.trim()) ?? [];
+		if (!typed) return undefined;
+		const name = resolveTyped(typed, []) ?? resolveTyped(typed, await this.commandsOf(route).catch(() => []));
+		if (name !== undefined) return args ? `/rc ${name} ${args}` : `/rc ${name}`;
+		// A menu entry another topic's conversation discovered: not something to prompt this one with.
+		return this.inMenu(bridge, typed) ? `/rc ${typed.replace(/@\w+$/, "")}` : undefined;
+	}
+
+	/** Whether `typed`, a command name with an optional `@bot`, is in the group's `/` menu. */
+	private inMenu(bridge: Bridge, typed: string): boolean {
+		const name = typed.replace(/@\w+$/, "").toLowerCase();
+		return resolveTyped(name, []) !== undefined || (bridge.menuShown?.some((entry) => entry.command === name) ?? false);
+	}
+
+	/** `/rc <name> [args]`: a catalog built-in, or a command Pi discovered. Extension commands run once the owner approves them. */
 	private async runCommand(bridge: Bridge, route: Route, name: string, args: string): Promise<void> {
 		if (isBuiltin(name)) {
 			const usage = builtinArgumentError(name, args);
 			if (usage) return this.reply(bridge, route, usage);
-			const report = await REMOTE_BUILTINS[name].run(route.pi, args).catch((error) => `/${name} failed: ${errorMessage(error)}`);
+			const report = await REMOTE_BUILTINS[name].run(this.builtinTarget(bridge, route), args).catch((error) => `/${name} failed: ${errorMessage(error)}`);
 			return this.reply(bridge, route, report);
 		}
+		if (name === REMOTE_CONTROL_COMMAND) return this.reply(bridge, route, OWN_COMMAND_REFUSAL);
 		const command = (await this.commandsOf(route)).find((candidate) => candidate.name === name);
 		if (!command) return this.reply(bridge, route, `Unknown command: /rc ${name}. ${SESSION_TOPIC_HELP}`);
-		if (command.source === "extension") return this.reply(bridge, route, extensionCommandRefusal(name));
-		this.send(bridge, route, args ? `/${name} ${args}` : `/${name}`, "message");
+		const text = args ? `/${name} ${args}` : `/${name}`;
+		if (command.source !== "extension") return this.send(bridge, route, text, "message");
+		// Waiting for the owner's answer must not hold back the topic's later messages.
+		this.runExtensionCommand(bridge, route, text).catch((error) => this.reply(bridge, route, `/${name} failed: ${errorMessage(error)}`));
+	}
+
+	/**
+	 * Runs an extension command once the owner approves it. Pi runs extension commands
+	 * outside the tool-call approvals, so the owner approves the command itself; the
+	 * approval is bound to the conversation it was asked for.
+	 */
+	private async runExtensionCommand(bridge: Bridge, route: Route, text: string): Promise<void> {
+		const conversation = route.pi.id;
+		const outcome = await this.ask(bridge, {
+			threadId: route.threadId,
+			text: extensionCommandQuestion(text, route.session.topicName),
+			rows: [APPROVE],
+			stillValid: () => bridge.routes.get(route.threadId) === route && route.pi.id === conversation,
+		});
+		if (outcome.kind !== "answered" || outcome.choice !== 0) return;
+		// A reload while the owner decided may have removed it; Pi would then send it to the model as a prompt.
+		const name = text.slice(1).split(" ")[0];
+		const discovered = await this.commandsOf(route);
+		if (!discovered.some((command) => command.source === "extension" && command.name === name)) {
+			return this.reply(bridge, route, `${route.session.name} no longer has /${name}, so nothing was run.`);
+		}
+		await route.pi.runExtensionCommand(text);
+	}
+
+	private builtinTarget(bridge: Bridge, route: Route): BuiltinTarget {
+		return {
+			pi: route.pi,
+			rename: (name) => this.renameSession(bridge, route, name),
+			newConversation: () => this.newConversation(bridge, route),
+			reload: () => this.reloadConversation(bridge, route),
+		};
+	}
+
+	/** Makes `session` what a topic's route and its agent hold, keeping the route and the questions it has open. */
+	private rebind(route: Route, session: AgentSession): void {
+		route.session = session;
+		const agent = this.agents.get(session.id);
+		if (agent) agent.session = session;
+	}
+
+	/** Pi's `/name`: renames the conversation and its agent session, and retitles the session topic. */
+	private renameSession(bridge: Bridge, route: Route, name: string): Promise<string> {
+		return this.withCreationLock(async () => {
+			const current = (await this.adapters.sessions.get(route.session.id)) ?? route.session;
+			// Names find sessions for /rc attach, so two in one repository would be ambiguous.
+			const namesake = (await this.adapters.sessions.list()).find((session) =>
+				session.id !== current.id && session.repositoryPath === current.repositoryPath && session.name.toLowerCase() === name.toLowerCase());
+			if (namesake) {
+				throw new RemoteControlError("duplicate-session", `${nameFromPath(current.repositoryPath)} already has an agent session named ${namesake.name}.`);
+			}
+			await route.pi.rename(name);
+			const repository = await this.adapters.repositories.getByPath(current.repositoryPath);
+			const topicName = topicTitle(repository?.name ?? nameFromPath(current.repositoryPath), name, current.branch);
+			const renamed: AgentSession = { ...current, name, topicName };
+			await this.adapters.sessions.update(renamed);
+			this.rebind(route, renamed);
+			if (topicName !== current.topicName) {
+				await bridge.api
+					.editForumTopic({ chatId: bridge.credentials.group.id, threadId: route.threadId, name: topicName })
+					.catch((error) => bridge.options.onDeliveryError?.(error));
+			}
+			return `Renamed to ${name}, in topic "${topicName}".`;
+		});
+	}
+
+	/**
+	 * Pi's `/new`: starts a new conversation in the workspace and rebinds the session
+	 * topic to it. The replaced conversation joins the earlier ones, attachable by id.
+	 */
+	private async newConversation(bridge: Bridge, route: Route): Promise<string> {
+		if (!route.pi.newConversation) return localOnlyBuiltin("new");
+		return this.withCreationLock(async () => {
+			const previous = (await this.adapters.sessions.get(route.session.id)) ?? route.session;
+			const next = await route.pi.newConversation!();
+			if (!next) return "An extension cancelled the new conversation; this topic stays on the current one.";
+			// What the replaced conversation was asking or running no longer applies.
+			this.prompts.cancelWhere((binding) => binding.threadId === route.threadId);
+			clearTimeout(route.progress?.timer);
+			route.progress = undefined;
+			route.settledRuns++;
+			const earlierConversations = await this.earlierConversationsAfter(previous, next.id);
+			const session: AgentSession = {
+				...withConversation(previous, { ...conversationOf(previous), piSessionId: next.id, piSessionFile: next.sessionFile }),
+				unprompted: true,
+				...(earlierConversations ? { earlierConversations } : {}),
+			};
+			await this.adapters.sessions.update(session);
+			this.rebind(route, session);
+			// Pi starts it unnamed; the agent session keeps its name either way.
+			await route.pi.rename(previous.name).catch(() => undefined);
+			const attachable = earlierConversations?.some((conversation) => conversation.piSessionId === previous.piSessionId);
+			return `Started a new conversation in ${previous.name}.${attachable ? ` The previous one stays attachable with /rc attach ${previous.piSessionId}.` : ""}`;
+		});
+	}
+
+	/** Pi's `/reload`; the commands the conversation discovers afterwards reach the menu. */
+	private async reloadConversation(bridge: Bridge, route: Route): Promise<string> {
+		if (!route.pi.reload) return localOnlyBuiltin("reload");
+		await route.pi.reload();
+		this.refreshMenu(bridge);
+		return `Reloaded the extensions, skills, prompts, and context files of ${route.session.name}.`;
+	}
+
+	/** Sets the group's `/` menu to the commands its connected conversations accept, when that changed. */
+	private refreshMenu(bridge: Bridge): void {
+		if (bridge.menuQueued) return;
+		bridge.menuQueued = true;
+		bridge.menu = bridge.menu
+			.then(async () => {
+				bridge.menuQueued = false;
+				if (bridge.abort.signal.aborted) return;
+				const discovered = await Promise.all([...bridge.routes.values()].map((route) => this.commandsOf(route).catch(() => [])));
+				const commands = buildMenu(discovered.flat());
+				if (JSON.stringify(commands) === JSON.stringify(bridge.menuShown)) return;
+				await bridge.api.setMyCommands({ chatId: bridge.credentials.group.id, commands });
+				bridge.menuShown = commands;
+			})
+			.catch((error) => bridge.options.onDeliveryError?.(error));
 	}
 
 	/** The commands a topic's conversation discovered; a Pi that does not answer in time must not hold up the topic. */
@@ -1636,7 +1855,9 @@ export class RemoteControlCoordinator {
 							await reject(message, `topic:${message.threadId}`, "This topic is not connected to a running Pi session.");
 						} else {
 							const command = parseControlCommand(message.text);
+							const typed = /^\/(\S+)/.exec(message.text.trim())?.[1];
 							if (command) this.runControl(bridge, message.threadId, command);
+							else if (typed && this.inMenu(bridge, typed)) this.sendTo(bridge, message.threadId, SESSION_COMMAND_ELSEWHERE);
 							else await options.onMessage?.({ messageId: message.messageId, threadId: message.threadId, text: message.text });
 						}
 					}

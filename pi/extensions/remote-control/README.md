@@ -60,8 +60,10 @@ waiting for its code.
 
 Owner `/rc` commands in the control topic (or the General topic) manage agent
 sessions (see [Agent sessions](#agent-sessions)); other owner messages there are
-shown as local notifications. Messages in a topic with no running session get one
-"not connected" reply. `/rc start` also adds `/rc` to the group's Telegram `/` menu.
+shown as local notifications, and a session-topic command picked from the `/`
+menu gets a reply pointing at the session topics. Messages in a topic with no
+running session get one "not connected" reply. `/rc start` also sets the group's
+Telegram `/` menu (see [Command discovery](#command-discovery)).
 
 ### Current session
 
@@ -91,13 +93,15 @@ In the session topic:
 | `/rc followup <message>` | A follow-up queued after the current run (a prompt if idle) |
 | `/rc commands` (or `/rc`, `/rc help`) | Everything this topic accepts (see [Command discovery](#command-discovery)) |
 | `/rc stop-agent` | Aborts the current run once you confirm (see [Approvals](#approvals)) |
-| `/rc compact [instructions]`, `/rc thinking <level>` | Runs that Pi built-in |
+| `/rc compact [instructions]`, `/rc thinking <level>`, `/rc model [provider/model]`, `/rc name <name>`, `/rc session`, `/rc new`, `/rc reload` | Runs that Pi built-in (see [Command discovery](#command-discovery)) |
 | `/rc <template or skill> [args]` | That prompt template or skill, as if typed as `/<name>` |
-| `/rc <extension command>` | Refused: extension commands run only in a local Pi |
+| `/rc <extension command> [args]` | Runs it once you approve (see [Approvals](#approvals)); never `/rc` itself |
 | Any other `/rc …` | An "unknown command" reply; nothing reaches Pi |
 
-Other `/` text is passed to Pi as typed: prompt templates and skills are expanded,
-extension commands are not run. Messages that arrive while a prompt is starting or Pi is compacting
+Every command above also works as `/<name>`, by its own name or its menu name
+(`/skill_tdd` for `/rc skill:tdd`), with or without `@bot`. A menu command this
+topic's conversation does not have gets an "unknown command" reply; other `/` text,
+such as a path, is passed to Pi as typed. Messages that arrive while a prompt is starting or Pi is compacting
 are held and delivered in order once Pi can accept them (`pi-delivery.ts`), so a
 burst of messages is never lost to Pi rejecting a concurrent prompt. Replies in the
 General topic count as General, not as the topic of the message they reply to.
@@ -201,7 +205,8 @@ without it, one started with extensions disabled, or one on another machine
 sharing the session files leaves no lease, and attach cannot see it.
 
 In an agent's topic, messages work as in [Current session](#current-session); the
-agent receives them through Pi's RPC `prompt`. Extension commands are refused. An
+agent receives them through Pi's RPC `prompt`. An extension command, as `/rc <name>`
+or `/<name>`, reaches it only once you approve it. An
 extension's confirmation or selection dialog is asked in the topic with buttons (see
 [Approvals](#approvals)); a dialog that needs typed input is cancelled with a note.
 Extension warnings and errors are posted in the topic. If the agent's Pi exits, the
@@ -211,19 +216,47 @@ topic says so and the session becomes disconnected.
 
 `/rc commands` in a session topic lists what that agent accepts, in one message:
 
-- remote control's own commands: `followup`, `stop-agent`, `commands`;
+- remote control's own commands: `commands`, `followup`, `stop-agent`;
 - a maintained catalog of Pi built-ins that remote control runs itself, because
-  Pi's command discovery leaves built-ins out and they do nothing sent as a prompt:
-  `/rc compact [instructions]` and `/rc thinking <level>` (`commands.ts`). `/reload`
-  is not among them: RPC has no reload command, and reloading the local Pi would
-  stop the bridge with this extension;
+  Pi's command discovery leaves built-ins out and they do nothing sent as a prompt
+  (`commands.ts`, in step with Pi's `BUILTIN_SLASH_COMMANDS` by hand):
+
+  | Built-in | Effect |
+  |----------|--------|
+  | `/rc compact [instructions]` | Compacts the context |
+  | `/rc thinking <level>` | Sets the thinking level |
+  | `/rc model [provider/model]` | Sets the model; without one, lists the models Pi can use |
+  | `/rc name <name>` | Renames the Pi conversation and its agent session, and retitles the topic `<repository> / <name> / <branch>` |
+  | `/rc session` | The conversation's id, file, model, message counts, tokens, cost, and context use |
+  | `/rc new` | An agent starts a new conversation in its workspace, named after the session; the topic is rebound to it, and the replaced one stays attachable by Pi session id while its history exists. Its open approvals are withdrawn |
+  | `/rc reload` | An agent's Pi reloads its extensions, skills, prompts, and context files |
+
+  The current conversation refuses `/rc new` and `/rc reload`: both replace the
+  local Pi's extension runtime, and remote control stops with it. Run them in Pi,
+  then `/rc` again ([#114](https://github.com/mikedelafuente/dotfiles-arch/issues/114)
+  tracks keeping the bridge through them). RPC has no reload command, so an agent
+  reloads through this extension's `/rc reload` in its own Pi, which calls
+  `ctx.reload()`. The other built-ins need Pi's terminal, local files or the
+  clipboard, a provider login, or another session, and are left out;
 - the prompt templates and skills Pi discovered, usable as `/rc <name>` or `/<name>`;
-- extension commands, listed as local Pi only.
+- the extension commands Pi discovered, which run once you approve them (see
+  [Approvals](#approvals)). `/rc` itself is never run from Telegram.
 
 Discovery is read from Pi on every request, so it follows a reload. An agent's Pi
 reports its reload to the Pi that started it, which re-reads that agent's commands
 before delivering its next message. A Pi that does not list its commands within ten
 seconds gets a failure reply, and the topic's later messages go through.
+
+The group's Telegram `/` menu lists `/rc`, remote control's topic commands, the
+built-ins, and every command the connected conversations discovered, since Telegram
+has one menu per group, not per topic. Telegram only accepts names of 1–32 of
+`a-z`, `0-9`, and `_`, so names are mapped: lowercased, every other character run
+becomes `_` (`skill:tdd` is `/skill_tdd`, `fix-tests` is `/fix_tests`). When two
+names map to the same entry, the one listed first keeps it (topic commands, then
+built-ins, then discovery order); the other still works as `/rc <name>`. The menu
+is set when remote control starts and again, only if it changed, when a topic is
+routed or unrouted, an agent reports a reload, `/rc reload` runs, or `/rc commands`
+is asked. A menu that cannot be set is a local warning.
 
 ### Approvals
 
@@ -253,8 +286,20 @@ withdraws the other. Every approval and every button selection is:
 - bound to the owner (other users are told they are not authorized, and the
   approval stays open), to the topic and chat it was asked in, and to its agent
   session and operation: once that topic is rebound to another conversation, or
-  the session disconnects, it no longer applies;
+  the session disconnects, it no longer applies. Routing the same conversation to
+  its own topic again (adopting it with `/rc new <name>`, renaming it with
+  `/rc name`) keeps its approvals open;
 - time-limited: after five minutes it expires, and a later press is refused.
+
+`/rc <extension command>` asks the same way before the command runs, naming it
+with its arguments: Pi runs extension commands outside the tool-call approvals, so
+approving it approves everything that command does. The approval is bound to the
+conversation it was asked for, and waiting for it does not hold back the topic's
+other messages; anything but Approve runs nothing, and neither does a command the
+conversation no longer has once you approve. Pi reports what the command does, and
+how it fails, where it runs: in the agent's topic, or in the local Pi for the
+current conversation. A command that itself starts a new session or reloads Pi
+stops remote control there, like `/new` and `/reload`.
 
 An approval that is denied or expires counts as a denial: the tool call is blocked
 and Pi is told not to retry it. When Telegram decides nothing (the approval could not
@@ -308,7 +353,8 @@ Adapter-backed tests: `coordinator.test.ts` covers creating, adopting, listing, 
 attaching agent sessions (including leased, unprompted, and earlier conversations),
 rollback and its leftovers, repository approval, and duplicate workspace rejection;
 `approvals.test.ts` covers approvals, selections, and `/rc stop-agent` (binding, expiry,
-single use, withdrawal); `commands.test.ts` covers command discovery and routing;
+single use, withdrawal, re-routing); `commands.test.ts` covers command discovery and
+routing, the built-ins, approved extension commands, and the Telegram menu;
 `lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
 and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
 current conversation, topic rebinding, message routing, progress, response

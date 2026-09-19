@@ -12,12 +12,12 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity, type PiCommand } from "./coordinator.ts";
+import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity, type PiCommand, type PiSessionInfo } from "./coordinator.ts";
 import { GitWorkspaces, gitWorkspace } from "./git-workspaces.ts";
 import { SessionLeaseFiles } from "./leases.ts";
 import { errorMessage, renderSessions, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
-import { AGENT_ENV, COMMANDS_CHANGED_STATUS, RpcPiSessions } from "./pi-rpc.ts";
+import { AGENT_ENV, AGENT_RELOAD, COMMANDS_CHANGED_STATUS, RpcPiSessions } from "./pi-rpc.ts";
 import { sensitiveOperation, type SensitiveOperation } from "./sensitive.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
 import { createTelegramBotApi } from "./telegram.ts";
@@ -44,6 +44,47 @@ const stateDir = join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "s
 /** Agents run the same Pi as this process: its runtime and its entry script. */
 function piCommand(): string[] {
 	return process.argv[1] ? [process.execPath, process.argv[1]] : ["pi"];
+}
+
+type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } };
+
+/** Pi's `/session` for the current conversation, counted the way Pi's own session stats count it. */
+function sessionInfo(ctx: ExtensionContext, name: string | undefined, thinkingLevel: string): PiSessionInfo {
+	const messages = { user: 0, assistant: 0, toolCalls: 0 };
+	const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	let cost = 0;
+	const add = (usage: Usage | undefined) => {
+		if (!usage) return;
+		tokens.input += usage.input;
+		tokens.output += usage.output;
+		tokens.cacheRead += usage.cacheRead;
+		tokens.cacheWrite += usage.cacheWrite;
+		cost += usage.cost.total;
+	};
+	for (const entry of ctx.sessionManager.getEntries()) {
+		if (entry.type === "branch_summary" || entry.type === "compaction") add(entry.usage);
+		if (entry.type !== "message") continue;
+		const { message } = entry;
+		if (message.role === "user") messages.user++;
+		else if (message.role === "toolResult") add((message as { usage?: Usage }).usage);
+		else if (message.role === "assistant") {
+			messages.assistant++;
+			messages.toolCalls += message.content.filter((part) => part.type === "toolCall").length;
+			add(message.usage);
+		}
+	}
+	const context = ctx.getContextUsage();
+	return {
+		id: ctx.sessionManager.getSessionId(),
+		file: ctx.sessionManager.getSessionFile(),
+		name,
+		model: ctx.model && `${ctx.model.provider}/${ctx.model.id}`,
+		thinkingLevel,
+		messages,
+		tokens,
+		cost,
+		...(context ? { context: { tokens: context.tokens, window: context.contextWindow, percent: context.percent } } : {}),
+	};
 }
 
 function createCoordinator(leases: SessionLeaseFiles): RemoteControlCoordinator {
@@ -110,7 +151,7 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	/** What Pi discovered now, so a reload is always reflected. */
 	const discovered = (): PiCommand[] => pi.getCommands().map(({ name, description, source }) => ({ name, description, source }));
 
-	/** A prompt template or skill command, which Pi expands; extension commands are never run from Telegram. */
+	/** A prompt template or skill command, which Pi expands; extension commands run only through `runExtensionCommand`, once approved. */
 	function expandable(text: string): boolean {
 		const name = /^\/(\S+)/.exec(text.trim())?.[1];
 		return name !== undefined && discovered().some((command) => command.name === name && command.source !== "extension");
@@ -138,11 +179,24 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			prompt: (text) => current.prompt(text),
 			steer: (text) => current.steer(text),
 			followUp: (text) => current.followUp(text),
-			rename: (name) => pi.setSessionName(name),
+			rename: async (name) => pi.setSessionName(name),
 			commands: async () => discovered(),
+			// Pi runs an extension command at once, even during a run, so it bypasses the delivery queue.
+			runExtensionCommand: async (text) => pi.sendUserMessage(text, { expandPromptTemplates: true }),
 			abort: async () => ctx.abort(),
 			compact: (instructions) => compact(ctx, instructions),
 			setThinkingLevel: async (level) => pi.setThinkingLevel(level),
+			info: async () => sessionInfo(ctx, pi.getSessionName(), pi.getThinkingLevel()),
+			models: async () => ({
+				current: ctx.model && `${ctx.model.provider}/${ctx.model.id}`,
+				available: ctx.modelRegistry.getAvailable().map((model) => `${model.provider}/${model.id}`),
+			}),
+			setModel: async (provider, modelId) => {
+				const model = ctx.modelRegistry.find(provider, modelId);
+				if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
+				if (!(await pi.setModel(model))) throw new Error(`${provider} has no credentials configured; run /login in Pi.`);
+			},
+			// No `/new` or `/reload`: replacing this conversation's runtime tears remote control down with it.
 		};
 	}
 
@@ -253,6 +307,15 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 				return status(ctx);
 			case "login":
 				return login(ctx);
+			case AGENT_RELOAD: {
+				// Remote control reloads an agent's Pi through this command, since RPC has none.
+				if (!isAgent) {
+					ctx.ui.notify("Use /reload; it stops remote control, so run /rc again afterwards.", "info");
+					return;
+				}
+				await ctx.reload();
+				return;
+			}
 			case "logout": {
 				const { hadCredentials } = await coordinator.logout();
 				ctx.ui.setStatus(STATUS_KEY, undefined);
