@@ -146,6 +146,8 @@ export const TOPIC_COMMANDS: CatalogEntry[] = [
 	{ name: "commands", usage: "/rc commands", description: "This list" },
 	{ name: "followup", usage: "/rc followup <message>", description: "Queue work after the current run" },
 	{ name: "stop-agent", usage: "/rc stop-agent", description: "Abort the current run, after you confirm" },
+	{ name: "status", usage: "/rc status", description: "Remote control, this agent, and its workspace, with their health" },
+	{ name: "archive", usage: "/rc archive", description: "Close this topic and disconnect the agent, after you confirm; its history, workspace, and branch are kept" },
 ];
 
 export function isBuiltin(name: string): name is BuiltinName {

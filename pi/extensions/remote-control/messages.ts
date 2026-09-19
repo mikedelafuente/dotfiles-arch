@@ -1,5 +1,5 @@
 /** Pure text formatting for session and control topics: commands in, progress, responses, and listings out. */
-import type { LeaseHolder, RepositorySessions, SessionStatus } from "./coordinator.ts";
+import type { CleanupReport, LeaseHolder, RemoteControlStatus, RepositoryHealth, RepositorySessions, SessionOverview, SessionStatus, StatusReport } from "./coordinator.ts";
 
 /** Room left under Telegram's 4096-character message limit for the truncation note. */
 const RESPONSE_BUDGET = 3500;
@@ -20,6 +20,8 @@ export type SessionTopicInput =
 	| { kind: "followUp"; text: string }
 	| { kind: "commands" }
 	| { kind: "stop-agent" }
+	| { kind: "status" }
+	| { kind: "archive" }
 	/** `/rc <name> [args]` for any other name: a Pi built-in or a command Pi discovered, resolved by the coordinator. */
 	| { kind: "command"; name: string; args: string }
 	| { kind: "invalid"; reply: string };
@@ -41,6 +43,10 @@ export function parseSessionTopicInput(text: string): SessionTopicInput {
 			return { kind: "commands" };
 		case "stop-agent":
 			return { kind: "stop-agent" };
+		case "status":
+			return { kind: "status" };
+		case "archive":
+			return { kind: "archive" };
 		default:
 			return { kind: "command", name: name.replace(/^\//, ""), args: argument.trim() };
 	}
@@ -117,6 +123,27 @@ export function condenseForTelegram(text: string, budget = RESPONSE_BUDGET): str
 	return `${head}\n\n… ${omitted} characters omitted: the full response is in the Pi session. …\n\n${tail}`;
 }
 
+/** Share of the message budget each held message shown in a reconnect summary may use. */
+const HELD_MESSAGE_BUDGET = 1000;
+
+/**
+ * The one message a session topic gets once Telegram answers again: how long it was
+ * unreachable, what the agent is doing now, and the latest `shown` of the messages held
+ * meanwhile, each condensed; older ones are only counted.
+ */
+export function renderHeldSummary(input: { held: string[]; offlineMs: number; now: string; shown: number }): string {
+	const { held, shown } = input;
+	const left = held.length - shown;
+	const lines = [
+		`🔌 Telegram was unreachable for about ${formatDuration(input.offlineMs)}; this agent kept running. Now: ${input.now}.`,
+		left > 0
+			? `${held.length} messages were held; the latest ${shown} follow (${left} earlier message${left === 1 ? "" : "s"} left out, in the Pi session):`
+			: `Held while it was unreachable:`,
+		...held.slice(-shown).map((text) => condenseForTelegram(text, HELD_MESSAGE_BUDGET)),
+	];
+	return condenseForTelegram(lines.join("\n\n"));
+}
+
 /** A failed run, in one Telegram message. */
 export function failureText(error: string): string {
 	return condenseForTelegram(`⚠️ Run failed: ${error}`);
@@ -134,6 +161,10 @@ export const CONTROL_TOPIC_HELP = [
 	"/rc new <repository> <name>: start an agent in a new worktree and branch; with only <name>, pick the repository",
 	"/rc attach <session>: reconnect a disconnected agent session; without <session>, pick one",
 	"/rc stop-agent <session>: abort an agent's current run, after you confirm; without <session>, pick one",
+	"/rc status: the bridge, repositories, and agent sessions, with their health",
+	"/rc archive <session>: close an idle session's topic and stop its Pi, keeping its history, workspace, and branch; without <session>, pick one",
+	"/rc cleanup history <session>: delete a disconnected session's Pi history, after you confirm",
+	"/rc cleanup workspace <session> [--abandon|--force]: remove a disconnected session's worktree and branch, after you confirm; --abandon for an unmerged branch, --force for uncommitted changes too",
 	"In a session topic, /rc commands lists what that agent accepts.",
 ].join("\n");
 
@@ -145,7 +176,13 @@ export type ControlCommand =
 	| { kind: "attach"; session?: string }
 	/** Without a session, the owner picks one of the connected sessions. */
 	| { kind: "stop-agent"; session?: string }
+	| { kind: "status" }
+	/** Without a session, the owner picks one of the sessions that can be archived. */
+	| { kind: "archive"; session?: string }
+	| { kind: "cleanup"; what: "history" | "workspace"; session: string; abandon: boolean; force: boolean }
 	| { kind: "invalid"; reply: string };
+
+const CLEANUP_USAGE = "Usage: /rc cleanup history <session>, or /rc cleanup workspace <session> [--abandon|--force]";
 
 /** Parses an owner message in the control topic; undefined when it is not a `/rc` command. */
 export function parseControlCommand(text: string): ControlCommand | undefined {
@@ -162,6 +199,20 @@ export function parseControlCommand(text: string): ControlCommand | undefined {
 			return { kind: "attach", session: args.join(" ") || undefined };
 		case "stop-agent":
 			return { kind: "stop-agent", session: args.join(" ") || undefined };
+		case "status":
+			return { kind: "status" };
+		case "archive":
+			return { kind: "archive", session: args.join(" ") || undefined };
+		case "cleanup": {
+			const [what = "", ...rest] = args;
+			const flags = rest.filter((arg) => arg.startsWith("--"));
+			const session = rest.filter((arg) => !arg.startsWith("--")).join(" ");
+			const unknown = flags.filter((flag) => flag !== "--abandon" && flag !== "--force");
+			if ((what !== "history" && what !== "workspace") || !session || unknown.length || (what === "history" && flags.length)) {
+				return { kind: "invalid", reply: CLEANUP_USAGE };
+			}
+			return { kind: "cleanup", what, session, abandon: flags.includes("--abandon"), force: flags.includes("--force") };
+		}
 		default:
 			return { kind: "invalid", reply: CONTROL_TOPIC_HELP };
 	}
@@ -189,24 +240,83 @@ const STATUS_TEXT: Record<Exclude<SessionStatus, "open">, string> = {
 	"missing-workspace": "missing workspace",
 };
 
-function statusText(status: SessionStatus, openIn: LeaseHolder[] = []): string {
-	return status === "open" ? `open in ${describeOpenIn(openIn)}` : STATUS_TEXT[status];
+function statusText(status: SessionStatus, openIn: LeaseHolder[] = [], activity?: SessionOverview["activity"]): string {
+	if (status === "open") return `open in ${describeOpenIn(openIn)}`;
+	return activity ? `${STATUS_TEXT[status]}, ${activity}` : STATUS_TEXT[status];
+}
+
+/** A repository's heading: its name and path, and what is wrong with it. */
+function repositoryLine(repository: RepositoryHealth): string {
+	return [`${repository.name} (${repository.path})`, !repository.approved && "not approved", !repository.exists && "checkout missing"].filter(Boolean).join(" · ");
+}
+
+function sessionLine(session: SessionOverview): string {
+	return `${session.name} · ${session.branch} · ${statusText(session.status, session.openIn, session.activity)}`;
+}
+
+/** One repository's sessions: archived ones on one line, since they are out of the active view. */
+function sessionLines(group: RepositorySessions): string[] {
+	const archived = group.sessions.filter((session) => session.archivedAt);
+	return [
+		repositoryLine(group.repository),
+		...group.sessions.filter((session) => !session.archivedAt).flatMap((session) => [
+			`• ${sessionLine(session)}`,
+			...session.earlierConversations.map((earlier) =>
+				`  ↳ earlier: ${earlier.name} · ${earlier.branch} · ${statusText(earlier.status, earlier.openIn)} · /rc attach ${earlier.piSessionId}`),
+		]),
+		...(archived.length ? [`  archived: ${archived.map(sessionLine).join("; ")}`] : []),
+		"",
+	];
 }
 
 /** Agent sessions grouped by repository, with their earlier conversations, in one Telegram message. */
 export function renderSessions(groups: RepositorySessions[]): string {
 	if (!groups.length) return "No agent sessions yet. Start one with /rc new <repository> <name>.";
-	const lines = groups.flatMap((group) => [
-		`${group.repository.name} (${group.repository.path})`,
-		...group.sessions.flatMap((session) => [
-			`• ${session.name} · ${session.branch} · ${statusText(session.status, session.openIn)}`,
-			...session.earlierConversations.map((earlier) =>
-				`  ↳ earlier: ${earlier.name} · ${earlier.branch} · ${statusText(earlier.status, earlier.openIn)} · /rc attach ${earlier.piSessionId}`),
-		]),
-		"",
-	]);
-	lines.push("Reconnect a disconnected session with /rc attach <session>; one open in another Pi must be closed there first.");
+	const lines = groups.flatMap(sessionLines);
+	lines.push("Reconnect a disconnected or archived session with /rc attach <session>; one open in another Pi must be closed there first.");
 	return condenseForTelegram(lines.join("\n"));
+}
+
+/** The bridge in one line: running or not, and whether Telegram answers. */
+export function bridgeLine(bridge: RemoteControlStatus): string {
+	if (!bridge.running) return "Remote control: stopped";
+	const where = [bridge.bot, bridge.group && `in ${bridge.group}`].filter(Boolean).join(" ");
+	const telegram = bridge.unreachableSince === undefined
+		? "Telegram: connected"
+		: `Telegram: unreachable since ${bridge.unreachableSince}, ${bridge.held} message${bridge.held === 1 ? "" : "s"} held`;
+	return [`Remote control: running${where ? ` · ${where}` : ""}`, telegram].join(" · ");
+}
+
+/** `/rc status`: the bridge, then every approved repository and every agent session, with their health. */
+export function renderStatus(report: StatusReport): string {
+	const withSessions = new Set(report.sessions.map((group) => group.repository.path));
+	const idle = report.repositories.filter((repository) => !withSessions.has(repository.path));
+	const lines = [bridgeLine(report.bridge), "", ...report.sessions.flatMap(sessionLines)];
+	if (idle.length) lines.push("No agent sessions:", ...idle.map((repository) => `• ${repositoryLine(repository)}`));
+	if (!report.repositories.length && !report.sessions.length) lines.push("No repository is approved yet; run /rc in a repository locally.");
+	return condenseForTelegram(lines.join("\n").trim());
+}
+
+/** `/rc status` in a session topic: the bridge and that one session. */
+export function renderSessionStatus(bridge: RemoteControlStatus, session: SessionOverview, repository: RepositoryHealth): string {
+	return [
+		bridgeLine(bridge),
+		sessionLine(session),
+		`Workspace: ${session.workspace}${session.status === "missing-workspace" ? " (missing)" : ""}`,
+		`Repository: ${repositoryLine(repository)}`,
+	].join("\n");
+}
+
+/** What a confirmed cleanup did, kept, and could not do. */
+export function renderCleanup(report: CleanupReport): string {
+	const section = (label: string, items: string[]) => (items.length ? [`${label}:`, ...items.map((item) => `• ${item}`)] : []);
+	return condenseForTelegram([
+		report.summary,
+		...section("Done", report.done),
+		...section("Kept", report.kept),
+		...section("Failed", report.failed),
+		...(report.forgotten ? ["Nothing of it is left, so it is no longer listed in /rc sessions."] : []),
+	].join("\n"));
 }
 
 type TextBlock = { type: string; text?: string };

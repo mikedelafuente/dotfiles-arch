@@ -6,6 +6,7 @@ import {
 	type AgentProcess,
 	type AgentSession,
 	type AgentSessionStore,
+	type BranchState,
 	type AuthorizedMessage,
 	type CoordinatorOptions,
 	type InlineButton,
@@ -55,6 +56,15 @@ export class FakeTelegram implements TelegramBotApi {
 	renamed: { threadId: number; name: string }[] = [];
 	/** Topics deleted in Telegram: posting into them fails like the real API. */
 	deletedTopics = new Set<number>();
+	/** Topics closed with closeForumTopic and not reopened. */
+	closedTopics = new Set<number>();
+	private unreachable = false;
+	/** Telegram cannot be reached: every call fails like a network error, which carries no Bot API error code. Going offline drops a waiting long poll. */
+	get offline(): boolean { return this.unreachable; }
+	set offline(value: boolean) {
+		this.unreachable = value;
+		if (value) this.wake?.();
+	}
 	members = new Map<number, TelegramChatMember>([
 		[OWNER.id, { status: "creator" }],
 		[BOT.id, { status: "administrator", canManageTopics: true }],
@@ -103,6 +113,7 @@ export class FakeTelegram implements TelegramBotApi {
 	async getUpdates(input: { offset?: number; timeoutSeconds: number; signal?: AbortSignal }): Promise<TelegramUpdate[]> {
 		this.polls++;
 		if (input.offset === -1) return this.updates.slice(-1);
+		this.throwIfOffline();
 		const failure = this.pollFailures.shift();
 		if (failure) throw failure;
 		const pending = () => this.updates.filter((update) => update.updateId >= (input.offset ?? 0));
@@ -112,6 +123,7 @@ export class FakeTelegram implements TelegramBotApi {
 			this.wake = resolve;
 			input.signal?.addEventListener("abort", () => reject(input.signal?.reason), { once: true });
 		});
+		this.throwIfOffline();
 		return pending();
 	}
 
@@ -136,7 +148,25 @@ export class FakeTelegram implements TelegramBotApi {
 		this.renamed.push({ threadId: input.threadId, name: input.name });
 	}
 
+	async closeForumTopic(input: { chatId: number; threadId: number }): Promise<void> {
+		this.throwIfOffline();
+		if (this.deletedTopics.has(input.threadId)) throw apiError(400, "Bad Request: message thread not found");
+		if (this.closedTopics.has(input.threadId)) throw apiError(400, "Bad Request: TOPIC_NOT_MODIFIED");
+		this.closedTopics.add(input.threadId);
+	}
+
+	async reopenForumTopic(input: { chatId: number; threadId: number }): Promise<void> {
+		this.throwIfOffline();
+		if (this.deletedTopics.has(input.threadId)) throw apiError(400, "Bad Request: message thread not found");
+		if (!this.closedTopics.delete(input.threadId)) throw apiError(400, "Bad Request: TOPIC_NOT_MODIFIED");
+	}
+
+	private throwIfOffline(): void {
+		if (this.offline) throw new Error("Telegram sendMessage failed: fetch failed");
+	}
+
 	async sendMessage(input: { chatId: number; threadId?: number; text: string; buttons?: InlineButton[][] }): Promise<{ messageId: number }> {
+		this.throwIfOffline();
 		if (input.threadId !== undefined && this.deletedTopics.has(input.threadId)) throw apiError(400, "Bad Request: message thread not found");
 		const messageId = this.nextMessageId++;
 		this.sent.push({ ...input, messageId });
@@ -144,6 +174,7 @@ export class FakeTelegram implements TelegramBotApi {
 	}
 
 	async editMessageText(input: { chatId: number; messageId: number; text: string; buttons?: InlineButton[][] }): Promise<void> {
+		this.throwIfOffline();
 		this.edits.push(input);
 	}
 
@@ -190,6 +221,10 @@ export function memoryStores(): { repositories: RepositoryRegistry & { items: Re
 				if (index === -1) throw new RemoteControlError("session-not-found", `Agent session not found: ${session.id}`);
 				assertWorkspaceFree(session);
 				sessions[index] = structuredClone(session);
+			},
+			remove: async (id) => {
+				const index = sessions.findIndex((item) => item.id === id);
+				if (index !== -1) sessions.splice(index, 1);
 			},
 		},
 	};
@@ -302,6 +337,14 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 	mainLineBranch = "main";
 	/** Makes remove() fail, leaving the worktree and branch behind. */
 	removeFailure?: Error;
+	/** Uncommitted changes by workspace path; absent means clean. */
+	dirty = new Map<string, string[]>();
+	/** How branches stand against the main line; a branch that exists defaults to merged. */
+	branchStates = new Map<string, BranchState>();
+	/** Branches that exist without a workspace. */
+	branchesWithoutWorkspace = new Set<string>();
+	/** remove() calls, with whether uncommitted changes were discarded. */
+	removals: { path: string; branch: string; discardChanges: boolean }[] = [];
 	async create(repository: Repository, branch: string): Promise<Workspace> {
 		const path = `${repository.path}.worktrees/${branch.replace(/\//g, "-")}`;
 		if (this.branches.has(path)) throw new Error(`already exists: ${path}`);
@@ -310,10 +353,21 @@ export class FakeWorkspaces implements WorkspaceAdapter {
 		this.created.push(workspace);
 		return workspace;
 	}
-	async remove(workspace: Workspace): Promise<void> {
+	async remove(workspace: Workspace, _repository: Repository, { discardChanges = true }: { discardChanges?: boolean } = {}): Promise<void> {
 		if (this.removeFailure) throw this.removeFailure;
+		this.removals.push({ path: workspace.path, branch: workspace.branch, discardChanges });
+		if (!discardChanges && this.dirty.get(workspace.path)?.length) throw new Error(`worktree ${workspace.path} and branch ${workspace.branch} remain: it has changes`);
 		this.branches.delete(workspace.path);
+		this.dirty.delete(workspace.path);
+		this.branchesWithoutWorkspace.delete(workspace.branch);
+		this.branchStates.delete(workspace.branch);
 		this.removed.push(workspace.path);
+	}
+	async changes(path: string): Promise<string[]> { return [...(this.dirty.get(path) ?? [])]; }
+	async branchState(_repositoryPath: string, branch: string): Promise<BranchState | undefined> {
+		const exists = [...this.branches.values()].includes(branch) || this.branchesWithoutWorkspace.has(branch);
+		if (!exists) return undefined;
+		return this.branchStates.get(branch) ?? { mainLine: this.mainLineBranch, merged: true, unmergedCommits: 0 };
 	}
 	async mainLine(): Promise<string> { return this.mainLineBranch; }
 	async inspect(path: string): Promise<{ branch: string } | undefined> {
@@ -354,6 +408,13 @@ export class FakePiSessions implements PiSessionAdapter {
 	}
 	async hasHistory(session: AgentSession): Promise<boolean> {
 		return session.piSessionFile !== undefined && this.histories.has(session.piSessionFile);
+	}
+	/** Session files deleted with deleteHistory, in order. */
+	deletedHistories: string[] = [];
+	async deleteHistory(session: AgentSession): Promise<boolean> {
+		if (session.piSessionFile === undefined || !this.histories.delete(session.piSessionFile)) return false;
+		this.deletedHistories.push(session.piSessionFile);
+		return true;
 	}
 	/** The most recently started process. */
 	get last(): FakeAgentProcess { return this.processes.at(-1)!; }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -75,4 +75,71 @@ test("a rollback that cannot remove the worktree or branch names what it left be
 	await git(repo.path, "worktree", "add", "--quiet", "--force", `${repo.path}.worktrees/other`, "rc/shared");
 	await assert.rejects(workspaces.remove(shared, repo), /^Error: branch rc\/shared remains: /);
 	assert.equal(await workspaces.inspect(shared.path), undefined);
+});
+
+const commit = (cwd: string, message: string) => git(cwd, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", message);
+
+test("lists a workspace's uncommitted changes, untracked files included", async (t) => {
+	const repo = await repository(t);
+	const workspaces = new GitWorkspaces();
+	const workspace = await workspaces.create(repo, "rc/dirty");
+	assert.deepEqual(await workspaces.changes(workspace.path), []);
+
+	await writeFile(join(workspace.path, "notes.txt"), "draft\n");
+	assert.deepEqual(await workspaces.changes(workspace.path), ["?? notes.txt"]);
+});
+
+test("a branch is merged once the main line contains it, or once its pull request merged at its tip", async (t) => {
+	const repo = await repository(t);
+	let pullRequest: { number: number; headOid: string } | undefined;
+	const asked: string[] = [];
+	const workspaces = new GitWorkspaces({
+		mergedPullRequest: async (repositoryPath, branch) => { asked.push(`${repositoryPath} ${branch}`); return pullRequest; },
+	});
+	const workspace = await workspaces.create(repo, "rc/work");
+	assert.deepEqual(await workspaces.branchState(repo.path, "rc/work"), { mainLine: "main", merged: true, unmergedCommits: 0 });
+
+	await commit(workspace.path, "work");
+	assert.deepEqual(await workspaces.branchState(repo.path, "rc/work"), { mainLine: "main", merged: false, unmergedCommits: 1 });
+	assert.deepEqual(asked, [`${repo.path} rc/work`]);
+
+	// A squash merge leaves the branch out of main's history; its merged pull request counts, but only at the branch's tip.
+	const tip = await git(repo.path, "rev-parse", "rc/work");
+	pullRequest = { number: 12, headOid: tip };
+	assert.deepEqual(await workspaces.branchState(repo.path, "rc/work"), { mainLine: "main", merged: true, pullRequest: 12, unmergedCommits: 1 });
+	await commit(workspace.path, "after the merge");
+	assert.deepEqual(await workspaces.branchState(repo.path, "rc/work"), { mainLine: "main", merged: false, unmergedCommits: 2 });
+
+	await git(repo.path, "branch", "-f", "main", "rc/work");
+	assert.deepEqual(await workspaces.branchState(repo.path, "rc/work"), { mainLine: "main", merged: true, unmergedCommits: 0 });
+	assert.equal(await workspaces.branchState(repo.path, "rc/none"), undefined);
+});
+
+test("removing a workspace without discarding changes refuses one with uncommitted work", async (t) => {
+	const repo = await repository(t);
+	const workspaces = new GitWorkspaces();
+	const workspace = await workspaces.create(repo, "rc/keep");
+	await writeFile(join(workspace.path, "notes.txt"), "draft\n");
+
+	await assert.rejects(workspaces.remove(workspace, repo, { discardChanges: false }), /worktree .* and branch rc\/keep remain/);
+	assert.deepEqual(await workspaces.inspect(workspace.path), { branch: "rc/keep" });
+
+	await workspaces.remove(workspace, repo, { discardChanges: true });
+	assert.equal(await workspaces.inspect(workspace.path), undefined);
+	assert.equal(await git(repo.path, "branch", "--list", "rc/keep"), "");
+});
+
+test("removing a workspace whose worktree is already gone deletes just its branch, and one with no branch just its worktree", async (t) => {
+	const repo = await repository(t);
+	const workspaces = new GitWorkspaces();
+	const gone = await workspaces.create(repo, "rc/gone");
+	await rm(gone.path, { recursive: true, force: true });
+	await workspaces.remove(gone, repo, { discardChanges: false });
+	assert.equal(await git(repo.path, "branch", "--list", "rc/gone"), "");
+
+	const detached = await workspaces.create(repo, "rc/detached");
+	await git(detached.path, "switch", "-q", "--detach");
+	await git(repo.path, "branch", "-D", "rc/detached");
+	await workspaces.remove({ ...detached, branch: "" }, repo, { discardChanges: false });
+	assert.equal(await workspaces.inspect(detached.path), undefined);
 });

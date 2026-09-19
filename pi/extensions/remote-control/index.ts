@@ -13,10 +13,19 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity, type PiCommand, type PiSessionInfo } from "./coordinator.ts";
+import {
+	RemoteControlCoordinator,
+	RemoteControlError,
+	type CleanupReport,
+	type ConfirmCleanup,
+	type LivePiSession,
+	type PiActivity,
+	type PiCommand,
+	type PiSessionInfo,
+} from "./coordinator.ts";
 import { GitWorkspaces, gitWorkspace } from "./git-workspaces.ts";
 import { SessionLeaseFiles } from "./leases.ts";
-import { errorMessage, renderSessions, runResponse, type RunMessage } from "./messages.ts";
+import { errorMessage, parseControlCommand, renderCleanup, renderSessions, renderStatus, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
 import { AGENT_ENV, AGENT_RELOAD, COMMANDS_CHANGED_STATUS, RpcPiSessions } from "./pi-rpc.ts";
 import { rememberForReconnect, takeReconnect } from "./reconnect.ts";
@@ -28,10 +37,12 @@ const STATUS_KEY = "rc";
 const SUBCOMMANDS = [
 	{ value: "start", description: "Start remote control (default)" },
 	{ value: "stop", description: "Stop accepting Telegram messages" },
-	{ value: "status", description: "Show login and bridge state" },
+	{ value: "status", description: "Show the bridge, repositories, and agent sessions, with their health" },
 	{ value: "new", description: "new <name>: adopt this branch/worktree, or start an agent in a new worktree" },
 	{ value: "sessions", description: "List agent sessions by repository" },
-	{ value: "attach", description: "attach <session>: reconnect a disconnected agent session" },
+	{ value: "attach", description: "attach <session>: reconnect a disconnected or archived agent session" },
+	{ value: "archive", description: "archive <session>: close an idle session's topic and disconnect it, keeping its history and workspace" },
+	{ value: "cleanup", description: "cleanup history|workspace <session> [--abandon|--force]: delete a disconnected session's Pi history, or its worktree and branch" },
 	{ value: "login", description: "Link a BotFather token, owner, and forum group" },
 	{ value: "logout", description: "Stop remote control and remove local credentials" },
 ];
@@ -280,13 +291,31 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			ctx.ui.notify("Remote control: not logged in. Run /rc login.", "info");
 			return;
 		}
-		const bridge = coordinator.status();
-		const topics = bridge.topics.length ? ` Session topics: ${bridge.topics.join(", ")}.` : "";
-		ctx.ui.notify(`Remote control: ${bridge.running ? "running" : "stopped"}; bot ${login.bot ?? "unknown"} in ${login.group ?? "the forum group"}.${topics}`, "info");
+		ctx.ui.notify(`Logged in: bot ${login.bot ?? "unknown"} in ${login.group ?? "the forum group"}.\n${renderStatus(await coordinator.report())}`, "info");
+	}
+
+	/** A cleanup asked for locally is confirmed locally; without the interactive UI there is no one to confirm it. */
+	function confirmLocally(ctx: ExtensionCommandContext): ConfirmCleanup {
+		return async (question, action) => ctx.hasUI && (await ctx.ui.confirm(`${action}?`, question));
+	}
+
+	/** `/rc archive` and `/rc cleanup`, parsed like their control-topic forms. */
+	async function cleanup(subcommand: string, rest: string, ctx: ExtensionCommandContext): Promise<void> {
+		const command = parseControlCommand(`/rc ${subcommand} ${rest}`);
+		let result: CleanupReport | undefined;
+		if (command?.kind === "archive" && command.session) result = await coordinator.archive(command.session, confirmLocally(ctx));
+		else if (command?.kind === "cleanup" && command.what === "history") result = await coordinator.cleanupHistory(command.session, confirmLocally(ctx));
+		else if (command?.kind === "cleanup") {
+			result = await coordinator.cleanupWorkspace(command.session, { abandon: command.abandon, force: command.force }, confirmLocally(ctx));
+		} else {
+			ctx.ui.notify(command?.kind === "invalid" ? command.reply : "Usage: /rc archive <session>", "error");
+			return;
+		}
+		ctx.ui.notify(result ? renderCleanup(result) : "Nothing was done.", result?.failed.length ? "warning" : "info");
 	}
 
 	pi.registerCommand("rc", {
-		description: "Telegram remote control: start, stop, status, new, sessions, attach, login, logout",
+		description: "Telegram remote control: start, stop, status, new, sessions, attach, archive, cleanup, login, logout",
 		getArgumentCompletions: (prefix) => {
 			const items = SUBCOMMANDS.filter((item) => item.value.startsWith(prefix.trim()))
 				.map((item) => ({ value: item.value, label: item.value, description: item.description }));
@@ -313,6 +342,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 				return;
 			case "attach":
 				return attach(rest, ctx);
+			case "archive":
+			case "cleanup":
+				return cleanup(subcommand, rest, ctx);
 			case "stop": {
 				const wasRunning = await coordinator.stop();
 				ctx.ui.setStatus(STATUS_KEY, undefined);

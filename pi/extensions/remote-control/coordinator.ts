@@ -23,8 +23,13 @@ import {
 	type ThinkingLevel,
 } from "./commands.ts";
 import {
+	bridgeLine,
 	condenseForTelegram,
 	describeOpenIn,
+	renderCleanup,
+	renderHeldSummary,
+	renderSessionStatus,
+	renderStatus,
 	describeTool,
 	errorMessage,
 	failureText,
@@ -64,6 +69,8 @@ export type AgentSession = {
 	unprompted?: boolean;
 	/** Conversations this workspace ran before a later one took over its topic; attachable by Pi session id. */
 	earlierConversations?: EarlierConversation[];
+	/** When `/rc archive` closed its topic; attaching it or exposing its workspace again reopens it. */
+	archivedAt?: string;
 };
 
 /** The Pi conversation fields an agent session stores for its current conversation and its earlier ones. */
@@ -93,9 +100,45 @@ export type EarlierConversationOverview = EarlierConversation & Health;
 
 export type SessionOverview = Omit<AgentSession, "earlierConversations"> & Standing<SessionStatus> & {
 	earlierConversations: EarlierConversationOverview[];
+	/** What an `active` session's Pi is doing. */
+	activity?: "working" | "idle";
 };
 
-export type RepositorySessions = { repository: { name: string; path: string }; sessions: SessionOverview[] };
+/** A repository as `/rc status` reports it: whether the registry approves it, and whether its checkout still exists. */
+export type RepositoryHealth = { name: string; path: string; approved: boolean; exists: boolean };
+
+export type RepositorySessions = { repository: RepositoryHealth; sessions: SessionOverview[] };
+
+/** What `/rc status` reports: the bridge, every approved repository, and the sessions grouped by repository. */
+export type StatusReport = { bridge: RemoteControlStatus; repositories: RepositoryHealth[]; sessions: RepositorySessions[] };
+
+/**
+ * Asks the owner to confirm one cleanup step, described by `question`; `action` labels
+ * the answer that confirms it, such as "Archive". Anything but true does nothing.
+ */
+export type ConfirmCleanup = (question: string, action: string) => Promise<boolean>;
+
+/** What a confirmed cleanup did, and kept, for the owner to read. */
+export type CleanupReport = {
+	/** One line, such as "Archived fix-ci." */
+	summary: string;
+	/** What was removed, closed, or stopped. */
+	done: string[];
+	/** What was deliberately left in place. */
+	kept: string[];
+	/** What could not be done, and why. */
+	failed: string[];
+	/** Nothing of the session was left, so its record was removed too. */
+	forgotten: boolean;
+};
+
+/** Which unmerged or uncommitted work a workspace cleanup may remove. */
+export type WorkspaceCleanupOptions = {
+	/** Removes a clean workspace whose branch is not merged. */
+	abandon?: boolean;
+	/** Removes the workspace whatever it holds: uncommitted changes and unmerged commits alike. */
+	force?: boolean;
+};
 
 export type NewSessionInput = {
 	name: string;
@@ -127,20 +170,38 @@ export interface AgentSessionStore {
 	get(id: string): Promise<AgentSession | undefined>;
 	/** Replaces a stored session with the same id. */
 	update(session: AgentSession): Promise<void>;
+	/** Forgets a session; a missing one is not an error. */
+	remove(id: string): Promise<void>;
 }
+
+/** How a branch stands against its repository's main line. */
+export type BranchState = {
+	mainLine: string;
+	/** The main line contains the branch, or a pull request from it merged at its current tip (a squash merge). */
+	merged: boolean;
+	/** The merged pull request, when that is what makes the branch merged. */
+	pullRequest?: number;
+	/** Commits on the branch the main line does not contain. */
+	unmergedCommits: number;
+};
 
 export interface WorkspaceAdapter {
 	/** Creates a worktree on a new branch from the repository's main line. */
 	create(repository: Repository, branch: string): Promise<Workspace>;
 	/**
-	 * Removes a worktree `create` made, and its branch; only used to roll back a
-	 * failed creation. Rejects with an error naming what it could not remove.
+	 * Removes a worktree and its branch: a failed creation's rollback, or a confirmed
+	 * cleanup. Unless `discardChanges` (the default), a worktree with uncommitted work
+	 * is refused. Rejects with an error naming what it could not remove.
 	 */
-	remove(workspace: Workspace, repository: Repository): Promise<void>;
+	remove(workspace: Workspace, repository: Repository, options?: { discardChanges?: boolean }): Promise<void>;
 	/** The branch checked out in a workspace, or undefined when the workspace no longer exists. */
 	inspect(path: string): Promise<{ branch: string } | undefined>;
 	/** The branch new work in the repository starts from, such as `main`. */
 	mainLine(repositoryPath: string): Promise<string>;
+	/** A workspace's uncommitted changes, untracked files included, one per line; empty when it is clean. */
+	changes(path: string): Promise<string[]>;
+	/** How a branch stands against the main line; undefined when the branch does not exist. */
+	branchState(repositoryPath: string, branch: string): Promise<BranchState | undefined>;
 }
 
 /** A dialog an extension opened in an agent's Pi, for the owner to answer in its session topic. */
@@ -176,6 +237,8 @@ export interface PiSessionAdapter {
 	resume(session: AgentSession, events: PiSessionEvents): Promise<AgentProcess>;
 	/** Whether the session's Pi history still exists to resume. */
 	hasHistory(session: AgentSession): Promise<boolean>;
+	/** Deletes the conversation's Pi history; false when there was none to delete. */
+	deleteHistory(session: AgentSession): Promise<boolean>;
 }
 
 /**
@@ -246,6 +309,9 @@ export interface TelegramBotApi {
 	createForumTopic(chatId: number, name: string): Promise<{ threadId: number }>;
 	deleteForumTopic(input: { chatId: number; threadId: number }): Promise<void>;
 	editForumTopic(input: { chatId: number; threadId: number; name: string }): Promise<void>;
+	/** Closes a topic: it stays in the group, marked closed, and only administrators can post in it. */
+	closeForumTopic(input: { chatId: number; threadId: number }): Promise<void>;
+	reopenForumTopic(input: { chatId: number; threadId: number }): Promise<void>;
 	/** `buttons` are rows of inline buttons under the message. */
 	sendMessage(input: { chatId: number; threadId?: number; text: string; buttons?: InlineButton[][] }): Promise<{ messageId: number }>;
 	/** Without `buttons`, the message keeps its buttons; an empty array removes them. */
@@ -396,6 +462,9 @@ export type CoordinatorOptions = {
 	approvalTimeoutMs?: number;
 	/** How long a Pi session may take to list its commands before the topic moves on. */
 	commandTimeoutMs?: number;
+	/** The first wait before polling Telegram again after a failure; it doubles up to `maxRetryDelayMs`. */
+	retryDelayMs?: number;
+	maxRetryDelayMs?: number;
 };
 
 export type RemoteControlStatus = {
@@ -404,6 +473,10 @@ export type RemoteControlStatus = {
 	group?: string;
 	/** Session topics the running bridge routes to Pi. */
 	topics: string[];
+	/** When Telegram stopped answering; undefined while it answers. */
+	unreachableSince?: string;
+	/** Session-topic messages held until Telegram answers again. */
+	held: number;
 };
 
 export type RemoteControlAdapters = {
@@ -427,6 +500,11 @@ export class RemoteControlError extends Error {
 		| "stale-session"
 		| "session-in-use"
 		| "rollback-incomplete"
+		| "session-busy"
+		| "session-changed"
+		| "workspace-not-clean"
+		| "branch-not-merged"
+		| "main-checkout"
 		| "not-running"
 		| "invalid-session-name"
 		| "invalid-token"
@@ -450,6 +528,7 @@ function id(prefix: string): string {
 
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
 const POLL_TIMEOUT_SECONDS = 25;
+const RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
 const CONTROL_TOPIC_NAME = "Pi remote control";
 const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
@@ -461,6 +540,10 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
 const APPROVE: PromptChoice[] = [{ label: "Approve", notice: "Approved" }, { label: "Deny", notice: "Denied" }];
 const STOP_RUN: PromptChoice[] = [{ label: "Stop run", notice: "Stopping the run" }, { label: "Keep running", notice: "Kept running" }];
 const CANCEL: PromptChoice = { label: "Cancel", notice: "Cancelled" };
+/** Held session-topic messages a reconnect summary shows; older ones are only counted. */
+const HELD_SHOWN = 3;
+/** A post skipped because Telegram is unreachable; what it carried is held, not lost. */
+const OFFLINE = Symbol("offline");
 /** The last path segment, as a repository's display name. */
 function nameFromPath(path: string): string {
 	return path.split("/").filter(Boolean).pop() || path;
@@ -478,6 +561,24 @@ function withConversation(session: AgentSession, conversation: PiConversation): 
 
 function conversationOf(session: AgentSession): PiConversation {
 	return { piSessionId: session.piSessionId, piSessionFile: session.piSessionFile, name: session.name, branch: session.branch };
+}
+
+function report(summary: string, parts: Partial<Pick<CleanupReport, "done" | "kept" | "failed">> = {}): CleanupReport {
+	return { summary, done: parts.done ?? [], kept: parts.kept ?? [], failed: parts.failed ?? [], forgotten: false };
+}
+
+function commitCount(count: number): string {
+	return `${count} commit${count === 1 ? "" : "s"}`;
+}
+
+function changeCount(changes: string[]): string {
+	return `${changes.length} uncommitted change${changes.length === 1 ? "" : "s"}`;
+}
+
+/** Uncommitted changes as `git status --short` lists them, the first ten of them. */
+function listChanges(changes: string[]): string {
+	const shown = changes.slice(0, 10).map((change) => change.trim()).join(", ");
+	return changes.length > 10 ? `${shown}, and ${changes.length - 10} more` : shown;
 }
 
 /** Labels sessions by name, adding the repository when two share a name. */
@@ -503,6 +604,17 @@ function fatalPollError(error: unknown): RemoteControlError | undefined {
 		return new RemoteControlError("bridge-conflict", "Another process is polling this bot (another Pi running /rc, or a webhook is set).");
 	}
 	return undefined;
+}
+
+/** A Telegram call that could not reach Telegram, or that Telegram failed on its side, as opposed to one it refused. */
+function isUnreachable(error: unknown): boolean {
+	const code = (error as { errorCode?: number } | undefined)?.errorCode;
+	return code === undefined || code >= 500;
+}
+
+/** Telegram's answer for closing a closed topic or reopening an open one. */
+function isUnchangedTopic(error: unknown): boolean {
+	return /TOPIC_NOT_MODIFIED/i.test(errorMessage(error));
 }
 
 /** Telegram's answer for a topic that was deleted, as opposed to a transient failure. */
@@ -579,6 +691,9 @@ type Progress = {
 	messageId?: number;
 	shown?: string;
 	timer?: ReturnType<typeof setTimeout>;
+	/** How the run ended, once Pi settled, and when. */
+	finished?: "done" | "failed";
+	endedAt?: number;
 };
 
 /** A session topic the running bridge delivers to one live Pi session. */
@@ -594,6 +709,12 @@ type Route = {
 	/** Runs this topic's conversation finished, so a stop confirmed after its run ended stops nothing. */
 	settledRuns: number;
 	progress?: Progress;
+	/** The latest run's progress, current or finished, re-shown once Telegram answers again. */
+	lastProgress?: Progress;
+	/** Messages for this topic held while Telegram was unreachable, oldest first. */
+	held: string[];
+	/** When the first held message was held. */
+	heldSince?: number;
 };
 
 type Bridge = {
@@ -612,6 +733,8 @@ type Bridge = {
 	menuQueued: boolean;
 	/** The menu Telegram has, so an unchanged one is not set again. */
 	menuShown?: MenuCommand[];
+	/** When Telegram stopped answering; cleared by the next successful poll, which sends what was held. */
+	offlineSince?: number;
 };
 
 /** The single authority for repository and agent-session invariants. */
@@ -630,6 +753,8 @@ export class RemoteControlCoordinator {
 	private readonly progressIntervalMs: number;
 	private readonly approvalTimeoutMs: number;
 	private readonly commandTimeoutMs: number;
+	private readonly retryDelayMs: number;
+	private readonly maxRetryDelayMs: number;
 	/** Approvals and selections waiting for the owner's button press. */
 	private readonly prompts: OwnerPrompts;
 
@@ -639,6 +764,8 @@ export class RemoteControlCoordinator {
 		this.progressIntervalMs = options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
 		this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
 		this.commandTimeoutMs = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
+		this.retryDelayMs = options.retryDelayMs ?? RETRY_DELAY_MS;
+		this.maxRetryDelayMs = options.maxRetryDelayMs ?? MAX_RETRY_DELAY_MS;
 		this.prompts = new OwnerPrompts(() => this.now().getTime());
 	}
 
@@ -819,7 +946,7 @@ export class RemoteControlCoordinator {
 			if (route !== sameConversation && (route.session.id === session.id || route.pi === pi || route.threadId === threadId)) this.unroute(bridge, route);
 		}
 		if (sameConversation) Object.assign(sameConversation, { session, pi });
-		else bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve(), settledRuns: 0 });
+		else bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve(), settledRuns: 0, held: [] });
 		this.refreshMenu(bridge);
 	}
 
@@ -846,29 +973,53 @@ export class RemoteControlCoordinator {
 
 	/** Agent sessions grouped by repository, each with its computed status. */
 	async sessions(): Promise<RepositorySessions[]> {
+		return (await this.health()).sessions;
+	}
+
+	/** What `/rc status` reports: the bridge, every approved repository, and the sessions by repository. */
+	async report(): Promise<StatusReport> {
+		const { repositories, sessions } = await this.health();
+		return { bridge: this.status(), repositories, sessions };
+	}
+
+	private async health(): Promise<{ repositories: RepositoryHealth[]; sessions: RepositorySessions[] }> {
 		const connected = this.connectedSessionIds();
 		const repositories = await this.adapters.repositories.list();
 		const groups = new Map<string, RepositorySessions>();
-		for (const repository of repositories) groups.set(repository.path, { repository: { name: repository.name, path: repository.path }, sessions: [] });
+		const exists = async (path: string) => (await this.adapters.workspaces.inspect(path)) !== undefined;
+		for (const repository of repositories) {
+			groups.set(repository.path, { repository: { name: repository.name, path: repository.path, approved: true, exists: await exists(repository.path) }, sessions: [] });
+		}
 		for (const session of await this.adapters.sessions.list()) {
 			let group = groups.get(session.repositoryPath);
 			if (!group) {
-				group = { repository: { name: nameFromPath(session.repositoryPath), path: session.repositoryPath }, sessions: [] };
+				const repository = { name: nameFromPath(session.repositoryPath), path: session.repositoryPath, approved: false, exists: await exists(session.repositoryPath) };
+				group = { repository, sessions: [] };
 				groups.set(session.repositoryPath, group);
 			}
 			const { earlierConversations = [], ...current } = session;
-			const exists = (await this.adapters.workspaces.inspect(session.workspace)) !== undefined;
+			const workspaceExists = await exists(session.workspace);
 			const health = (conversation: AgentSession): Promise<Health> =>
-				exists ? this.conversationHealth(conversation) : Promise.resolve({ status: "missing-workspace" });
+				workspaceExists ? this.conversationHealth(conversation) : Promise.resolve({ status: "missing-workspace" });
 			const earlier: EarlierConversationOverview[] = [];
 			for (const conversation of earlierConversations) earlier.push({ ...conversation, ...(await health(withConversation(session, conversation))) });
+			const live = connected.has(session.id) ? this.livePi(session.id) : undefined;
 			group.sessions.push({
 				...current,
 				...(connected.has(session.id) ? { status: "active" as const } : await health(session)),
+				...(live ? { activity: live.isIdle() ? "idle" as const : "working" as const } : {}),
 				earlierConversations: earlier,
 			});
 		}
-		return [...groups.values()].filter((group) => group.sessions.length);
+		return {
+			repositories: [...groups.values()].filter((group) => group.repository.approved).map((group) => group.repository),
+			sessions: [...groups.values()].filter((group) => group.sessions.length),
+		};
+	}
+
+	/** The live Pi conversation of a connected session: an agent remote control started, or a routed topic's. */
+	private livePi(sessionId: string): LivePiSession | undefined {
+		return this.agents.get(sessionId)?.pi ?? [...this.bridge?.routes.values() ?? []].find((route) => route.session.id === sessionId)?.pi;
 	}
 
 	private connectedSessionIds(): Set<string> {
@@ -985,8 +1136,9 @@ export class RemoteControlCoordinator {
 				if (agent.id !== target.piSessionId) throw new Error(`Pi resumed session ${agent.id} instead of ${target.piSessionId}.`);
 				const title = topicTitle(repository.name, target.name, workspace.branch);
 				const threadId = await this.bindTopic(bridge, session, title, `Reconnected to Pi session "${target.name}" on ${workspace.branch}. ${SESSION_TOPIC_HELP}`);
+				const { archivedAt: _archivedAt, ...unarchived } = target;
 				const attached: AgentSession = {
-					...target, branch: workspace.branch, topicId: String(threadId), topicName: title,
+					...unarchived, branch: workspace.branch, topicId: String(threadId), topicName: title,
 					piSessionFile: agent.sessionFile ?? target.piSessionFile,
 					earlierConversations: await this.earlierConversationsAfter(session, target.piSessionId),
 				};
@@ -1001,6 +1153,251 @@ export class RemoteControlCoordinator {
 	}
 
 	/**
+	 * Archives an idle agent session: posts why in its session topic and closes it, and
+	 * disconnects it (an agent remote control started is stopped; the current
+	 * conversation's topic is no longer routed). Its Pi history, workspace, and branch are
+	 * kept; `/rc attach`, or `/rc` in its workspace, reopens it. Undefined when not confirmed.
+	 */
+	archive(reference: string, confirm: ConfirmCleanup): Promise<CleanupReport | undefined> {
+		return this.confirmedCleanup(reference, confirm, {
+			plan: async (session) => {
+				this.requireBridge();
+				const kept = await this.kept(session, { history: true, workspace: true });
+				if (session.archivedAt) return { nothing: report(`${session.name} is already archived.`, { kept }) };
+				const live = this.connectedSessionIds().has(session.id) ? this.livePi(session.id) : undefined;
+				if (live && !live.isIdle()) {
+					throw new RemoteControlError("session-busy", `${session.name} is working; archive it once its run ends, or stop the run with /rc stop-agent.`);
+				}
+				return {
+					question: [
+						`Archive ${session.name} (${session.topicName})?`,
+						`Its topic is closed${live ? " and it is disconnected" : ""}. Kept: ${kept.join("; ") || "nothing else is left"}.`,
+						`/rc attach ${session.name} brings it back.`,
+					].join("\n\n"),
+					action: "Archive",
+				};
+			},
+			run: async (session) => {
+				const bridge = this.requireBridge();
+				const done: string[] = [];
+				const failed: string[] = [];
+				const route = [...bridge.routes.values()].find((candidate) => candidate.session.id === session.id);
+				if (route) {
+					this.unroute(bridge, route);
+					await route.outbox;
+				}
+				const agent = this.agents.get(session.id);
+				if (agent) {
+					this.agents.delete(session.id);
+					await agent.pi.close().then(() => done.push("stopped its Pi process"), (error) => failed.push(`its Pi process is still running: ${errorMessage(error)}`));
+				} else if (route) {
+					done.push("disconnected its topic from this Pi's conversation");
+				}
+				const chatId = bridge.credentials.group.id;
+				const threadId = Number(session.topicId);
+				await bridge.api.sendMessage({ chatId, threadId, text: `📦 Archived ${session.name}: its Pi history, workspace, and branch are kept. /rc attach ${session.name} in the control topic brings it back.` })
+					.catch(() => undefined);
+				await bridge.api.closeForumTopic({ chatId, threadId }).then(
+					() => done.push(`closed topic "${session.topicName}"`),
+					(error) => {
+						if (isUnchangedTopic(error)) done.push(`closed topic "${session.topicName}"`);
+						else if (isMissingTopic(error)) done.push(`topic "${session.topicName}" was already deleted`);
+						else failed.push(`topic "${session.topicName}" is still open: ${errorMessage(error)}`);
+					},
+				);
+				await this.adapters.sessions.update({ ...session, archivedAt: this.now().toISOString() });
+				return report(`Archived ${session.name}.`, { done, failed, kept: await this.kept(session, { history: true, workspace: true }) });
+			},
+		});
+	}
+
+	/**
+	 * Deletes the Pi history of a disconnected session, its earlier conversations
+	 * included; its topic, workspace, and branch are kept. Undefined when not confirmed.
+	 */
+	cleanupHistory(reference: string, confirm: ConfirmCleanup): Promise<CleanupReport | undefined> {
+		return this.confirmedCleanup(reference, confirm, {
+			plan: async (session) => {
+				await this.assertDisconnected(session, "deleting its Pi history");
+				const histories = await this.histories(session);
+				const kept = await this.kept(session, { topic: true, workspace: true });
+				if (!histories.length) return { nothing: report(`${session.name} has no Pi history to delete.`, { kept }) };
+				return {
+					question: [
+						`Delete the Pi history of ${session.name}? ${histories.length} conversation${histories.length === 1 ? "" : "s"}:`,
+						histories.map((conversation) => conversation.piSessionFile).join("\n"),
+						`This cannot be undone. Kept: ${kept.join("; ")}.`,
+					].join("\n\n"),
+					action: "Delete history",
+				};
+			},
+			run: async (session) => {
+				const done: string[] = [];
+				const failed: string[] = [];
+				for (const conversation of await this.histories(session)) {
+					await this.adapters.pi.deleteHistory(conversation).then(
+						(deleted) => { if (deleted) done.push(`Pi history ${conversation.piSessionFile}`); },
+						(error) => failed.push(`Pi history ${conversation.piSessionFile}: ${errorMessage(error)}`),
+					);
+				}
+				// Earlier conversations are only kept while they can be attached; a current one without history is stale.
+				const { unprompted: _unprompted, earlierConversations = [], ...rest } = session;
+				const remaining: EarlierConversation[] = [];
+				for (const conversation of earlierConversations) {
+					if (await this.adapters.pi.hasHistory(withConversation(session, conversation))) remaining.push(conversation);
+				}
+				await this.adapters.sessions.update({ ...rest, ...(remaining.length ? { earlierConversations: remaining } : {}) });
+				return report(`Deleted the Pi history of ${session.name}.`, { done, failed, kept: await this.kept(session, { topic: true, workspace: true }) });
+			},
+		});
+	}
+
+	/**
+	 * Removes a disconnected session's worktree and branch. The workspace must be clean
+	 * and its branch merged; `abandon` allows an unmerged branch, and `force` uncommitted
+	 * changes too. A repository's main checkout is never removed. Undefined when not confirmed.
+	 */
+	cleanupWorkspace(reference: string, options: WorkspaceCleanupOptions, confirm: ConfirmCleanup): Promise<CleanupReport | undefined> {
+		const force = options.force === true;
+		const abandon = force || options.abandon === true;
+		return this.confirmedCleanup(reference, confirm, {
+			plan: async (session) => {
+				await this.assertDisconnected(session, "removing its workspace");
+				const target = await this.workspaceTarget(session);
+				const { name } = session;
+				const kept = await this.kept(session, { topic: true, history: true });
+				if (!target.exists && !target.state) return { nothing: report(`${name} has no workspace or branch left to remove.`, { kept }) };
+				const { changes, state, branch } = target;
+				if (changes.length && !force) {
+					throw new RemoteControlError(
+						"workspace-not-clean",
+						`The workspace of ${name} has ${changeCount(changes)}: ${listChanges(changes)}. Commit or discard them, or remove it anyway with /rc cleanup workspace ${name} --force.`,
+					);
+				}
+				const unmerged = target.exists && !branch ? "is on a detached HEAD, whose commits cleanup cannot check"
+					: state && !state.merged ? `is on branch ${branch}, which has ${commitCount(state.unmergedCommits)} not merged into ${state.mainLine} and no merged pull request`
+					: undefined;
+				if (unmerged && !abandon) {
+					throw new RemoteControlError("branch-not-merged", `The workspace of ${name} ${unmerged}. Remove it anyway with /rc cleanup workspace ${name} --abandon.`);
+				}
+				const items = [
+					target.exists && `worktree ${session.workspace}`,
+					state && (state.merged
+						? `branch ${branch}: merged into ${state.mainLine}${state.pullRequest ? ` (pull request #${state.pullRequest})` : ""}`
+						: `branch ${branch}: ⚠️ not merged: abandons ${commitCount(state.unmergedCommits)} not on ${state.mainLine}`),
+					target.exists && !branch && "⚠️ detached HEAD: abandons any commits only it holds",
+					changes.length && `⚠️ discards ${changeCount(changes)}: ${listChanges(changes)}`,
+				].filter((item): item is string => typeof item === "string");
+				return {
+					question: [`Remove the workspace of ${name}?`, items.map((item) => `• ${item}`).join("\n"), `Kept: ${kept.join("; ")}.`].join("\n\n"),
+					action: changes.length ? "Force remove" : unmerged ? "Abandon and remove" : "Remove",
+				};
+			},
+			run: async (session) => {
+				const target = await this.workspaceTarget(session);
+				const { changes, state, branch, repository } = target;
+				const done: string[] = [];
+				const failed: string[] = [];
+				await this.adapters.workspaces
+					.remove({ path: session.workspace, branch: state ? branch ?? "" : "", created: true }, repository, { discardChanges: force })
+					.catch((error) => failed.push(errorMessage(error)));
+				const worktreeGone = target.exists && !(await this.adapters.workspaces.inspect(session.workspace));
+				const branchGone = state !== undefined && branch !== undefined && !(await this.adapters.workspaces.branchState(repository.path, branch));
+				if (worktreeGone) done.push(`worktree ${session.workspace}`);
+				if (branchGone) done.push(state.merged ? `branch ${branch}` : `branch ${branch}, with ${commitCount(state.unmergedCommits)} not merged into ${state.mainLine}`);
+				if (worktreeGone && changes.length) done.push(`${changeCount(changes)}: ${changes.map((change) => change.trim()).join(", ")}`);
+				return report(`Removed the workspace of ${session.name}.`, { done, failed, kept: await this.kept(session, { topic: true, history: true }) });
+			},
+		});
+	}
+
+	/** A session's workspace as cleanup sees it: whether it exists, its branch, and what removing it would lose. */
+	private async workspaceTarget(session: AgentSession): Promise<{ repository: Repository; exists: boolean; branch?: string; state?: BranchState; changes: string[] }> {
+		const repository = await this.adapters.repositories.getByPath(session.repositoryPath);
+		if (!repository) {
+			throw new RemoteControlError("repository-not-approved", `The repository of ${session.name} is no longer approved for remote control: ${session.repositoryPath}`);
+		}
+		if (session.workspace === repository.path) {
+			throw new RemoteControlError("main-checkout", `The workspace of ${session.name} is the main checkout of ${repository.name}; cleanup only removes worktrees.`);
+		}
+		const inspected = await this.adapters.workspaces.inspect(session.workspace);
+		const branch = inspected ? (inspected.branch.startsWith("detached@") ? undefined : inspected.branch) : session.branch;
+		const state = branch ? await this.adapters.workspaces.branchState(repository.path, branch) : undefined;
+		const changes = inspected ? await this.adapters.workspaces.changes(session.workspace) : [];
+		return { repository, exists: inspected !== undefined, branch, state, changes };
+	}
+
+	/**
+	 * Plans a cleanup, asks the owner to confirm exactly that plan, then plans it again and
+	 * runs it only if nothing changed meanwhile: the confirmation applies to the session
+	 * state it described. The session is forgotten once nothing of it is left.
+	 */
+	private async confirmedCleanup(reference: string, confirm: ConfirmCleanup, step: {
+		plan(session: AgentSession): Promise<{ question: string; action: string } | { nothing: CleanupReport }>;
+		run(session: AgentSession): Promise<CleanupReport>;
+	}): Promise<CleanupReport | undefined> {
+		const { session } = await this.findSession(reference);
+		const asked = await this.withCreationLock(() => step.plan(session));
+		if ("nothing" in asked) return asked.nothing;
+		if (!(await confirm(asked.question, asked.action))) return undefined;
+		return this.withCreationLock(async () => {
+			const current = await this.adapters.sessions.get(session.id);
+			const planned = current && (await step.plan(current));
+			if (!current || !planned || "nothing" in planned || planned.question !== asked.question || planned.action !== asked.action) {
+				throw new RemoteControlError("session-changed", `Nothing was done: ${session.name} changed while you decided. Ask again to see what cleanup would do now.`);
+			}
+			const result = await step.run(current);
+			return { ...result, forgotten: await this.forgetIfEmpty(current.id) };
+		});
+	}
+
+	/** Cleanup of a session's history or workspace never runs under a Pi that has it open. */
+	private async assertDisconnected(session: AgentSession, what: string): Promise<void> {
+		if (this.connectedSessionIds().has(session.id)) {
+			throw new RemoteControlError("session-busy", `${session.name} is connected; archive it with /rc archive ${session.name} before ${what}.`);
+		}
+		for (const conversation of this.conversations(session)) {
+			await this.assertNotOpen(conversation, conversation.piSessionId === session.piSessionId ? session.name : `Conversation ${conversation.piSessionId} of ${session.name}`);
+		}
+	}
+
+	/** A session's current conversation and its earlier ones. */
+	private conversations(session: AgentSession): AgentSession[] {
+		return [session, ...(session.earlierConversations ?? []).map((conversation) => withConversation(session, conversation))];
+	}
+
+	/** The session's conversations whose Pi history exists. */
+	private async histories(session: AgentSession): Promise<AgentSession[]> {
+		const found: AgentSession[] = [];
+		for (const conversation of this.conversations(session)) if (await this.adapters.pi.hasHistory(conversation)) found.push(conversation);
+		return found;
+	}
+
+	/** What of a session a cleanup leaves in place, for its question and report. */
+	private async kept(session: AgentSession, what: { topic?: boolean; history?: boolean; workspace?: boolean }): Promise<string[]> {
+		const kept: string[] = [];
+		if (what.topic) kept.push(`topic "${session.topicName}"${session.archivedAt ? " (archived)" : ""}`);
+		if (what.history) {
+			const count = (await this.histories(session)).length;
+			if (count) kept.push(`Pi history (${count} conversation${count === 1 ? "" : "s"})`);
+		}
+		if (what.workspace) {
+			const workspace = await this.adapters.workspaces.inspect(session.workspace);
+			if (workspace) kept.push(`workspace ${session.workspace}`, `branch ${workspace.branch}`);
+		}
+		return kept;
+	}
+
+	/** Forgets an archived session with no Pi history and no workspace: nothing of it is left to attach or clean up. */
+	private async forgetIfEmpty(sessionId: string): Promise<boolean> {
+		const session = await this.adapters.sessions.get(sessionId);
+		if (!session?.archivedAt || (await this.adapters.workspaces.inspect(session.workspace))) return false;
+		if ((await this.histories(session)).length) return false;
+		await this.adapters.sessions.remove(session.id);
+		return true;
+	}
+
+	/**
 	 * Announces a session in its stored topic, renaming it when the title changed.
 	 * Posting proves the topic still exists; one deleted in Telegram is replaced. Any
 	 * other failure is thrown rather than orphaning a topic that still exists.
@@ -1009,6 +1406,12 @@ export class RemoteControlCoordinator {
 		const { api, options } = bridge;
 		const chatId = bridge.credentials.group.id;
 		let threadId = stored ? Number(stored.topicId) : undefined;
+		if (threadId !== undefined && stored?.archivedAt) {
+			const archived = threadId;
+			await api.reopenForumTopic({ chatId, threadId: archived }).catch((error) => {
+				if (!isUnchangedTopic(error) && !isMissingTopic(error)) options.onDeliveryError?.(error);
+			});
+		}
 		if (threadId !== undefined) {
 			await api.sendMessage({ chatId, threadId, text }).catch((error) => {
 				if (!isMissingTopic(error)) throw error;
@@ -1270,6 +1673,8 @@ export class RemoteControlCoordinator {
 			bot: credentials?.bot.username && `@${credentials.bot.username}`,
 			group: credentials?.group.title,
 			topics: [...(this.bridge?.routes.values() ?? [])].map((route) => route.session.topicName),
+			unreachableSince: this.bridge?.offlineSince === undefined ? undefined : new Date(this.bridge.offlineSince).toISOString(),
+			held: [...(this.bridge?.routes.values() ?? [])].reduce((count, route) => count + route.held.length, 0),
 		};
 	}
 
@@ -1338,8 +1743,10 @@ export class RemoteControlCoordinator {
 				if (!progress) return;
 				route.progress = undefined;
 				clearTimeout(progress.timer);
+				progress.finished = progress.failure ? "failed" : "done";
+				progress.endedAt = this.now().getTime();
 				if (progress.failure) this.reply(bridge, route, progress.failure);
-				this.post(bridge, route, () => this.showProgress(bridge, route, progress, progress.failure ? "failed" : "done"));
+				this.post(bridge, route, () => this.showProgress(bridge, route, progress, progress.finished));
 				return;
 			}
 		}
@@ -1348,6 +1755,7 @@ export class RemoteControlCoordinator {
 	private beginProgress(bridge: Bridge, route: Route, prompt?: string): Progress {
 		const progress: Progress = { startedAt: this.now().getTime(), prompt, tools: [] };
 		route.progress = progress;
+		route.lastProgress = progress;
 		this.post(bridge, route, () => this.showProgress(bridge, route, progress));
 		return progress;
 	}
@@ -1363,8 +1771,10 @@ export class RemoteControlCoordinator {
 	}
 
 	/** Sends the progress message on first use and edits it in place afterwards. */
-	private async showProgress(bridge: Bridge, route: Route, progress: Progress, finished?: "done" | "failed"): Promise<void> {
-		const text = renderProgress({ prompt: progress.prompt, tools: progress.tools, elapsedMs: this.now().getTime() - progress.startedAt, finished });
+	/** `finished` is how the run stood when the edit was queued, so an earlier edit never shows a later ending. */
+	private async showProgress(bridge: Bridge, route: Route, progress: Progress, finished?: Progress["finished"]): Promise<void> {
+		const ended = finished ? progress.endedAt ?? this.now().getTime() : this.now().getTime();
+		const text = renderProgress({ prompt: progress.prompt, tools: progress.tools, elapsedMs: ended - progress.startedAt, finished });
 		if (text === progress.shown) return;
 		const chatId = bridge.credentials.group.id;
 		if (progress.messageId === undefined) progress.messageId = (await bridge.api.sendMessage({ chatId, threadId: route.threadId, text })).messageId;
@@ -1372,17 +1782,75 @@ export class RemoteControlCoordinator {
 		progress.shown = text;
 	}
 
-	/** Queues a Telegram call for a session topic; failures are reported, never thrown. */
-	private post(bridge: Bridge, route: Route, send: () => Promise<void>): void {
+	/**
+	 * Queues a Telegram call for a session topic; failures are reported, never thrown.
+	 * While Telegram is unreachable nothing is sent: `hold`, the text the call carries,
+	 * is held for the reconnect summary instead, and a progress edit is simply redone then.
+	 */
+	private post(bridge: Bridge, route: Route, send: () => Promise<void>, hold?: string): void {
 		route.outbox = route.outbox
-			.then(() => withRateLimitRetry(send, bridge.abort.signal))
-			.catch((error) => bridge.options.onDeliveryError?.(error));
+			.then(() => {
+				if (bridge.offlineSince !== undefined) throw OFFLINE;
+				return withRateLimitRetry(send, bridge.abort.signal);
+			})
+			.catch((error) => {
+				if (error !== OFFLINE && !isUnreachable(error)) return bridge.options.onDeliveryError?.(error);
+				if (error !== OFFLINE) {
+					this.markOffline(bridge);
+					bridge.options.onError?.(error);
+				}
+				if (hold === undefined) return;
+				route.heldSince ??= this.now().getTime();
+				route.held.push(hold);
+			});
 	}
 
 	private reply(bridge: Bridge, route: Route, text: string): void {
 		this.post(bridge, route, async () => {
 			await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId: route.threadId, text });
-		});
+		}, text);
+	}
+
+	/** Telegram stopped answering. Agents keep running; session-topic messages are held until it answers again. */
+	private markOffline(bridge: Bridge): void {
+		bridge.offlineSince ??= this.now().getTime();
+	}
+
+	/**
+	 * Telegram answers again: brings each topic's progress message up to date and sends
+	 * one compact summary of what was held, rather than replaying every message.
+	 */
+	private reconnected(bridge: Bridge): void {
+		bridge.offlineSince = undefined;
+		bridge.options.onRecovered?.();
+		for (const route of bridge.routes.values()) {
+			const progress = route.lastProgress;
+			if (progress) {
+				const finished = progress.finished;
+				this.post(bridge, route, () => this.showProgress(bridge, route, progress, finished));
+			}
+			if (!route.held.length) continue;
+			this.post(bridge, route, async () => {
+				const held = route.held.length;
+				const text = renderHeldSummary({
+					held: route.held,
+					offlineMs: this.now().getTime() - (route.heldSince ?? this.now().getTime()),
+					now: this.activityText(route),
+					shown: HELD_SHOWN,
+				});
+				await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId: route.threadId, text });
+				// Messages held while the summary was being sent wait for the next one.
+				route.held.splice(0, held);
+				if (!route.held.length) route.heldSince = undefined;
+			});
+		}
+	}
+
+	/** What a topic's conversation is doing now, for a reconnect summary. */
+	private activityText(route: Route): string {
+		if (route.pi.isIdle()) return "idle";
+		const tools = route.progress?.tools.length ?? 0;
+		return `working${tools ? ` · ${tools} tool call${tools === 1 ? "" : "s"} so far` : ""}`;
 	}
 
 	/** Hands an owner message from a session topic to its live Pi session, in the order the owner sent them. */
@@ -1410,6 +1878,14 @@ export class RemoteControlCoordinator {
 			case "stop-agent":
 				// Waiting for the owner's answer must not hold back the topic's later messages.
 				this.stopAgent(bridge, route, route.threadId).catch((error) => this.reply(bridge, route, `Failed: ${errorMessage(error)}`));
+				return;
+			case "status":
+				return this.reply(bridge, route, await this.sessionStatusText(route));
+			case "archive":
+				// Likewise; the topic is told it was archived before it closes, so only a failure is reported here.
+				this.archive(route.session.id, this.confirmIn(bridge, route.threadId, () => bridge.routes.get(route.threadId) === route))
+					.then((report) => { if (report?.failed.length) this.sendTo(bridge, route.threadId, renderCleanup(report)); })
+					.catch((error) => this.sendTo(bridge, route.threadId, `Failed: ${errorMessage(error)}`));
 				return;
 			case "command":
 				return this.runCommand(bridge, route, input.name, input.args);
@@ -1769,7 +2245,61 @@ export class RemoteControlCoordinator {
 				this.stopAgent(bridge, route, threadId).catch((error) => this.sendTo(bridge, threadId, `Failed: ${errorMessage(error)}`));
 				return undefined;
 			}
+			case "status":
+				return renderStatus(await this.report());
+			case "archive": {
+				if (command.session === undefined) return this.pickSessionToArchive(bridge, threadId);
+				const reference = command.session;
+				this.runCleanup(bridge, threadId, () => this.archive(reference, this.confirmIn(bridge, threadId)));
+				return undefined;
+			}
+			case "cleanup": {
+				const confirm = this.confirmIn(bridge, threadId);
+				this.runCleanup(bridge, threadId, () => (command.what === "history"
+					? this.cleanupHistory(command.session, confirm)
+					: this.cleanupWorkspace(command.session, { abandon: command.abandon, force: command.force }, confirm)));
+				return undefined;
+			}
 		}
+	}
+
+	/** `/rc status` in a session topic: the bridge and that topic's session. */
+	private async sessionStatusText(route: Route): Promise<string> {
+		const report = await this.report();
+		for (const group of report.sessions) {
+			const session = group.sessions.find((candidate) => candidate.id === route.session.id);
+			if (session) return renderSessionStatus(report.bridge, session, group.repository);
+		}
+		return bridgeLine(report.bridge);
+	}
+
+	/** Asks the owner in a topic to confirm a cleanup step, with the step's own button and Cancel. */
+	private confirmIn(bridge: Bridge, threadId: number | undefined, stillValid = () => this.bridge === bridge): ConfirmCleanup {
+		return async (question, action) => {
+			const outcome = await this.ask(bridge, { threadId, text: question, rows: [[{ label: action }, CANCEL]], stillValid });
+			return outcome.kind === "answered" && outcome.choice === 0;
+		};
+	}
+
+	/**
+	 * Runs a cleanup in the background, since it waits for the owner's confirmation, and
+	 * posts its report where it was asked for; a cancelled one already says so on its question.
+	 */
+	private runCleanup(bridge: Bridge, threadId: number | undefined, cleanup: () => Promise<CleanupReport | undefined>): void {
+		cleanup()
+			.then((report) => report && renderCleanup(report), (error) => `Failed: ${errorMessage(error)}`)
+			.then((reply) => { if (reply) this.sendTo(bridge, threadId, reply); });
+	}
+
+	private async pickSessionToArchive(bridge: Bridge, threadId: number | undefined): Promise<string | undefined> {
+		const archivable = (await this.sessions()).flatMap((group) => group.sessions)
+			.filter((session) => !session.archivedAt && (session.status !== "active" || session.activity === "idle"));
+		if (!archivable.length) return "No agent session can be archived: every one is archived or working. List them with /rc sessions.";
+		this.pick(bridge, threadId, "Archive which agent session?", archivable, sessionLabel(archivable), async (session) => {
+			const report = await this.archive(session.id, this.confirmIn(bridge, threadId));
+			return report && renderCleanup(report);
+		});
+		return undefined;
 	}
 
 	private async startedText(name: string, repository: string): Promise<string> {
@@ -1818,7 +2348,7 @@ export class RemoteControlCoordinator {
 		const { api, credentials, options } = bridge;
 		const signal = bridge.abort.signal;
 		let offset = initialOffset;
-		let retryDelay = 1000;
+		let retryDelay = this.retryDelayMs;
 		let failing = false;
 		const rejected = new Set<string>();
 		const reject = async (message: TelegramMessage, key: string, text: string) => {
@@ -1831,8 +2361,9 @@ export class RemoteControlCoordinator {
 			let updates: TelegramUpdate[];
 			try {
 				updates = await api.getUpdates({ offset, timeoutSeconds: POLL_TIMEOUT_SECONDS, signal });
-				retryDelay = 1000;
-				if (failing) options.onRecovered?.();
+				retryDelay = this.retryDelayMs;
+				// Telegram answers again, after a failed poll or a failed delivery.
+				if (failing || bridge.offlineSince !== undefined) this.reconnected(bridge);
 				failing = false;
 			} catch (error) {
 				if (signal.aborted) return;
@@ -1844,11 +2375,12 @@ export class RemoteControlCoordinator {
 					options.onStopped?.(fatal);
 					return;
 				}
-				// Network or Telegram outages never stop the bridge; retry with backoff.
+				// Network or Telegram outages never stop the bridge or its agents; retry with backoff.
 				failing = true;
+				if (isUnreachable(error)) this.markOffline(bridge);
 				options.onError?.(error);
 				await sleep(retryDelay, signal);
-				retryDelay = Math.min(retryDelay * 2, MAX_RETRY_DELAY_MS);
+				retryDelay = Math.min(retryDelay * 2, this.maxRetryDelayMs);
 				continue;
 			}
 			for (const update of updates) {

@@ -118,3 +118,14 @@ test("maps inline buttons, button presses, and the command menu", async () => {
 		["setMyCommands", { commands: [{ command: "rc", description: "Remote control" }], scope: { type: "chat", chat_id: -1001 } }],
 	]);
 });
+
+test("closes and reopens forum topics", async () => {
+	const calls: Call[] = [];
+	const api = createTelegramBotApi("123:secret", fakeFetch({ closeForumTopic: true, reopenForumTopic: true }, calls));
+	await api.closeForumTopic({ chatId: -1001, threadId: 503 });
+	await api.reopenForumTopic({ chatId: -1001, threadId: 503 });
+	assert.deepEqual(calls.map((call) => [call.url.split("/").pop(), call.body]), [
+		["closeForumTopic", { chat_id: -1001, message_thread_id: 503 }],
+		["reopenForumTopic", { chat_id: -1001, message_thread_id: 503 }],
+	]);
+});

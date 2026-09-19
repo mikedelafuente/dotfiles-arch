@@ -6,10 +6,13 @@
 |---------|--------|
 | `/rc` or `/rc start` | Start the remote bridge inside this Pi process and expose this conversation |
 | `/rc stop` | Stop accepting Telegram messages; Pi sessions are untouched |
-| `/rc status` | Show login and bridge state, and the session topics being routed |
+| `/rc status` | Show login, the bridge and whether Telegram answers, and every repository and agent session with its health |
 | `/rc new <name>` | Adopt this branch or worktree as agent session `<name>`, or start one in a new worktree |
 | `/rc sessions` | List agent sessions by repository, with their status |
-| `/rc attach <session>` | Reconnect a disconnected agent session, or an earlier conversation by Pi session id |
+| `/rc attach <session>` | Reconnect a disconnected or archived agent session, or an earlier conversation by Pi session id |
+| `/rc archive <session>` | Close an idle session's topic and disconnect it, keeping its Pi history, workspace, and branch |
+| `/rc cleanup history <session>` | Delete a disconnected session's Pi history |
+| `/rc cleanup workspace <session> [--abandon\|--force]` | Remove a disconnected session's worktree and branch |
 | `/rc login` | Link a BotFather token, the owner, and a private forum group |
 | `/rc logout` | Stop the bridge and delete local credentials |
 
@@ -53,7 +56,8 @@ stopped. While it runs:
 - Messages posted with "Remain anonymous" cannot be tied to the owner and get
   one reply asking to turn it off (login rejects an anonymous code the same way).
 - Network failures are retried with backoff; the status line returns to
-  `rc: on` once polling recovers.
+  `rc: on` once polling recovers. Agents keep running meanwhile (see
+  [Telegram outages](#telegram-outages)).
 - A revoked token (401) or another poller on the same bot (409: a second Pi
   running `/rc`, or a webhook) stops the bridge with an error instead of retrying.
 
@@ -95,6 +99,8 @@ In the session topic:
 | `/rc followup <message>` | A follow-up queued after the current run (a prompt if idle) |
 | `/rc commands` (or `/rc`, `/rc help`) | Everything this topic accepts (see [Command discovery](#command-discovery)) |
 | `/rc stop-agent` | Aborts the current run once you confirm (see [Approvals](#approvals)) |
+| `/rc status` | Remote control, this session's agent and workspace, and its repository, with their health |
+| `/rc archive` | Archives this session once you confirm (see [Archive and cleanup](#archive-and-cleanup)) |
 | `/rc compact [instructions]`, `/rc thinking <level>`, `/rc model [provider/model]`, `/rc name <name>`, `/rc session` | Runs that Pi built-in (see [Command discovery](#command-discovery)) |
 | `/rc new`, `/rc reload` | Replies that remote control will reconnect, then runs `/new` or `/reload` in the local Pi (see [Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)) |
 | `/rc <template or skill> [args]` | That prompt template or skill, as if typed as `/<name>` |
@@ -166,6 +172,10 @@ and session topic. Two sessions never share a workspace.
 | `/rc sessions` | Both | Sessions grouped by repository, with their status |
 | `/rc attach <session>` | Both | Reconnects a disconnected session by name or id, or an earlier conversation by Pi session id. In the control topic without `<session>`, pick a disconnected session from buttons |
 | `/rc stop-agent [session]` | Control topic | Aborts a connected session's current run once you confirm; without `[session]`, pick it from buttons |
+| `/rc status` | Both | The bridge, every approved repository, and every session, with their health (see [Status](#status)) |
+| `/rc archive [session]` | Both | Archives an idle session once you confirm; in the control topic without `[session]`, pick it from buttons |
+| `/rc cleanup history <session>` | Both | Deletes a disconnected session's Pi history once you confirm |
+| `/rc cleanup workspace <session> [--abandon\|--force]` | Both | Removes a disconnected session's worktree and branch once you confirm |
 | `/rc help` | Control topic | The control-topic commands |
 
 A new session gets, together or not at all:
@@ -196,6 +206,9 @@ topic, the Pi process, or the worktree and branch.
 | stale | Its Pi history is gone |
 | missing workspace | Its worktree was removed |
 
+A running session also says whether its Pi is `working` or `idle`. Archived sessions
+are listed on one `archived:` line under their repository, with the same statuses.
+
 Earlier conversations are listed under their session with the same statuses and
 the `/rc attach <Pi session id>` that reconnects them.
 
@@ -216,6 +229,66 @@ Attaching an earlier conversation makes it the session's current one again, in t
 same topic, and keeps the one it replaces as an earlier conversation. It is refused
 while the session's current conversation is connected or open in another Pi, since
 two conversations never share a workspace.
+
+### Status
+
+`/rc status`, in the control topic or locally, reports:
+
+- the bridge: running or stopped, and `Telegram: connected`, or unreachable since
+  when, with how many session-topic messages are held (see [Telegram outages](#telegram-outages));
+- every repository, marked `not approved` when a session's repository was removed
+  from the registry, and `checkout missing` when its path is no longer a Git checkout;
+  approved repositories without sessions are listed too;
+- every agent session as `/rc sessions` lists it.
+
+In a session topic it reports the bridge, that session, its workspace, and its repository.
+
+### Telegram outages
+
+Agents never depend on Telegram being reachable. When a poll or a session-topic
+message fails because Telegram cannot be reached (a network error, or a 5xx from
+Telegram), the bridge keeps polling with backoff and every Pi keeps running; no run is
+aborted and no topic is unrouted. Meanwhile, nothing is sent to session topics:
+responses, failures, and notices are held per topic, and progress edits are skipped.
+
+The first successful poll afterwards brings each topic's latest progress message up to
+date and sends one summary: how long Telegram was unreachable, whether the agent is
+working or idle now, and the latest three held messages, each condensed; older ones
+are only counted, since they are in the Pi session. A topic with nothing held gets no
+summary. Approvals asked during an outage cannot be posted, so they are decided as
+when they cannot be posted otherwise (see [Approvals](#approvals)). Held messages are
+dropped if remote control stops before Telegram answers again.
+
+### Archive and cleanup
+
+A session becoming idle never removes anything. Archiving its topic, deleting its Pi
+history, and removing its worktree and branch are three separate operations, each
+confirmed on its own: with buttons (the operation's own and Cancel) when asked from
+Telegram, and in the local Pi when asked there. The question names exactly what goes and
+what stays; once confirmed, the operation checks again and does nothing if its answer
+would now be different (`session-changed`), so a confirmation only applies to the state it
+described. Each reports what it did, what it kept, and what it could not do.
+
+| Operation | Requires | Removes | Keeps |
+|-----------|----------|---------|-------|
+| `/rc archive` | An idle session: not in the middle of a run. Needs remote control running | Closes the session topic (Telegram's close, so it stays in the group) after posting why; stops an agent `/rc new` or `/rc attach` started, or stops routing the current conversation's topic | Pi history, workspace, branch |
+| `/rc cleanup history` | A disconnected session (archive it first) that no Pi has open | The Pi session files of its current and earlier conversations; the session becomes stale | Topic, workspace, branch |
+| `/rc cleanup workspace` | A disconnected session that no Pi has open, in an approved repository; a clean workspace; a merged branch | The worktree (`git worktree remove`, so Git refuses uncommitted work too) and the branch | Topic, Pi history |
+
+A branch counts as merged when the main line contains it, or when `gh` reports a
+merged pull request from it at its current tip (a squash merge). Otherwise workspace
+cleanup is refused, naming the unmerged commits; `--abandon` removes it anyway, after a
+confirmation that says the commits are abandoned. Uncommitted changes, untracked files
+included, are refused even with `--abandon`; only `--force` discards them, after a
+confirmation that lists them, and the report names every change it discarded. A
+detached HEAD needs `--abandon` too, since its commits cannot be checked. A
+repository's main checkout, which the current conversation may have been adopted in,
+is never removed.
+
+`/rc attach`, or `/rc` in its workspace, reopens an archived session's topic. Once a
+session is archived, has no Pi history, and has no workspace, nothing of it is left:
+it is forgotten, and no longer listed. Its closed topic stays in Telegram for you to
+delete.
 
 ### Session leases
 
@@ -378,7 +451,8 @@ injected `TelegramBotApi` (`telegram.ts` is the fetch-based implementation).
 It also routes session-topic messages to an injected `LivePiSession` and turns
 `recordActivity()` reports (`index.ts` maps Pi's agent and tool events to them) into
 progress edits and responses. `messages.ts` holds the pure text formatting and parsing,
-`commands.ts` the command catalog. Approvals and button selections go through
+`commands.ts` the command catalog. Archive and cleanup take a `ConfirmCleanup` callback,
+so the Telegram buttons and the local Pi dialog confirm them through the same seam. Approvals and button selections go through
 `owner-prompts.ts`, which issues and checks their single-use, bound, expiring buttons;
 `index.ts` gates sensitive tool calls through `requestApproval()`.
 
@@ -393,7 +467,9 @@ and the reconnect's rebinding), approved extension commands, and the Telegram me
 and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
 current conversation, topic rebinding, message routing, progress, response
 condensing, retry-safe failure reporting, and rate limits; `pi-delivery.test.ts`
-covers holding messages while a prompt starts or Pi compacts. Shared fakes live in
+covers holding messages while a prompt starts or Pi compacts; `health.test.ts` covers
+`/rc status`, and Telegram outages and the reconnect summary; `cleanup.test.ts` covers
+archive, history and workspace cleanup, their confirmations, and forgetting a session. Shared fakes live in
 `test-support.ts`.
 
 

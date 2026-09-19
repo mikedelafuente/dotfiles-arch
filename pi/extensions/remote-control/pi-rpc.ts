@@ -6,7 +6,7 @@
  * child exits when its stdin closes, so it cannot outlive the Pi that started it.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { access } from "node:fs/promises";
+import { access, unlink } from "node:fs/promises";
 import { extensionCommandRefusal, type ThinkingLevel } from "./commands.ts";
 import type {
 	AgentProcess,
@@ -446,6 +446,17 @@ export class RpcPiSessions implements PiSessionAdapter {
 	async hasHistory(session: AgentSession): Promise<boolean> {
 		if (!session.piSessionFile) return false;
 		return access(session.piSessionFile).then(() => true, () => false);
+	}
+
+	async deleteHistory(session: AgentSession): Promise<boolean> {
+		if (!session.piSessionFile) return false;
+		try {
+			await unlink(session.piSessionFile);
+			return true;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+			throw error;
+		}
 	}
 
 	private async start(cwd: string, args: string[], location: Location, events: PiSessionEvents): Promise<AgentProcess> {
