@@ -11,7 +11,7 @@ import {
 	builtinArgumentError,
 	extensionCommandQuestion,
 	isBuiltin,
-	localOnlyBuiltin,
+	runtimeReplacementNotice,
 	OWN_COMMAND_REFUSAL,
 	REMOTE_BUILTINS,
 	REMOTE_CONTROL_COMMAND,
@@ -343,13 +343,19 @@ export interface LivePiSession {
 	/** Pi's `/model <provider/model>`; rejects for a model Pi does not have or cannot use. */
 	setModel(provider: string, modelId: string): Promise<void>;
 	/**
-	 * Pi's `/new`: resolves with the new conversation, or undefined when an extension
-	 * cancelled it. Absent for the current conversation: replacing it tears down this
-	 * extension, and remote control with it.
+	 * An agent's `/new` over RPC: resolves with the new conversation, or undefined when
+	 * an extension cancelled it. Absent for the current conversation, which has
+	 * `replaceRuntime` instead.
 	 */
 	newConversation?(): Promise<NextConversation | undefined>;
-	/** Pi's `/reload`. Absent for the current conversation, for the same reason as `newConversation`. */
+	/** An agent's `/reload`. Absent for the current conversation, like `newConversation`. */
 	reload?(): Promise<void>;
+	/**
+	 * The current conversation's `/new` or `/reload`, run in the local Pi. Either replaces
+	 * this extension's runtime, stopping remote control; the next runtime starts it again
+	 * and rebinds the session topic (see `reconnect.ts`), so nothing is stored here.
+	 */
+	replaceRuntime?(command: "new" | "reload"): Promise<void>;
 }
 
 /** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
@@ -1442,7 +1448,8 @@ export class RemoteControlCoordinator {
 			const usage = builtinArgumentError(name, args);
 			if (usage) return this.reply(bridge, route, usage);
 			const report = await REMOTE_BUILTINS[name].run(this.builtinTarget(bridge, route), args).catch((error) => `/${name} failed: ${errorMessage(error)}`);
-			return this.reply(bridge, route, report);
+			if (report) this.reply(bridge, route, report);
+			return;
 		}
 		if (name === REMOTE_CONTROL_COMMAND) return this.reply(bridge, route, OWN_COMMAND_REFUSAL);
 		const command = (await this.commandsOf(route)).find((candidate) => candidate.name === name);
@@ -1521,8 +1528,8 @@ export class RemoteControlCoordinator {
 	 * Pi's `/new`: starts a new conversation in the workspace and rebinds the session
 	 * topic to it. The replaced conversation joins the earlier ones, attachable by id.
 	 */
-	private async newConversation(bridge: Bridge, route: Route): Promise<string> {
-		if (!route.pi.newConversation) return localOnlyBuiltin("new");
+	private async newConversation(bridge: Bridge, route: Route): Promise<string | undefined> {
+		if (!route.pi.newConversation) return this.replaceRuntime(bridge, route, "new");
 		return this.withCreationLock(async () => {
 			const previous = (await this.adapters.sessions.get(route.session.id)) ?? route.session;
 			const next = await route.pi.newConversation!();
@@ -1548,11 +1555,23 @@ export class RemoteControlCoordinator {
 	}
 
 	/** Pi's `/reload`; the commands the conversation discovers afterwards reach the menu. */
-	private async reloadConversation(bridge: Bridge, route: Route): Promise<string> {
-		if (!route.pi.reload) return localOnlyBuiltin("reload");
+	private async reloadConversation(bridge: Bridge, route: Route): Promise<string | undefined> {
+		if (!route.pi.reload) return this.replaceRuntime(bridge, route, "reload");
 		await route.pi.reload();
 		this.refreshMenu(bridge);
 		return `Reloaded the extensions, skills, prompts, and context files of ${route.session.name}.`;
+	}
+
+	/**
+	 * The current conversation's `/new` or `/reload`: tells the topic first, since the
+	 * bridge stops with the runtime Pi replaces, then has the local Pi run it.
+	 */
+	private async replaceRuntime(bridge: Bridge, route: Route, command: "new" | "reload"): Promise<undefined> {
+		if (!route.pi.replaceRuntime) throw new Error(`${route.session.name} cannot run /${command}.`);
+		this.reply(bridge, route, runtimeReplacementNotice(command));
+		await route.outbox;
+		await route.pi.replaceRuntime(command);
+		return undefined;
 	}
 
 	/** Sets the group's `/` menu to the commands its connected conversations accept, when that changed. */

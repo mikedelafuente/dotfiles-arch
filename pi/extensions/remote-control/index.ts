@@ -6,7 +6,8 @@
  * Inside a Git repository, the current conversation is exposed in a session topic.
  * Agent sessions `/rc new` or `/rc attach` start run as `pi --mode rpc` children.
  * While a conversation is remote-controlled, merges, branch deletions, deployments,
- * and privileged commands wait for the owner's approval.
+ * and privileged commands wait for the owner's approval. Pi's `/new` and `/reload`
+ * stop remote control with the runtime they replace; the next runtime starts it again.
  */
 
 import { homedir } from "node:os";
@@ -18,6 +19,7 @@ import { SessionLeaseFiles } from "./leases.ts";
 import { errorMessage, renderSessions, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
 import { AGENT_ENV, AGENT_RELOAD, COMMANDS_CHANGED_STATUS, RpcPiSessions } from "./pi-rpc.ts";
+import { rememberForReconnect, takeReconnect } from "./reconnect.ts";
 import { sensitiveOperation, type SensitiveOperation } from "./sensitive.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
 import { createTelegramBotApi } from "./telegram.ts";
@@ -33,6 +35,12 @@ const SUBCOMMANDS = [
 	{ value: "login", description: "Link a BotFather token, owner, and forum group" },
 	{ value: "logout", description: "Stop remote control and remove local credentials" },
 ];
+
+/**
+ * The unlisted `/rc` subcommand through which the current conversation's topic runs
+ * `/new` or `/reload`: only a command context has `newSession()` and `reload()`.
+ */
+const REPLACE_RUNTIME = "replace-runtime";
 
 /** This Pi is an agent session remote control started: every sensitive operation needs the owner's approval. */
 const isAgent = process.env[AGENT_ENV] === "1";
@@ -112,6 +120,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		await leases.acquire(leased).catch((error) => ctx.ui.notify(`Remote control could not record this session's lease: ${errorMessage(error)}`, "warning"));
 		// Tells the Pi that started this agent to read its commands again (see pi-rpc.ts).
 		if (isAgent && event.reason === "reload") ctx.ui.setStatus(COMMANDS_CHANGED_STATUS, new Date().toISOString());
+		// Remote control was running when /new or /reload replaced the last runtime. Not awaited:
+		// validating Telegram must not hold up the new session; start() reports its own failure.
+		if (takeReconnect(globalThis, event.reason)) void start(ctx);
 	});
 
 	async function login(ctx: ExtensionCommandContext): Promise<void> {
@@ -161,8 +172,11 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		return new Promise((resolve, reject) => ctx.compact({ customInstructions: instructions, onComplete: resolve, onError: reject }));
 	}
 
-	/** The current conversation as remote control drives it, with the branch it is on now. */
-	async function liveSession(ctx: ExtensionCommandContext): Promise<LivePiSession | undefined> {
+	/**
+	 * The current conversation as remote control drives it, with the branch it is on now.
+	 * Built from this runtime's context: after a runtime swap, the old one's is stale.
+	 */
+	async function liveSession(ctx: ExtensionContext): Promise<LivePiSession | undefined> {
 		const workspace = await gitWorkspace(ctx.cwd);
 		if (!workspace) return undefined;
 		// One delivery queue per conversation: its route may be rebuilt, but held messages must not be lost.
@@ -196,7 +210,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 				if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
 				if (!(await pi.setModel(model))) throw new Error(`${provider} has no credentials configured; run /login in Pi.`);
 			},
-			// No `/new` or `/reload`: replacing this conversation's runtime tears remote control down with it.
+			// Tears this runtime down, remote control with it; the next runtime reconnects (see reconnect.ts).
+			// Not awaited: Pi runs the command on its own, after the topic was told.
+			replaceRuntime: async (command) => pi.sendUserMessage(`/rc ${REPLACE_RUNTIME} ${command}`, { expandPromptTemplates: true }),
 		};
 	}
 
@@ -232,7 +248,7 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 		);
 	}
 
-	async function start(ctx: ExtensionCommandContext): Promise<void> {
+	async function start(ctx: ExtensionContext): Promise<void> {
 		try {
 			const session = await liveSession(ctx);
 			const { alreadyRunning, credentials, session: exposed } = await coordinator.start({
@@ -307,6 +323,19 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 				return status(ctx);
 			case "login":
 				return login(ctx);
+			case REPLACE_RUNTIME: {
+				// The session topic asked for /new or /reload; session_shutdown then records the reconnect.
+				if (rest === "reload") return ctx.reload();
+				if (rest !== "new") {
+					ctx.ui.notify(`Usage: /rc ${REPLACE_RUNTIME} new|reload`, "error");
+					return;
+				}
+				const conversation = ctx.sessionManager.getSessionId();
+				const { cancelled } = await ctx.newSession();
+				// Only a cancelled switch leaves this runtime, and remote control, running.
+				if (cancelled) coordinator.recordActivity(conversation, { type: "notice", text: "An extension cancelled the new conversation; this topic stays on the current one." });
+				return;
+			}
 			case AGENT_RELOAD: {
 				// Remote control reloads an agent's Pi through this command, since RPC has none.
 				if (!isAgent) {
@@ -401,7 +430,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 
 	// Pi tears down this extension instance on quit, reload, and session switches;
 	// neither the bridge nor the agent processes may outlive it. This also cancels a pending login.
-	pi.on("session_shutdown", async () => {
+	// After /new or /reload, the next runtime starts remote control again if it was running.
+	pi.on("session_shutdown", async (event) => {
+		rememberForReconnect(globalThis, event.reason, coordinator.status().running);
 		await coordinator.shutdown();
 		delivery?.dispose();
 		if (leased) await leases.release(leased).catch(() => undefined);

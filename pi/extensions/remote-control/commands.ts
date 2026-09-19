@@ -23,17 +23,20 @@ export type BuiltinTarget = {
 	pi: LivePiSession;
 	/** Renames the conversation, its agent session, and its topic; resolves with the reply. */
 	rename(name: string): Promise<string>;
-	/** Starts a new conversation in the workspace and rebinds the topic to it; resolves with the reply. */
-	newConversation(): Promise<string>;
-	/** Reloads the conversation's Pi; resolves with the reply. */
-	reload(): Promise<string>;
+	/**
+	 * Starts a new conversation in the workspace and rebinds the topic to it; resolves with
+	 * the reply, or undefined once the topic was told the local Pi replaces its runtime.
+	 */
+	newConversation(): Promise<string | undefined>;
+	/** Reloads the conversation's Pi; resolves like `newConversation`. */
+	reload(): Promise<string | undefined>;
 };
 
 type Builtin = CatalogEntry & {
 	/** The only arguments the built-in accepts, checked before it runs. */
 	requiresArgument?: readonly string[];
-	/** Runs the built-in; resolves with the reply for its topic. */
-	run(target: BuiltinTarget, args: string): Promise<string>;
+	/** Runs the built-in; resolves with the reply for its topic, or undefined when it already replied. */
+	run(target: BuiltinTarget, args: string): Promise<string | undefined>;
 };
 
 /** `provider/model`, as Pi's `/model` takes it. */
@@ -112,9 +115,11 @@ export const REMOTE_BUILTINS: Record<BuiltinName, Builtin> = {
 	},
 };
 
-/** The reply when the current conversation is asked for a built-in that would replace its Pi runtime. */
-export function localOnlyBuiltin(name: BuiltinName): string {
-	return `/${name} runs only locally for this conversation: it replaces this Pi's extensions, which stops remote control. Run /${name} in Pi, then /rc again.`;
+/** Posted before the current conversation's Pi replaces its runtime, which stops remote control until it reconnects. */
+export function runtimeReplacementNotice(command: "new" | "reload"): string {
+	return command === "new"
+		? "Starting a new conversation in Pi. Remote control stops and reconnects on its own, routing this topic to the new conversation; the current one stays attachable while its history exists."
+		: "Reloading Pi's extensions, skills, prompts, and context files. Remote control stops and reconnects on its own.";
 }
 
 /** What the owner approves before an extension command runs. */

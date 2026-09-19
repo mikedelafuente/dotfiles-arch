@@ -40,7 +40,9 @@ token in @BotFather to disable the bot itself.
 
 The bridge is a long-polling task inside the running Pi process, not a daemon.
 It stops on `/rc stop`, `/rc logout`, or `session_shutdown` (quit, reload, and
-session switches), so nothing outlives the Pi process. `session_shutdown` also
+session switches), so nothing outlives the Pi process. After `/new` or `/reload`,
+typed locally or sent from the session topic, it starts again on its own (see
+[Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)). `session_shutdown` also
 stops the agent processes `/rc new` and `/rc attach` started; `/rc stop` leaves
 them running and `/rc start` routes their topics again. `/rc start` re-validates
 the token and group permissions and discards updates that arrived while it was
@@ -93,7 +95,8 @@ In the session topic:
 | `/rc followup <message>` | A follow-up queued after the current run (a prompt if idle) |
 | `/rc commands` (or `/rc`, `/rc help`) | Everything this topic accepts (see [Command discovery](#command-discovery)) |
 | `/rc stop-agent` | Aborts the current run once you confirm (see [Approvals](#approvals)) |
-| `/rc compact [instructions]`, `/rc thinking <level>`, `/rc model [provider/model]`, `/rc name <name>`, `/rc session`, `/rc new`, `/rc reload` | Runs that Pi built-in (see [Command discovery](#command-discovery)) |
+| `/rc compact [instructions]`, `/rc thinking <level>`, `/rc model [provider/model]`, `/rc name <name>`, `/rc session` | Runs that Pi built-in (see [Command discovery](#command-discovery)) |
+| `/rc new`, `/rc reload` | Replies that remote control will reconnect, then runs `/new` or `/reload` in the local Pi (see [Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)) |
 | `/rc <template or skill> [args]` | That prompt template or skill, as if typed as `/<name>` |
 | `/rc <extension command> [args]` | Runs it once you approve (see [Approvals](#approvals)); never `/rc` itself |
 | Any other `/rc …` | An "unknown command" reply; nothing reaches Pi |
@@ -124,6 +127,32 @@ typed locally:
   warnings and do not stop the bridge.
 - When rebinding, only a topic Telegram reports as deleted is replaced; any other
   failure makes `/rc` fail instead.
+
+### Reconnecting after /new and /reload
+
+`/new` and `/reload` replace Pi's extension runtime, which stops remote control
+with it. When remote control was running, the next runtime starts it again, as `/rc`
+would (`reconnect.ts`):
+
+- the workspace keeps its session topic, rebound to the new conversation and renamed
+  if the name or branch changed;
+- after `/new`, the replaced conversation is kept as an earlier conversation,
+  attachable by its Pi session id, as long as its Pi history exists.
+
+This holds whether `/new` or `/reload` was typed in Pi or sent from the session topic.
+From the topic, `/rc new` (or `/new`, or the menu entry) first replies that a new
+conversation is starting and remote control will reconnect, then the local Pi runs
+`/new` through this extension's unlisted `/rc replace-runtime` subcommand, since only
+a command gets `newSession()` and `reload()`. `/rc reload` works the same way.
+
+The reconnect is a stop followed by a start, so the topic gets the usual
+`Disconnected` and `Connected` messages, Telegram messages sent in between are
+discarded, open approvals are withdrawn, and the agent processes `/rc new` and
+`/rc attach` started are closed. A failed restart (the credentials were removed, say)
+is reported in Pi like a failed `/rc`, and remote control stays off; nothing retries.
+Quitting Pi, `/resume`, `/fork`, and a `/new` or `/reload` while remote control is
+stopped never start it. Pi re-imports the extension for every runtime, so whether to
+reconnect is kept on `globalThis`, and consumed by the next `session_start`.
 
 ### Agent sessions
 
@@ -228,15 +257,15 @@ topic says so and the session becomes disconnected.
   | `/rc model [provider/model]` | Sets the model; without one, lists the models Pi can use |
   | `/rc name <name>` | Renames the Pi conversation and its agent session, and retitles the topic `<repository> / <name> / <branch>` |
   | `/rc session` | The conversation's id, file, model, message counts, tokens, cost, and context use |
-  | `/rc new` | An agent starts a new conversation in its workspace, named after the session; the topic is rebound to it, and the replaced one stays attachable by Pi session id while its history exists. Its open approvals are withdrawn |
-  | `/rc reload` | An agent's Pi reloads its extensions, skills, prompts, and context files |
+  | `/rc new` | Starts a new conversation in the workspace; the topic is rebound to it, and the replaced one stays attachable by Pi session id while its history exists. Its open approvals are withdrawn. An agent's conversation is named after the session |
+  | `/rc reload` | Pi reloads its extensions, skills, prompts, and context files |
 
-  The current conversation refuses `/rc new` and `/rc reload`: both replace the
-  local Pi's extension runtime, and remote control stops with it. Run them in Pi,
-  then `/rc` again ([#114](https://github.com/mikedelafuente/dotfiles-arch/issues/114)
-  tracks keeping the bridge through them). RPC has no reload command, so an agent
-  reloads through this extension's `/rc reload` in its own Pi, which calls
-  `ctx.reload()`. The other built-ins need Pi's terminal, local files or the
+  An agent runs `/rc new` and `/rc reload` over RPC, and its topic stays routed
+  throughout. RPC has no reload command, so an agent reloads through this
+  extension's `/rc reload` in its own Pi, which calls `ctx.reload()`. The current
+  conversation runs them in the local Pi, which replaces its extension runtime:
+  remote control stops and reconnects on its own (see
+  [Reconnecting after /new and /reload](#reconnecting-after-new-and-reload)). The other built-ins need Pi's terminal, local files or the
   clipboard, a provider login, or another session, and are left out;
 - the prompt templates and skills Pi discovered, usable as `/rc <name>` or `/<name>`;
 - the extension commands Pi discovered, which run once you approve them (see
@@ -299,7 +328,7 @@ other messages; anything but Approve runs nothing, and neither does a command th
 conversation no longer has once you approve. Pi reports what the command does, and
 how it fails, where it runs: in the agent's topic, or in the local Pi for the
 current conversation. A command that itself starts a new session or reloads Pi
-stops remote control there, like `/new` and `/reload`.
+stops remote control there, which then reconnects like after `/new` and `/reload`.
 
 An approval that is denied or expires counts as a denial: the tool call is blocked
 and Pi is told not to retry it. When Telegram decides nothing (the approval could not
@@ -318,7 +347,9 @@ Sources use only erasable TypeScript and `.ts` import specifiers, so Node's
 built-in type stripping runs them directly. `git-workspaces.test.ts` needs `git`;
 `pi-rpc.test.ts` runs a scripted stand-in for `pi --mode rpc`, not Pi itself;
 `leases.test.ts` uses real lease files and processes; `sensitive.test.ts` covers
-which commands need approval.
+which commands need approval; `reconnect.test.ts` covers when the next runtime
+reconnects; `index.test.ts` loads the extension into a fake `ExtensionAPI` to cover
+the reconnect around `session_shutdown` and `session_start`.
 
 ## Coordinator foundation
 
@@ -354,7 +385,8 @@ attaching agent sessions (including leased, unprompted, and earlier conversation
 rollback and its leftovers, repository approval, and duplicate workspace rejection;
 `approvals.test.ts` covers approvals, selections, and `/rc stop-agent` (binding, expiry,
 single use, withdrawal, re-routing); `commands.test.ts` covers command discovery and
-routing, the built-ins, approved extension commands, and the Telegram menu;
+routing, the built-ins (including the current conversation's `/new` and `/reload`
+and the reconnect's rebinding), approved extension commands, and the Telegram menu;
 `lifecycle.test.ts` covers login, owner allowlisting, group validation, start/stop,
 and logout against a fake Bot API; `session-bridge.test.ts` covers exposing the
 current conversation, topic rebinding, message routing, progress, response
