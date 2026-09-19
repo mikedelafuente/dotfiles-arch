@@ -5,17 +5,20 @@
  * `/rc stop`, `/rc logout`, or Pi shutdown; there is no background daemon.
  * Inside a Git repository, the current conversation is exposed in a session topic.
  * Agent sessions `/rc new` or `/rc attach` start run as `pi --mode rpc` children.
+ * While a conversation is remote-controlled, merges, branch deletions, deployments,
+ * and privileged commands wait for the owner's approval.
  */
 
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity } from "./coordinator.ts";
+import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity, type PiCommand } from "./coordinator.ts";
 import { GitWorkspaces, gitWorkspace } from "./git-workspaces.ts";
 import { SessionLeaseFiles } from "./leases.ts";
 import { errorMessage, renderSessions, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
-import { RpcPiSessions } from "./pi-rpc.ts";
+import { AGENT_ENV, COMMANDS_CHANGED_STATUS, RpcPiSessions } from "./pi-rpc.ts";
+import { sensitiveOperation, type SensitiveOperation } from "./sensitive.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
 import { createTelegramBotApi } from "./telegram.ts";
 
@@ -30,6 +33,11 @@ const SUBCOMMANDS = [
 	{ value: "login", description: "Link a BotFather token, owner, and forum group" },
 	{ value: "logout", description: "Stop remote control and remove local credentials" },
 ];
+
+/** This Pi is an agent session remote control started: every sensitive operation needs the owner's approval. */
+const isAgent = process.env[AGENT_ENV] === "1";
+
+type ThinkingLevel = Parameters<ExtensionAPI["setThinkingLevel"]>[0];
 
 // Machine-local on purpose: never under ~/.pi/agent, which is partly symlinked from dotfiles.
 const configDir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "pi-remote-control");
@@ -60,9 +68,11 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	// Every Pi running this extension leases its conversation, whether or not it runs /rc,
 	// so /rc attach never resumes a conversation another Pi is writing.
 	let leased: string | undefined;
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", async (event, ctx) => {
 		leased = ctx.sessionManager.getSessionId();
 		await leases.acquire(leased).catch((error) => ctx.ui.notify(`Remote control could not record this session's lease: ${errorMessage(error)}`, "warning"));
+		// Tells the Pi that started this agent to read its commands again (see pi-rpc.ts).
+		if (isAgent && event.reason === "reload") ctx.ui.setStatus(COMMANDS_CHANGED_STATUS, new Date().toISOString());
 	});
 
 	async function login(ctx: ExtensionCommandContext): Promise<void> {
@@ -99,12 +109,42 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	// Holds Telegram messages while a prompt is starting or Pi is compacting.
 	let delivery: PiDelivery | undefined;
 
+	/** What Pi discovered now, so a reload is always reflected. */
+	const discovered = (): PiCommand[] => pi.getCommands().map(({ name, description, source }) => ({ name, description, source }));
+
+	/** A prompt template or skill command, which Pi expands; extension commands are never run from Telegram. */
+	function expandable(text: string): boolean {
+		const name = /^\/(\S+)/.exec(text.trim())?.[1];
+		return name !== undefined && discovered().some((command) => command.name === name && command.source !== "extension");
+	}
+
+	async function runBuiltin(ctx: ExtensionContext, name: string, args: string): Promise<string> {
+		switch (name) {
+			case "compact":
+				return new Promise((resolve, reject) => {
+					ctx.compact({
+						customInstructions: args || undefined,
+						onComplete: (result) => resolve(`Compacted the context from ${result.tokensBefore} to about ${result.estimatedTokensAfter ?? "?"} tokens.`),
+						onError: reject,
+					});
+				});
+			case "thinking":
+				pi.setThinkingLevel(args as ThinkingLevel);
+				return `Thinking level set to ${pi.getThinkingLevel()}.`;
+			default:
+				throw new Error(`/${name} is not a Pi built-in remote control can run.`);
+		}
+	}
+
 	/** The current conversation as remote control drives it, with the branch it is on now. */
 	async function liveSession(ctx: ExtensionCommandContext): Promise<LivePiSession | undefined> {
 		const workspace = await gitWorkspace(ctx.cwd);
 		if (!workspace) return undefined;
 		// One delivery queue per conversation: its route may be rebuilt, but held messages must not be lost.
-		const current = delivery ??= new PiDelivery({ send: (text, deliverAs) => pi.sendUserMessage(text, { deliverAs }), isIdle: () => ctx.isIdle() });
+		const current = delivery ??= new PiDelivery({
+			send: (text, deliverAs) => pi.sendUserMessage(text, { deliverAs, expandPromptTemplates: expandable(text) }),
+			isIdle: () => ctx.isIdle(),
+		});
 		return {
 			id: ctx.sessionManager.getSessionId(),
 			name: pi.getSessionName() ?? "",
@@ -115,6 +155,9 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			steer: (text) => current.steer(text),
 			followUp: (text) => current.followUp(text),
 			rename: (name) => pi.setSessionName(name),
+			commands: async () => discovered(),
+			abort: async () => ctx.abort(),
+			runBuiltin: (name, args) => runBuiltin(ctx, name, args),
 		};
 	}
 
@@ -240,6 +283,35 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 				ctx.ui.notify(`Unknown /rc command: ${subcommand}. Use ${SUBCOMMANDS.map((item) => item.value).join(", ")}.`, "error");
 		}
 	}
+
+	/**
+	 * Asks for approval both here and in Telegram; the first answer wins and
+	 * withdraws the other question.
+	 */
+	async function approveHereOrRemotely(ctx: ExtensionContext, operation: SensitiveOperation): Promise<boolean> {
+		const withdraw = new AbortController();
+		const remote = coordinator.requestApproval(ctx.sessionManager.getSessionId(), { title: operation.title, message: operation.detail }, withdraw.signal);
+		const local = ctx.hasUI
+			? ctx.ui.confirm(operation.title, `${operation.detail}\n\nAlso asked in Telegram.`, { signal: withdraw.signal })
+			: new Promise<boolean>(() => undefined);
+		try {
+			return await Promise.race([remote, local]);
+		} finally {
+			withdraw.abort();
+		}
+	}
+
+	// A remote-controlled conversation runs sensitive operations only once the owner approves them.
+	pi.on("tool_call", async (event, ctx) => {
+		const operation = sensitiveOperation(event.toolName, event.input);
+		if (!operation) return;
+		let approved: boolean;
+		if (isAgent) approved = await ctx.ui.confirm(operation.title, operation.detail); // Answered in the agent's session topic.
+		else if (coordinator.isRemoteControlled(ctx.sessionManager.getSessionId())) approved = await approveHereOrRemotely(ctx, operation);
+		else return;
+		if (approved) return;
+		return { block: true, reason: `The owner did not approve this ${operation.kind.replace("-", " ")}: ${operation.detail}. Do not retry it; ask the owner instead.` };
+	});
 
 	// Mirror this conversation's work into its session topic. The coordinator ignores
 	// these while the bridge is stopped. Tool output is never forwarded.

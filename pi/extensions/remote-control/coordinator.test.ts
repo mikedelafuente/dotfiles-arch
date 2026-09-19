@@ -126,7 +126,7 @@ test("remote /rc new only reaches approved repositories and always creates an is
 	await startWith(h);
 
 	assert.match(await control(h, "/rc new /etc pwn"), /not approved.*demo/is);
-	assert.match(await control(h, "/rc new demo"), /usage: \/rc new <repository> <name>/i);
+	assert.match(await control(h, "/rc new"), /usage: \/rc new <repository> <name>/i);
 	const reply = await control(h, "/rc new demo fix ci");
 	assert.match(reply, /demo \/ fix ci \/ rc\/fix-ci/);
 	assert.deepEqual(h.workspaces.created.map((workspace) => workspace.branch), ["rc/fix-ci"]);

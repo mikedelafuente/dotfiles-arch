@@ -6,6 +6,7 @@
  */
 
 import { randomBytes, randomUUID } from "node:crypto";
+import { builtinArgumentError, isBuiltin, renderCommands } from "./commands.ts";
 import {
 	condenseForTelegram,
 	describeOpenIn,
@@ -22,6 +23,7 @@ import {
 	type ControlCommand,
 	type ToolProgress,
 } from "./messages.ts";
+import { OwnerPrompts, type PromptChoice } from "./owner-prompts.ts";
 
 export type Repository = {
 	id: string;
@@ -126,10 +128,22 @@ export interface WorkspaceAdapter {
 	mainLine(repositoryPath: string): Promise<string>;
 }
 
+/** A dialog an extension opened in an agent's Pi, for the owner to answer in its session topic. */
+export type PiDialog = {
+	title: string;
+	message?: string;
+	/** Pi resolves the dialog itself after this long. */
+	timeoutMs?: number;
+};
+
 export type PiSessionEvents = {
 	activity(activity: PiActivity): void;
 	/** The Pi process ended without `close()`. */
 	exited(reason: string): void;
+	/** A confirmation dialog; false when the owner denies it or it expires. */
+	confirm(dialog: PiDialog): Promise<boolean>;
+	/** A selection dialog; undefined when the owner cancels it or it expires. */
+	choose(dialog: PiDialog & { options: string[] }): Promise<string | undefined>;
 };
 
 /** A Pi conversation remote control runs in its own Pi process, in its own workspace. */
@@ -186,7 +200,18 @@ export type TelegramMessage = {
 	text?: string;
 };
 
-export type TelegramUpdate = { updateId: number; message?: TelegramMessage };
+/** A press of an inline button; `data` is the button's callback data. */
+export type TelegramCallbackQuery = {
+	id: string;
+	from: TelegramUser;
+	data?: string;
+	/** The message carrying the button. */
+	message?: { messageId: number; chatId: number; threadId?: number };
+};
+
+export type TelegramUpdate = { updateId: number; message?: TelegramMessage; callbackQuery?: TelegramCallbackQuery };
+
+export type InlineButton = { text: string; data: string };
 
 export type TelegramChatMember = {
 	status: "creator" | "administrator" | "member" | "restricted" | "left" | "kicked";
@@ -206,8 +231,14 @@ export interface TelegramBotApi {
 	createForumTopic(chatId: number, name: string): Promise<{ threadId: number }>;
 	deleteForumTopic(input: { chatId: number; threadId: number }): Promise<void>;
 	editForumTopic(input: { chatId: number; threadId: number; name: string }): Promise<void>;
-	sendMessage(input: { chatId: number; threadId?: number; text: string }): Promise<{ messageId: number }>;
-	editMessageText(input: { chatId: number; messageId: number; text: string }): Promise<void>;
+	/** `buttons` are rows of inline buttons under the message. */
+	sendMessage(input: { chatId: number; threadId?: number; text: string; buttons?: InlineButton[][] }): Promise<{ messageId: number }>;
+	/** Without `buttons`, the message keeps its buttons; an empty array removes them. */
+	editMessageText(input: { chatId: number; messageId: number; text: string; buttons?: InlineButton[][] }): Promise<void>;
+	/** Acknowledges a button press, showing `text` to the presser. */
+	answerCallbackQuery(input: { id: string; text?: string }): Promise<void>;
+	/** Sets the `/` command menu shown in one chat. */
+	setMyCommands(input: { chatId: number; commands: { command: string; description: string }[] }): Promise<void>;
 }
 
 /** Machine-local remote-control credentials: never synchronized or committed. */
@@ -230,6 +261,9 @@ export type LoginOptions = {
 	timeoutMs?: number;
 	signal?: AbortSignal;
 };
+
+/** A command Pi discovered: an extension command, a prompt template, or a skill (`skill:<name>`). */
+export type PiCommand = { name: string; description?: string; source: "extension" | "prompt" | "skill" };
 
 /**
  * The Pi conversation running in this process. Remote control exposes it as an
@@ -256,6 +290,12 @@ export interface LivePiSession {
 	followUp(text: string): void;
 	/** Sets the Pi session name, when an adopted conversation is renamed. */
 	rename?(name: string): void;
+	/** The commands Pi discovered, read fresh on every call so a reload of Pi's resources is reflected. */
+	commands(): Promise<PiCommand[]>;
+	/** Aborts the current run. */
+	abort(): Promise<void>;
+	/** Runs one of the catalog's Pi built-ins (`commands.ts`); resolves with a short report. */
+	runBuiltin(name: string, args: string): Promise<string>;
 }
 
 /** What a live Pi session is doing, reported to its session topic. Tool output is deliberately absent. */
@@ -287,6 +327,8 @@ export type StartOptions = {
 export type CoordinatorOptions = {
 	/** Minimum time between edits of a progress message; Telegram rate-limits edits. */
 	progressIntervalMs?: number;
+	/** How long an approval or selection stays answerable. */
+	approvalTimeoutMs?: number;
 };
 
 export type RemoteControlStatus = {
@@ -347,6 +389,12 @@ const TOKEN_PATTERN = /^\d+:[\w-]{30,}$/;
 const DEFAULT_PROGRESS_INTERVAL_MS = 5000;
 const MAX_RATE_LIMIT_WAIT_SECONDS = 60;
 const DEFAULT_SESSION_NAME = "agent";
+const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
+const APPROVE: PromptChoice[] = [{ label: "Approve", notice: "Approved" }, { label: "Deny", notice: "Denied" }];
+const STOP_RUN: PromptChoice[] = [{ label: "Stop run", notice: "Stopping the run" }, { label: "Keep running", notice: "Kept running" }];
+const CANCEL: PromptChoice = { label: "Cancel", notice: "Cancelled" };
+/** The Telegram `/` menu entry for remote control; everything else is listed by `/rc commands` and `/rc help`. */
+const MENU = [{ command: "rc", description: "Remote control: /rc commands in a session topic, /rc help in the control topic" }];
 /** The last path segment, as a repository's display name. */
 function nameFromPath(path: string): string {
 	return path.split("/").filter(Boolean).pop() || path;
@@ -465,6 +513,8 @@ type Route = {
 	pi: LivePiSession;
 	/** Serializes this topic's Telegram calls so edits never overtake the message they edit. */
 	outbox: Promise<void>;
+	/** Serializes the owner's messages in this topic, so a command lookup never reorders them. */
+	inbox: Promise<void>;
 	progress?: Progress;
 };
 
@@ -494,11 +544,16 @@ export class RemoteControlCoordinator {
 	private readonly adapters: RemoteControlAdapters;
 	private readonly now: () => Date;
 	private readonly progressIntervalMs: number;
+	private readonly approvalTimeoutMs: number;
+	/** Approvals and selections waiting for the owner's button press. */
+	private readonly prompts: OwnerPrompts;
 
 	constructor(adapters: RemoteControlAdapters, now = () => new Date(), options: CoordinatorOptions = {}) {
 		this.adapters = adapters;
 		this.now = now;
 		this.progressIntervalMs = options.progressIntervalMs ?? DEFAULT_PROGRESS_INTERVAL_MS;
+		this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+		this.prompts = new OwnerPrompts(() => this.now().getTime());
 	}
 
 	private withCreationLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -629,6 +684,14 @@ export class RemoteControlCoordinator {
 				const current = agent();
 				if (current && !this.disconnectAgent(current, reason)) this.exitedBeforeConnect.set(current, reason);
 			},
+			confirm: async (dialog) => {
+				const current = agent();
+				return current ? this.requestApproval(current.id, dialog) : false;
+			},
+			choose: async (dialog) => {
+				const current = agent();
+				return current ? this.requestChoice(current.id, dialog) : undefined;
+			},
 		};
 	}
 
@@ -659,13 +722,19 @@ export class RemoteControlCoordinator {
 
 	private route(bridge: Bridge, session: AgentSession, pi: LivePiSession): void {
 		for (const [threadId, route] of bridge.routes) {
-			if (route.session.id === session.id || route.pi === pi) {
-				clearTimeout(route.progress?.timer);
-				bridge.routes.delete(threadId);
-			}
+			if (route.session.id === session.id || route.pi === pi) this.unroute(bridge, route);
 		}
 		const threadId = Number(session.topicId);
-		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve() });
+		const replaced = bridge.routes.get(threadId);
+		if (replaced) this.unroute(bridge, replaced);
+		bridge.routes.set(threadId, { session, threadId, pi, outbox: Promise.resolve(), inbox: Promise.resolve() });
+	}
+
+	/** Stops routing a topic; what its conversation was asking the owner no longer applies. */
+	private unroute(bridge: Bridge, route: Route): void {
+		clearTimeout(route.progress?.timer);
+		bridge.routes.delete(route.threadId);
+		this.prompts.cancelWhere((binding) => binding.threadId === route.threadId);
 	}
 
 	/** Returns false for an agent that was never connected. */
@@ -676,8 +745,7 @@ export class RemoteControlCoordinator {
 		const bridge = this.bridge;
 		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi === agent);
 		if (!bridge || !route) return true;
-		bridge.routes.delete(route.threadId);
-		clearTimeout(route.progress?.timer);
+		this.unroute(bridge, route);
 		this.reply(bridge, route, `Disconnected: the Pi agent ${reason}. Reconnect with /rc attach ${route.session.name}.`);
 		return true;
 	}
@@ -996,6 +1064,7 @@ export class RemoteControlCoordinator {
 			}
 			await verifyGroup(api, chat, bot.id, credentials.owner.id);
 			const offset = await drainUpdates(api);
+			await api.setMyCommands({ chatId: credentials.group.id, commands: MENU }).catch((error) => options.onError?.(error));
 
 			const live = options.session;
 			const bridge: Bridge = {
@@ -1068,6 +1137,8 @@ export class RemoteControlCoordinator {
 		this.bridge = undefined;
 		bridge.abort.abort();
 		await bridge.done;
+		// Nothing can be approved once remote control stops: pending approvals count as denied.
+		this.prompts.cancelWhere(() => true);
 		const chatId = bridge.credentials.group.id;
 		for (const [threadId, route] of bridge.routes) {
 			clearTimeout(route.progress?.timer);
@@ -1214,52 +1285,267 @@ export class RemoteControlCoordinator {
 		});
 	}
 
-	/** Delivers an owner message from a session topic to its live Pi session. */
+	/** Hands an owner message from a session topic to its live Pi session, in the order the owner sent them. */
 	private deliver(bridge: Bridge, route: Route, text: string): void {
+		route.inbox = route.inbox
+			.then(() => this.handleTopicInput(bridge, route, text))
+			.catch((error) => this.reply(bridge, route, `Failed: ${errorMessage(error)}`));
+	}
+
+	private async handleTopicInput(bridge: Bridge, route: Route, text: string): Promise<void> {
 		const input = parseSessionTopicInput(text);
-		if (input.kind === "invalid") return this.reply(bridge, route, input.reply);
-		if (route.pi.isIdle()) return route.pi.prompt(input.text);
-		if (input.kind === "followUp") {
-			route.pi.followUp(input.text);
+		switch (input.kind) {
+			case "invalid":
+				return this.reply(bridge, route, input.reply);
+			case "message":
+			case "followUp":
+				return this.send(bridge, route, input.text, input.kind);
+			case "commands":
+				return this.reply(bridge, route, renderCommands(await route.pi.commands()));
+			case "stop-agent":
+				// Waiting for the owner's answer must not hold back the topic's later messages.
+				this.stopAgent(bridge, route, route.threadId).catch((error) => this.reply(bridge, route, `Failed: ${errorMessage(error)}`));
+				return;
+			case "command":
+				return this.runCommand(bridge, route, input.name, input.args);
+		}
+	}
+
+	private send(bridge: Bridge, route: Route, text: string, kind: "message" | "followUp"): void {
+		if (route.pi.isIdle()) return route.pi.prompt(text);
+		if (kind === "followUp") {
+			route.pi.followUp(text);
 			return this.reply(bridge, route, "Queued as a follow-up after the current run.");
 		}
-		route.pi.steer(input.text);
+		route.pi.steer(text);
 		this.reply(bridge, route, "Steering the current run.");
+	}
+
+	/** `/rc <name> [args]`: a catalog built-in, or a prompt template or skill Pi discovered. Extension commands stay local. */
+	private async runCommand(bridge: Bridge, route: Route, name: string, args: string): Promise<void> {
+		if (isBuiltin(name)) {
+			const usage = builtinArgumentError(name, args);
+			if (usage) return this.reply(bridge, route, usage);
+			const report = await route.pi.runBuiltin(name, args).catch((error) => `/${name} failed: ${errorMessage(error)}`);
+			return this.reply(bridge, route, report);
+		}
+		const command = (await route.pi.commands()).find((candidate) => candidate.name === name);
+		if (!command) return this.reply(bridge, route, `Unknown command: /rc ${name}. ${SESSION_TOPIC_HELP}`);
+		if (command.source === "extension") {
+			return this.reply(bridge, route, `/${name} is an extension command, which runs only in a local Pi: remote control cannot approve what it does.`);
+		}
+		this.send(bridge, route, args ? `/${name} ${args}` : `/${name}`, "message");
+	}
+
+	/** Aborts a session's current run once the owner confirms, asking in `threadId`. */
+	private async stopAgent(bridge: Bridge, route: Route, threadId: number | undefined): Promise<void> {
+		const { name } = route.session;
+		const where = (text: string) => (threadId === route.threadId ? this.reply(bridge, route, text) : this.sendTo(bridge, threadId, text));
+		if (route.pi.isIdle()) return where(`${name} is not running anything to stop.`);
+		const outcome = await this.ask(bridge, {
+			threadId,
+			text: `Stop the current run of ${name} (${topicTitle(nameFromPath(route.session.repositoryPath), name, route.session.branch)})?`,
+			operation: `agent-stop ${route.session.id}`,
+			rows: [STOP_RUN],
+			stillValid: () => bridge.routes.get(route.threadId) === route,
+		});
+		if (outcome !== 0) return;
+		await route.pi.abort();
+		where(`Stopped the current run of ${name}.`);
+	}
+
+	/**
+	 * Asks the owner to approve an operation in the session topic of a live Pi
+	 * conversation. False when the owner denies it, it expires, `signal` withdraws it,
+	 * or remote control is not routing that conversation.
+	 */
+	async requestApproval(piSessionId: string, dialog: PiDialog, signal?: AbortSignal): Promise<boolean> {
+		const found = this.routeOf(piSessionId);
+		if (!found) return false;
+		const text = [`🔐 ${dialog.title}`, dialog.message, `Agent session: ${found.route.session.topicName}`].filter(Boolean).join("\n\n");
+		const outcome = await this.ask(found.bridge, {
+			threadId: found.route.threadId, text, operation: dialog.title, rows: [APPROVE], signal, timeoutMs: dialog.timeoutMs,
+			stillValid: () => found.bridge.routes.get(found.route.threadId) === found.route,
+		});
+		return outcome === 0;
+	}
+
+	/** Asks the owner to pick one of `options` in a live Pi conversation's session topic; undefined when there is no answer. */
+	async requestChoice(piSessionId: string, dialog: PiDialog & { options: string[] }, signal?: AbortSignal): Promise<string | undefined> {
+		const found = this.routeOf(piSessionId);
+		if (!found || !dialog.options.length) return undefined;
+		const text = [dialog.title, dialog.message, `Agent session: ${found.route.session.topicName}`].filter(Boolean).join("\n\n");
+		const outcome = await this.ask(found.bridge, {
+			threadId: found.route.threadId, text, operation: dialog.title, signal, timeoutMs: dialog.timeoutMs,
+			rows: [...dialog.options.map((option) => [{ label: option, notice: `Chose ${option}` }]), [CANCEL]],
+			stillValid: () => found.bridge.routes.get(found.route.threadId) === found.route,
+		});
+		return outcome === undefined ? undefined : dialog.options[outcome];
+	}
+
+	/** Whether the running bridge routes a Pi conversation's session topic, so its sensitive operations need the owner's approval. */
+	isRemoteControlled(piSessionId: string): boolean {
+		return this.routeOf(piSessionId) !== undefined;
+	}
+
+	private routeOf(piSessionId: string): { bridge: Bridge; route: Route } | undefined {
+		const bridge = this.bridge;
+		const route = bridge && [...bridge.routes.values()].find((candidate) => candidate.pi.id === piSessionId);
+		return bridge && route ? { bridge, route } : undefined;
+	}
+
+	/**
+	 * Posts a question with buttons and waits for the owner's press. Resolves with the
+	 * chosen index, or undefined when it expired, was cancelled, or stopped applying.
+	 * The message is edited to show how it ended, without its buttons.
+	 */
+	private async ask(bridge: Bridge, question: {
+		threadId?: number;
+		text: string;
+		operation: string;
+		rows: PromptChoice[][];
+		stillValid?(): boolean;
+		signal?: AbortSignal;
+		timeoutMs?: number;
+	}): Promise<number | undefined> {
+		const chatId = bridge.credentials.group.id;
+		const ttl = Math.min(this.approvalTimeoutMs, question.timeoutMs ?? Infinity);
+		const { buttons, answer, cancel } = this.prompts.open(
+			{ ownerId: bridge.credentials.owner.id, chatId, threadId: question.threadId, operation: question.operation, stillValid: question.stillValid },
+			question.rows,
+			ttl,
+		);
+		if (question.signal?.aborted) cancel();
+		question.signal?.addEventListener("abort", cancel, { once: true });
+		let messageId: number | undefined;
+		try {
+			messageId = (await bridge.api.sendMessage({ chatId, threadId: question.threadId, text: question.text, buttons })).messageId;
+		} catch (error) {
+			cancel();
+			bridge.options.onDeliveryError?.(error);
+		}
+		const outcome = await answer;
+		question.signal?.removeEventListener("abort", cancel);
+		if (messageId !== undefined) {
+			const ending = outcome.kind === "answered" ? `→ ${outcome.notice}.`
+				: outcome.kind === "expired" ? "⌛ Expired: nothing was done."
+				: outcome.kind === "invalidated" ? "No longer valid: nothing was done."
+				: "Withdrawn: nothing was done.";
+			await bridge.api.editMessageText({ chatId, messageId, text: `${question.text}\n\n${ending}`, buttons: [] }).catch(() => undefined);
+		}
+		const choice = outcome.kind === "answered" ? outcome.choice : undefined;
+		return choice !== undefined && question.rows.flat()[choice] !== CANCEL ? choice : undefined;
+	}
+
+	/** Answers an inline button press; presses of remote control's own buttons settle the question they belong to. */
+	private answerPress(bridge: Bridge, query: TelegramCallbackQuery): void {
+		if (query.from.isBot) return;
+		const notice = OwnerPrompts.owns(query.data)
+			? this.prompts.press({ data: query.data!, userId: query.from.id, chatId: query.message?.chatId, threadId: query.message?.threadId })
+			: "This button is no longer valid.";
+		bridge.api.answerCallbackQuery({ id: query.id, text: notice }).catch((error) => bridge.options.onError?.(error));
+	}
+
+	private sendTo(bridge: Bridge, threadId: number | undefined, text: string): void {
+		bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId, text }).catch((error) => bridge.options.onError?.(error));
 	}
 
 	/** Runs a control-topic command in the background, so polling continues, and replies where it was sent. */
 	private runControl(bridge: Bridge, threadId: number | undefined, command: ControlCommand): void {
-		const send = (text: string) => bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId, text });
 		bridge.control = bridge.control
 			.then(async () => {
-				let reply: string;
+				let reply: string | undefined;
 				try {
-					reply = await this.controlReply(command);
+					reply = await this.controlReply(bridge, threadId, command);
 				} catch (error) {
 					reply = `Failed: ${errorMessage(error)}`;
 				}
-				await send(reply);
+				if (reply) await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId, text: reply });
 			})
 			.catch((error) => bridge.options.onError?.(error));
 	}
 
-	private async controlReply(command: ControlCommand): Promise<string> {
+	/** The reply to a control-topic command; undefined when it asks the owner to pick something first and answers later. */
+	private async controlReply(bridge: Bridge, threadId: number | undefined, command: ControlCommand): Promise<string | undefined> {
 		switch (command.kind) {
 			case "invalid":
 				return command.reply;
 			case "sessions":
 				return renderSessions(await this.sessions());
 			case "new": {
-				const { session } = await this.newSession({ name: command.name, repository: command.repository });
-				return `Started ${session.name} in topic "${session.topicName}", working in ${session.workspace}.`;
+				if (command.repository === undefined) return this.pickRepository(bridge, threadId, command.name);
+				return this.startedText(command.name, command.repository);
 			}
 			case "attach": {
-				const { session, alreadyConnected } = await this.attach(command.session);
-				return alreadyConnected
-					? `${session.name} is already connected in topic "${session.topicName}".`
-					: `Reconnected ${session.name} in topic "${session.topicName}".`;
+				if (command.session === undefined) return this.pickSessionToAttach(bridge, threadId);
+				return this.attachedText(command.session);
+			}
+			case "stop-agent": {
+				const connected = [...bridge.routes.values()];
+				if (command.session === undefined) {
+					if (!connected.length) return "No agent session is connected.";
+					this.pick(bridge, threadId, "Stop the current run of which agent session?", connected.map((route) => route.session), (session) => {
+						const route = [...bridge.routes.values()].find((candidate) => candidate.session.id === session.id);
+						return route ? this.stopAgent(bridge, route, threadId).then(() => undefined) : Promise.resolve(`${session.name} is no longer connected.`);
+					});
+					return undefined;
+				}
+				const { session } = await this.findSession(command.session);
+				const route = connected.find((candidate) => candidate.session.id === session.id);
+				if (!route) return `${session.name} is not connected, so it is not running anything.`;
+				this.stopAgent(bridge, route, threadId).catch((error) => this.sendTo(bridge, threadId, `Failed: ${errorMessage(error)}`));
+				return undefined;
 			}
 		}
+	}
+
+	private async startedText(name: string, repository: string): Promise<string> {
+		const { session } = await this.newSession({ name, repository });
+		return `Started ${session.name} in topic "${session.topicName}", working in ${session.workspace}.`;
+	}
+
+	private async attachedText(reference: string): Promise<string> {
+		const { session, alreadyConnected } = await this.attach(reference);
+		return alreadyConnected
+			? `${session.name} is already connected in topic "${session.topicName}".`
+			: `Reconnected ${session.name} in topic "${session.topicName}".`;
+	}
+
+	private async pickRepository(bridge: Bridge, threadId: number | undefined, name: string): Promise<string | undefined> {
+		const repositories = await this.adapters.repositories.list();
+		if (!repositories.length) return "No repository is approved yet; run /rc in a repository locally.";
+		this.pick(bridge, threadId, `Start agent session "${name}" in which repository?`, repositories, (repository) => this.startedText(name, repository.path));
+		return undefined;
+	}
+
+	private async pickSessionToAttach(bridge: Bridge, threadId: number | undefined): Promise<string | undefined> {
+		const attachable = (await this.sessions()).flatMap((group) => group.sessions).filter((session) => session.status === "disconnected");
+		if (!attachable.length) return "No disconnected agent session to attach. List them with /rc sessions.";
+		this.pick(bridge, threadId, "Attach which agent session?", attachable, (session) => this.attachedText(session.id));
+		return undefined;
+	}
+
+	/**
+	 * Offers `items` as buttons in the control topic and, once the owner picks one,
+	 * runs `then` with it and posts its reply. Items are labelled by name, with their
+	 * repository added when two share a name.
+	 */
+	private pick<Item extends { name: string; path?: string; repositoryPath?: string }>(
+		bridge: Bridge,
+		threadId: number | undefined,
+		text: string,
+		items: Item[],
+		then: (item: Item) => Promise<string | undefined>,
+	): void {
+		const label = (item: Item) => {
+			const shared = items.filter((other) => other.name === item.name).length > 1;
+			return shared ? `${item.name} (${nameFromPath(item.repositoryPath ?? item.path ?? "")})` : item.name;
+		};
+		const rows = [...items.map((item) => [{ label: label(item), notice: `Chose ${label(item)}` }]), [CANCEL]];
+		this.ask(bridge, { threadId, text, operation: text, rows, stillValid: () => this.bridge === bridge })
+			.then(async (choice) => (choice === undefined ? undefined : then(items[choice])))
+			.catch((error) => `Failed: ${errorMessage(error)}`)
+			.then((reply) => { if (reply) this.sendTo(bridge, threadId, reply); });
 	}
 
 	private async poll(bridge: Bridge, initialOffset: number | undefined): Promise<void> {
@@ -1288,6 +1574,7 @@ export class RemoteControlCoordinator {
 				if (fatal) {
 					if (this.bridge === bridge) this.bridge = undefined;
 					for (const route of bridge.routes.values()) clearTimeout(route.progress?.timer);
+					this.prompts.cancelWhere(() => true);
 					options.onStopped?.(fatal);
 					return;
 				}
@@ -1301,6 +1588,10 @@ export class RemoteControlCoordinator {
 			for (const update of updates) {
 				if (signal.aborted) return;
 				offset = update.updateId + 1;
+				if (update.callbackQuery) {
+					this.answerPress(bridge, update.callbackQuery);
+					continue;
+				}
 				const message = update.message;
 				if (!message?.from) continue;
 				try {

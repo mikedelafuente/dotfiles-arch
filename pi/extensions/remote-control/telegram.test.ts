@@ -44,7 +44,7 @@ test("maps Bot API payloads to remote-control types", async () => {
 			chat: { id: -1001, type: "supergroup", title: "Pi", username: undefined, isForum: true },
 		},
 	}]);
-	assert.deepEqual(calls[0].body, { offset: 5, timeout: 25, allowed_updates: ["message"] });
+	assert.deepEqual(calls[0].body, { offset: 5, timeout: 25, allowed_updates: ["message", "callback_query"] });
 	assert.equal(calls[0].url, "https://api.telegram.org/bot123:secret/getUpdates");
 	assert.deepEqual(await api.getChatMember(-1001, 1000), { status: "administrator", canManageTopics: true });
 	assert.deepEqual(await api.createForumTopic(-1001, "control"), { threadId: 9 });
@@ -80,4 +80,41 @@ test("exposes Telegram's retry_after on rate-limit errors", async () => {
 test("reports Telegram errors without leaking the bot token", async () => {
 	const api = createTelegramBotApi("123:secret", fakeFetch({ getMe: new Error("Unauthorized") }, []));
 	await assert.rejects(api.getMe(), (error: Error) => /Unauthorized/.test(error.message) && !error.message.includes("secret"));
+});
+
+test("maps inline buttons, button presses, and the command menu", async () => {
+	const calls: Call[] = [];
+	const api = createTelegramBotApi("123:secret", fakeFetch({
+		getUpdates: [{
+			update_id: 9,
+			callback_query: {
+				id: "cb-1", data: "rc:abc:0",
+				from: { id: 42, is_bot: false, username: "owner" },
+				message: { message_id: 77, message_thread_id: 501, is_topic_message: true, chat: { id: -1001, type: "supergroup", is_forum: true } },
+			},
+		}],
+		sendMessage: { message_id: 77 },
+		editMessageText: true,
+		answerCallbackQuery: true,
+		setMyCommands: true,
+	}, calls));
+
+	assert.deepEqual(await api.getUpdates({ timeoutSeconds: 0 }), [{
+		updateId: 9,
+		message: undefined,
+		callbackQuery: { id: "cb-1", data: "rc:abc:0", from: { id: 42, isBot: false, username: "owner" }, message: { messageId: 77, chatId: -1001, threadId: 501 } },
+	}]);
+	await api.sendMessage({ chatId: -1001, threadId: 501, text: "Approve?", buttons: [[{ text: "Approve", data: "rc:abc:0" }, { text: "Deny", data: "rc:abc:1" }]] });
+	await api.editMessageText({ chatId: -1001, messageId: 77, text: "Approved.", buttons: [] });
+	await api.answerCallbackQuery({ id: "cb-1", text: "Approved." });
+	await api.setMyCommands({ chatId: -1001, commands: [{ command: "rc", description: "Remote control" }] });
+	assert.deepEqual(calls.slice(1).map((call) => [call.url.split("/").pop(), call.body]), [
+		["sendMessage", {
+			chat_id: -1001, message_thread_id: 501, text: "Approve?",
+			reply_markup: { inline_keyboard: [[{ text: "Approve", callback_data: "rc:abc:0" }, { text: "Deny", callback_data: "rc:abc:1" }]] },
+		}],
+		["editMessageText", { chat_id: -1001, message_id: 77, text: "Approved.", reply_markup: { inline_keyboard: [] } }],
+		["answerCallbackQuery", { callback_query_id: "cb-1", text: "Approved." }],
+		["setMyCommands", { commands: [{ command: "rc", description: "Remote control" }], scope: { type: "chat", chat_id: -1001 } }],
+	]);
 });
