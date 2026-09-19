@@ -4,9 +4,9 @@
  * Machine-local; a Pi without this extension, or on another machine, leaves none.
  */
 import { readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, rmdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SessionLeases } from "./coordinator.ts";
+import type { LeaseHolder, SessionLeases } from "./coordinator.ts";
 
 type Lease = { pid: number; startTime?: string };
 
@@ -45,36 +45,40 @@ export class SessionLeaseFiles implements SessionLeases {
 		this.pid = pid;
 	}
 
+	private conversationDirectory(piSessionId: string): string {
+		return join(this.directory, entryName(piSessionId));
+	}
+
 	/** Records that this process has the conversation open. */
 	async acquire(piSessionId: string): Promise<void> {
-		const directory = join(this.directory, entryName(piSessionId));
+		const directory = this.conversationDirectory(piSessionId);
 		await mkdir(directory, { recursive: true, mode: 0o700 });
 		const lease: Lease = { pid: this.pid, startTime: startTime(this.pid) };
 		await writeFile(join(directory, String(this.pid)), `${JSON.stringify(lease)}\n`, { mode: 0o600 });
 	}
 
 	async release(piSessionId: string): Promise<void> {
-		const directory = join(this.directory, entryName(piSessionId));
+		const directory = this.conversationDirectory(piSessionId);
 		await rm(join(directory, String(this.pid)), { force: true });
 		// Only succeeds once no other process holds a lease.
-		await rm(directory).catch(() => undefined);
+		await rmdir(directory).catch(() => undefined);
 	}
 
-	async holders(piSessionId: string): Promise<number[]> {
-		const directory = join(this.directory, entryName(piSessionId));
+	async holders(piSessionId: string): Promise<LeaseHolder[]> {
+		const directory = this.conversationDirectory(piSessionId);
 		const entries = await readdir(directory).catch((error: NodeJS.ErrnoException) => {
 			if (error.code === "ENOENT") return [];
 			throw error;
 		});
-		const live: number[] = [];
+		const live: LeaseHolder[] = [];
 		for (const entry of entries) {
 			const lease = await readFile(join(directory, entry), "utf8")
 				.then((text) => JSON.parse(text) as Lease)
 				.catch(() => undefined);
 			if (typeof lease?.pid !== "number" || String(lease.pid) !== entry) continue;
-			if (isAlive(lease)) live.push(lease.pid);
+			if (isAlive(lease)) live.push({ pid: lease.pid, here: lease.pid === this.pid });
 			else await rm(join(directory, entry), { force: true });
 		}
-		return live.sort((a, b) => a - b);
+		return live.sort((a, b) => a.pid - b.pid);
 	}
 }

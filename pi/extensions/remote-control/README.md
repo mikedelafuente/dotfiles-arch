@@ -167,10 +167,11 @@ missing-workspace sessions, sessions whose repository was removed from the
 registry, and conversations another Pi has open (see [Session leases](#session-leases)),
 naming that Pi's process. A name that matches more than one session asks for the id.
 
-A session `/rc new` created that never got a response has no Pi history yet,
+A session `/rc new` created that never got a prompt has no Pi history yet,
 because Pi writes the session file with its first response. It is attachable, not
-stale: Pi restarts it under the same session id (`--session-id`). Once it has
-answered, a missing history makes it stale.
+stale: Pi restarts it under the same session id (`--session-id`). Once a run has
+started, a missing history makes it stale, even if Pi died before answering, so
+attach never quietly restarts a lost conversation empty.
 
 Attaching an earlier conversation makes it the session's current one again, in the
 same topic, and keeps the one it replaces as an earlier conversation. It is refused

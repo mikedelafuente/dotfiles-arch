@@ -3,12 +3,9 @@ import { execFile } from "node:child_process";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { Repository, Workspace, WorkspaceAdapter } from "./coordinator.ts";
+import { errorMessage } from "./messages.ts";
 
 const execFileAsync = promisify(execFile);
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
 
 async function git(cwd: string, args: string[]): Promise<string> {
 	try {

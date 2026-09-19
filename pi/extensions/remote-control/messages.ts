@@ -9,6 +9,10 @@ const TOOL_DETAIL_LENGTH = 80;
 const PROMPT_LENGTH = 200;
 const VISIBLE_TOOLS = 8;
 
+export function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 export const SESSION_TOPIC_HELP = "Send a message to prompt or steer this agent, or /rc followup <message> to queue work after the current run.";
 
 export type SessionTopicInput =

@@ -12,7 +12,7 @@ async function control(h: Harness, text: string): Promise<string> {
 	return h.telegram.inTopic(CONTROL_TOPIC).at(-1)!.text;
 }
 
-/** Has an agent answer once, which writes its Pi history, and waits until its session is no longer unprompted. */
+/** Has an agent run and answer once, which writes its Pi history, and waits until its session is no longer unprompted. */
 async function prompted(h: Harness, session: AgentSession): Promise<void> {
 	const agent = h.pi.processes.findLast((process) => process.id === session.piSessionId)!;
 	agent.report({ type: "run-start", prompt: "hi" });
@@ -479,5 +479,18 @@ test("a session that never got a prompt can be attached, and is stale only once 
 	assert.equal((await h.coordinator.sessions())[0].sessions[1].status, "disconnected");
 	h.pi.histories.delete(session.piSessionFile!);
 	assert.equal((await h.coordinator.sessions())[0].sessions[1].status, "stale");
+	await assert.rejects(h.coordinator.attach("fix-ci"), { code: "stale-session" });
+});
+
+test("a session whose first run started is no longer unprompted, even if Pi dies before answering", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { pi: current } = await startWith(h);
+	const { session } = await h.coordinator.newSession({ name: "fix-ci", current });
+
+	h.pi.last.report({ type: "run-start", prompt: "go" });
+	await until(() => h.stores.sessions.items.find((item) => item.id === session.id)?.unprompted === undefined);
+	h.pi.last.events.exited("crashed");
+	assert.equal((await h.coordinator.sessions())[0].sessions[1].status, "stale", "never restarted empty under its old id");
 	await assert.rejects(h.coordinator.attach("fix-ci"), { code: "stale-session" });
 });

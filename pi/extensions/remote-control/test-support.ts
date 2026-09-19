@@ -7,6 +7,7 @@ import {
 	type AgentSession,
 	type AgentSessionStore,
 	type AuthorizedMessage,
+	type LeaseHolder,
 	type LivePiSession,
 	type PiActivity,
 	type PiSessionAdapter,
@@ -274,10 +275,12 @@ export class FakePiSessions implements PiSessionAdapter {
 	}
 }
 
-/** Live Pi processes holding each conversation; stale leases are the file adapter's concern. */
+/** Live Pi processes holding each conversation, by PID; stale leases are the file adapter's concern. */
 export class FakeLeases implements SessionLeases {
 	held = new Map<string, number[]>();
-	async holders(piSessionId: string): Promise<number[]> { return this.held.get(piSessionId) ?? []; }
+	async holders(piSessionId: string): Promise<LeaseHolder[]> {
+		return (this.held.get(piSessionId) ?? []).map((pid) => ({ pid, here: pid === process.pid }));
+	}
 }
 
 /** A logged-in coordinator over fakes, ready to start. */
