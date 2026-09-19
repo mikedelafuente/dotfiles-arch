@@ -263,9 +263,13 @@ export class RpcPiSessions implements PiSessionAdapter {
 	}
 
 	async resume(session: AgentSession, events: PiSessionEvents): Promise<AgentProcess> {
-		// Pi silently starts a new conversation for a missing file, so require one that exists.
-		if (!(await this.hasHistory(session))) throw new Error(`The Pi history of ${session.name} was not found.`);
-		const agent = await this.start(session.workspace, ["--session", session.piSessionFile!], session, events);
+		// Pi silently starts a new conversation for a missing file, so require one that exists,
+		// unless Pi never wrote it: `--session-id` then restarts the conversation under its own id.
+		const args = await this.hasHistory(session)
+			? ["--session", session.piSessionFile!]
+			: session.unprompted ? ["--session-id", session.piSessionId, "--name", session.name] : undefined;
+		if (!args) throw new Error(`The Pi history of ${session.name} was not found.`);
+		const agent = await this.start(session.workspace, args, session, events);
 		if (agent.id !== session.piSessionId) {
 			await agent.close();
 			throw new Error(`Pi resumed session ${agent.id} instead of ${session.piSessionId}.`);

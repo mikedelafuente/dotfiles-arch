@@ -61,3 +61,18 @@ test("inspect reports missing workspaces and directories that are no longer a wo
 	assert.match((await workspaces.inspect(repo.path))?.branch ?? "", /^detached@[0-9a-f]+$/);
 	assert.equal(await gitWorkspace(tmpdir()), undefined);
 });
+
+test("a rollback that cannot remove the worktree or branch names what it left behind", async (t) => {
+	const repo = await repository(t);
+	const workspaces = new GitWorkspaces();
+	const locked = await workspaces.create(repo, "rc/locked");
+	await git(repo.path, "worktree", "lock", locked.path);
+	await assert.rejects(workspaces.remove(locked, repo), new RegExp(`worktree ${locked.path} and branch rc/locked remain: .*locked`));
+	assert.deepEqual(await workspaces.inspect(locked.path), { branch: "rc/locked" });
+
+	// The branch is also checked out elsewhere, so only the worktree can go.
+	const shared = await workspaces.create(repo, "rc/shared");
+	await git(repo.path, "worktree", "add", "--quiet", "--force", `${repo.path}.worktrees/other`, "rc/shared");
+	await assert.rejects(workspaces.remove(shared, repo), /^Error: branch rc\/shared remains: /);
+	assert.equal(await workspaces.inspect(shared.path), undefined);
+});

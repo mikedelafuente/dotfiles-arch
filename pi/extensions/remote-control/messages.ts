@@ -1,5 +1,5 @@
 /** Pure text formatting for session and control topics: commands in, progress, responses, and listings out. */
-import type { RepositorySessions, SessionStatus } from "./coordinator.ts";
+import type { LeaseHolder, RepositorySessions, SessionStatus } from "./coordinator.ts";
 
 /** Room left under Telegram's 4096-character message limit for the truncation note. */
 const RESPONSE_BUDGET = 3500;
@@ -8,6 +8,10 @@ const TAIL_SHARE = 0.4;
 const TOOL_DETAIL_LENGTH = 80;
 const PROMPT_LENGTH = 200;
 const VISIBLE_TOOLS = 8;
+
+export function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
 
 export const SESSION_TOPIC_HELP = "Send a message to prompt or steer this agent, or /rc followup <message> to queue work after the current run.";
 
@@ -148,22 +152,39 @@ export function sessionBranch(name: string): string | undefined {
 	return slug ? `rc/${slug}` : undefined;
 }
 
-const STATUS_TEXT: Record<SessionStatus, string> = {
+/** Where a conversation is open: "this Pi", "another Pi (process 123)", or both. */
+export function describeOpenIn(holders: LeaseHolder[]): string {
+	const others = holders.filter((holder) => !holder.here).map((holder) => holder.pid);
+	const places = holders.some((holder) => holder.here) ? ["this Pi"] : [];
+	if (others.length === 1) places.push(`another Pi (process ${others[0]})`);
+	else if (others.length) places.push(`other Pis (processes ${others.join(", ")})`);
+	return places.join(" and ");
+}
+
+const STATUS_TEXT: Record<Exclude<SessionStatus, "open">, string> = {
 	active: "running",
 	disconnected: "disconnected",
 	stale: "stale: Pi history not found",
 	"missing-workspace": "missing workspace",
 };
 
-/** Agent sessions grouped by repository, in one Telegram message. */
+function statusText(status: SessionStatus, openIn: LeaseHolder[] = []): string {
+	return status === "open" ? `open in ${describeOpenIn(openIn)}` : STATUS_TEXT[status];
+}
+
+/** Agent sessions grouped by repository, with their earlier conversations, in one Telegram message. */
 export function renderSessions(groups: RepositorySessions[]): string {
 	if (!groups.length) return "No agent sessions yet. Start one with /rc new <repository> <name>.";
 	const lines = groups.flatMap((group) => [
 		`${group.repository.name} (${group.repository.path})`,
-		...group.sessions.map((session) => `• ${session.name} · ${session.branch} · ${STATUS_TEXT[session.status]}`),
+		...group.sessions.flatMap((session) => [
+			`• ${session.name} · ${session.branch} · ${statusText(session.status, session.openIn)}`,
+			...session.earlierConversations.map((earlier) =>
+				`  ↳ earlier: ${earlier.name} · ${earlier.branch} · ${statusText(earlier.status, earlier.openIn)} · /rc attach ${earlier.piSessionId}`),
+		]),
 		"",
 	]);
-	lines.push("Reconnect a disconnected session with /rc attach <session>.");
+	lines.push("Reconnect a disconnected session with /rc attach <session>; one open in another Pi must be closed there first.");
 	return condenseForTelegram(lines.join("\n"));
 }
 

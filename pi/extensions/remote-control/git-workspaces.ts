@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { Repository, Workspace, WorkspaceAdapter } from "./coordinator.ts";
+import { errorMessage } from "./messages.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -12,7 +13,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
 		return result.stdout.trim();
 	} catch (error) {
 		const stderr = (error as { stderr?: string }).stderr?.trim();
-		throw new Error(stderr || (error instanceof Error ? error.message : String(error)));
+		throw new Error(stderr || errorMessage(error));
 	}
 }
 
@@ -53,9 +54,14 @@ export class GitWorkspaces implements WorkspaceAdapter {
 		return { path, branch, created: true };
 	}
 
+	/** Rejects naming what remains: the branch cannot be deleted while its worktree is still there. */
 	async remove(workspace: Workspace, repository: Repository): Promise<void> {
-		await git(repository.path, ["worktree", "remove", "--force", workspace.path]);
-		await git(repository.path, ["branch", "-D", workspace.branch]);
+		await git(repository.path, ["worktree", "remove", "--force", workspace.path]).catch((error) => {
+			throw new Error(`worktree ${workspace.path} and branch ${workspace.branch} remain: ${errorMessage(error)}`);
+		});
+		await git(repository.path, ["branch", "-D", workspace.branch]).catch((error) => {
+			throw new Error(`branch ${workspace.branch} remains: ${errorMessage(error)}`);
+		});
 	}
 
 	mainLine(repositoryPath: string): Promise<string> {

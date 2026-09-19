@@ -12,7 +12,8 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { RemoteControlCoordinator, RemoteControlError, type LivePiSession, type PiActivity } from "./coordinator.ts";
 import { GitWorkspaces, gitWorkspace } from "./git-workspaces.ts";
-import { renderSessions, runResponse, type RunMessage } from "./messages.ts";
+import { SessionLeaseFiles } from "./leases.ts";
+import { errorMessage, renderSessions, runResponse, type RunMessage } from "./messages.ts";
 import { PiDelivery } from "./pi-delivery.ts";
 import { RpcPiSessions } from "./pi-rpc.ts";
 import { JsonAgentSessionStore, JsonCredentialStore, JsonRepositoryRegistry, JsonStateStore } from "./state.ts";
@@ -39,24 +40,30 @@ function piCommand(): string[] {
 	return process.argv[1] ? [process.execPath, process.argv[1]] : ["pi"];
 }
 
-function createCoordinator(): RemoteControlCoordinator {
+function createCoordinator(leases: SessionLeaseFiles): RemoteControlCoordinator {
 	const state = new JsonStateStore(join(stateDir, "state.json"));
 	return new RemoteControlCoordinator({
 		repositories: new JsonRepositoryRegistry(state),
 		sessions: new JsonAgentSessionStore(state),
 		workspaces: new GitWorkspaces(),
 		pi: new RpcPiSessions({ command: piCommand() }),
+		leases,
 		credentials: new JsonCredentialStore(join(configDir, "credentials.json")),
 		telegramBot: (token) => createTelegramBotApi(token),
 	});
 }
 
-function describe(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
 export default function remoteControlExtension(pi: ExtensionAPI): void {
-	const coordinator = createCoordinator();
+	const leases = new SessionLeaseFiles(join(stateDir, "leases"));
+	const coordinator = createCoordinator(leases);
+
+	// Every Pi running this extension leases its conversation, whether or not it runs /rc,
+	// so /rc attach never resumes a conversation another Pi is writing.
+	let leased: string | undefined;
+	pi.on("session_start", async (_event, ctx) => {
+		leased = ctx.sessionManager.getSessionId();
+		await leases.acquire(leased).catch((error) => ctx.ui.notify(`Remote control could not record this session's lease: ${errorMessage(error)}`, "warning"));
+	});
 
 	async function login(ctx: ExtensionCommandContext): Promise<void> {
 		if (!ctx.hasUI) {
@@ -83,7 +90,7 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			});
 			ctx.ui.notify(`Remote control linked to ${credentials.group.title ?? "the forum group"}. Run /rc to start.`, "info");
 		} catch (error) {
-			ctx.ui.notify(`Remote control login failed: ${describe(error)}`, "error");
+			ctx.ui.notify(`Remote control login failed: ${errorMessage(error)}`, "error");
 		} finally {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 		}
@@ -149,13 +156,13 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			const { alreadyRunning, credentials, session: exposed } = await coordinator.start({
 				session,
 				onMessage: async (message) => ctx.ui.notify(`Telegram: ${message.text}`, "info"),
-				onError: (error) => ctx.ui.setStatus(STATUS_KEY, `rc: reconnecting (${describe(error)})`),
+				onError: (error) => ctx.ui.setStatus(STATUS_KEY, `rc: reconnecting (${errorMessage(error)})`),
 				onRecovered: () => ctx.ui.setStatus(STATUS_KEY, "rc: on"),
 				onStopped: (reason) => {
 					ctx.ui.setStatus(STATUS_KEY, undefined);
 					ctx.ui.notify(`Remote control stopped: ${reason.message}`, "error");
 				},
-				onDeliveryError: (error) => ctx.ui.notify(`Remote control could not update Telegram: ${describe(error)}`, "warning"),
+				onDeliveryError: (error) => ctx.ui.notify(`Remote control could not update Telegram: ${errorMessage(error)}`, "warning"),
 			});
 			ctx.ui.setStatus(STATUS_KEY, "rc: on");
 			const where = exposed ? ` This session is in topic "${exposed.topicName}".` : " Not in a Git repository, so this session is not exposed.";
@@ -165,7 +172,7 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			);
 		} catch (error) {
 			const hint = error instanceof RemoteControlError && error.code === "invalid-group" ? " Fix the group or run /rc login again." : "";
-			ctx.ui.notify(`Remote control did not start: ${describe(error)}${hint}`, "error");
+			ctx.ui.notify(`Remote control did not start: ${errorMessage(error)}${hint}`, "error");
 		}
 	}
 
@@ -192,7 +199,7 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 			try {
 				await run(subcommand || "start", rest.trim(), ctx);
 			} catch (error) {
-				ctx.ui.notify(`/rc ${subcommand} failed: ${describe(error)}`, "error");
+				ctx.ui.notify(`/rc ${subcommand} failed: ${errorMessage(error)}`, "error");
 			}
 		},
 	});
@@ -274,5 +281,6 @@ export default function remoteControlExtension(pi: ExtensionAPI): void {
 	pi.on("session_shutdown", async () => {
 		await coordinator.shutdown();
 		delivery?.dispose();
+		if (leased) await leases.release(leased).catch(() => undefined);
 	});
 }

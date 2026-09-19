@@ -15,8 +15,9 @@ const FAKE_PI = String.raw`
 import { writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const flag = (name) => { const i = args.indexOf(name); return i === -1 ? undefined : args[i + 1]; };
-const file = flag("--session") ?? process.cwd() + "/new-session.jsonl";
-const id = process.env.FAKE_PI_ID ?? file.split("/").pop().replace(".jsonl", "");
+// Like Pi, --session-id opens the project session with that id or creates a new one under it.
+const file = flag("--session") ?? process.cwd() + "/" + (flag("--session-id") ? "fresh-" + flag("--session-id") : "new-session") + ".jsonl";
+const id = process.env.FAKE_PI_ID ?? flag("--session-id") ?? file.split("/").pop().replace(".jsonl", "");
 const log = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 const answers = [];
 let buffer = "";
@@ -35,6 +36,7 @@ function handle(command) {
 	switch (command.type) {
 		case "get_state":
 			writeFileSync(process.cwd() + "/pid", String(process.pid));
+			writeFileSync(process.cwd() + "/state.json", JSON.stringify({ args }));
 			if (process.env.FAKE_PI_FAIL_STATE) return respond(undefined, false, "no model available");
 			return respond({ sessionId: id, sessionFile: file, sessionName: flag("--name"), cwd: process.cwd(), args });
 		case "get_commands": return respond({ commands: [{ name: "merge-pr", source: "extension" }, { name: "skill:tdd", source: "skill" }] });
@@ -127,6 +129,20 @@ test("resumes the persisted session file and refuses a different conversation", 
 
 	const mismatched = new RpcPiSessions({ command: [process.execPath, join(h.root, "fake-pi.mjs")], env: { FAKE_PI_ID: "other" } });
 	await assert.rejects(mismatched.resume(session, h.events), /other.*instead of abc/);
+});
+
+test("an unprompted session without history restarts under its own id; a prompted one is refused", async (t) => {
+	const h = await setup(t);
+	const missing = join(h.root, "never-written.jsonl");
+	const session = { piSessionId: "0199-abc", piSessionFile: missing, name: "fix ci", workspace: h.root, branch: "rc/x", repositoryPath: h.root } as AgentSession;
+
+	await assert.rejects(h.sessions.resume(session, h.events), /history of fix ci was not found/);
+	const agent = await h.sessions.resume({ ...session, unprompted: true }, h.events);
+	t.after(() => agent.close());
+	assert.equal(agent.id, "0199-abc");
+	assert.equal(agent.sessionFile, join(h.root, "fresh-0199-abc.jsonl"));
+	const state = JSON.parse(await readFile(join(h.root, "state.json"), "utf8")) as { args: string[] };
+	assert.deepEqual(state.args, ["--mode", "rpc", "--session-id", "0199-abc", "--name", "fix ci"]);
 });
 
 test("reports a Pi process that exits on its own, but not one that was closed", async (t) => {
