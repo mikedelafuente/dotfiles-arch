@@ -8,7 +8,18 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { access } from "node:fs/promises";
 import { extensionCommandRefusal, type ThinkingLevel } from "./commands.ts";
-import type { AgentProcess, AgentSession, PiCommand, PiDialog, PiSessionAdapter, PiSessionEvents, Repository, Workspace } from "./coordinator.ts";
+import type {
+	AgentProcess,
+	AgentSession,
+	NextConversation,
+	PiCommand,
+	PiDialog,
+	PiSessionAdapter,
+	PiSessionEvents,
+	PiSessionInfo,
+	Repository,
+	Workspace,
+} from "./coordinator.ts";
 import { runResponse, type RunMessage } from "./messages.ts";
 
 export type RpcPiSessionsOptions = {
@@ -33,9 +44,26 @@ const TEXT_DIALOGS = new Set(["input", "editor"]);
 export const AGENT_ENV = "PI_REMOTE_CONTROL_AGENT";
 /** The status key an agent's Pi sets after reloading its resources, so its discovered commands are read again. */
 export const COMMANDS_CHANGED_STATUS = "remote-control:commands";
+/**
+ * The `/rc` subcommand that reloads an agent's Pi. RPC has no reload command, but
+ * extension commands get `ctx.reload()`, so this extension reloads the agent's Pi for it.
+ */
+export const AGENT_RELOAD = "reload";
 
 type RpcResponse = { id?: string; type: "response"; command: string; success: boolean; data?: unknown; error?: string };
 type RpcEvent = { type: string; [key: string]: unknown };
+type RpcModel = { provider: string; id: string };
+type RpcState = { sessionId: string; sessionFile?: string; sessionName?: string; model?: RpcModel | null; thinkingLevel?: string };
+type RpcSessionStats = {
+	sessionId: string;
+	sessionFile?: string;
+	userMessages: number;
+	assistantMessages: number;
+	toolCalls: number;
+	tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+	cost: number;
+	contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null };
+};
 type Location = { name: string; workspace: string; branch: string; repositoryPath: string };
 
 function lastLine(text: string): string {
@@ -107,9 +135,7 @@ class RpcAgent implements AgentProcess {
 	async start(timeoutMs: number): Promise<void> {
 		const timeout = setTimeout(() => this.child.kill("SIGKILL"), timeoutMs);
 		try {
-			const state = (await this.request({ type: "get_state" })).data as { sessionId: string; sessionFile?: string };
-			this.id = state.sessionId;
-			this.sessionFile = state.sessionFile;
+			await this.readState();
 			this.started = true;
 		} catch (error) {
 			this.closing = true;
@@ -119,6 +145,14 @@ class RpcAgent implements AgentProcess {
 			clearTimeout(timeout);
 		}
 		await this.refreshCommands();
+	}
+
+	/** Pi's state; the conversation's id and file change with `/new`. */
+	private async readState(): Promise<RpcState> {
+		const state = (await this.request({ type: "get_state" })).data as RpcState;
+		this.id = state.sessionId;
+		this.sessionFile = state.sessionFile;
+		return state;
 	}
 
 	async commands(): Promise<PiCommand[]> {
@@ -156,6 +190,66 @@ class RpcAgent implements AgentProcess {
 
 	async setThinkingLevel(level: ThinkingLevel): Promise<void> {
 		await this.request({ type: "set_thinking_level", level });
+	}
+
+	async rename(name: string): Promise<void> {
+		await this.request({ type: "set_session_name", name });
+		this.name = name;
+	}
+
+	async info(): Promise<PiSessionInfo> {
+		const state = await this.readState();
+		const stats = (await this.request({ type: "get_session_stats" })).data as RpcSessionStats;
+		const { input, output, cacheRead, cacheWrite } = stats.tokens;
+		const context = stats.contextUsage;
+		return {
+			id: stats.sessionId,
+			file: stats.sessionFile,
+			name: state.sessionName,
+			model: state.model ? `${state.model.provider}/${state.model.id}` : undefined,
+			thinkingLevel: state.thinkingLevel,
+			messages: { user: stats.userMessages, assistant: stats.assistantMessages, toolCalls: stats.toolCalls },
+			tokens: { input, output, cacheRead, cacheWrite },
+			cost: stats.cost,
+			...(context ? { context: { tokens: context.tokens, window: context.contextWindow, percent: context.percent } } : {}),
+		};
+	}
+
+	async models(): Promise<{ current?: string; available: string[] }> {
+		const { model } = await this.readState();
+		const { models } = (await this.request({ type: "get_available_models" })).data as { models: RpcModel[] };
+		return { current: model ? `${model.provider}/${model.id}` : undefined, available: models.map((candidate) => `${candidate.provider}/${candidate.id}`) };
+	}
+
+	async setModel(provider: string, modelId: string): Promise<void> {
+		await this.request({ type: "set_model", provider, modelId });
+	}
+
+	/** Pi's `/new` in this process: the RPC child moves to a new conversation in the same workspace. */
+	async newConversation(): Promise<NextConversation | undefined> {
+		const { cancelled } = (await this.request({ type: "new_session" })).data as { cancelled: boolean };
+		if (cancelled) return undefined;
+		this.running = false;
+		this.clearStarting();
+		await this.readState();
+		void this.refreshCommands();
+		return { id: this.id, sessionFile: this.sessionFile };
+	}
+
+	/** Pi's `/reload`, run by this extension in the agent's Pi; Pi then reports its commands changed. */
+	async reload(): Promise<void> {
+		await this.commandsReady;
+		// Without this extension, `/rc reload` would reach the model as a prompt.
+		if (!this.commandList.some((command) => command.source === "extension" && command.name === "rc")) {
+			throw new Error("the agent's Pi does not run remote control's extension, which reloads it");
+		}
+		await this.runExtensionCommand(`/rc ${AGENT_RELOAD}`);
+	}
+
+	/** Pi answers a prompt that is an extension command once the command finished. */
+	async runExtensionCommand(text: string): Promise<void> {
+		const response = await this.request({ type: "prompt", message: text });
+		if (!response.success) throw new Error(response.error ?? "Pi did not accept the command");
 	}
 
 	isIdle(): boolean {
@@ -204,7 +298,8 @@ class RpcAgent implements AgentProcess {
 	/**
 	 * Uses RPC `prompt` for every message, so skills and prompt templates expand as
 	 * they do locally. Extension commands are refused: they would run immediately,
-	 * outside the approvals that gate an agent's tool calls.
+	 * outside the approvals that gate an agent's tool calls; `runExtensionCommand`
+	 * runs them once the owner approved.
 	 */
 	private send(text: string, streamingBehavior: "steer" | "followUp"): void {
 		this.commandsReady.then(() => {
@@ -311,7 +406,7 @@ class RpcAgent implements AgentProcess {
 					this.answerDialog(event.id, Promise.resolve({ cancelled: true }));
 					report({ type: "notice", text: `Pi asked "${dialog.title}", which needs typed input remote control cannot give yet, so it was cancelled.` });
 				} else if (method === "setStatus" && event.statusKey === COMMANDS_CHANGED_STATUS) {
-					void this.refreshCommands();
+					void this.refreshCommands().then(() => report({ type: "commands-changed" }));
 				} else if (method === "notify" && (event.notifyType === "warning" || event.notifyType === "error")) {
 					report({ type: "notice", text: String(event.message) });
 				}

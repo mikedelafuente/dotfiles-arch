@@ -15,6 +15,7 @@ import {
 	type PiCommand,
 	type PiSessionAdapter,
 	type PiSessionEvents,
+	type PiSessionInfo,
 	type RemoteControlAdapters,
 	type Repository,
 	type RepositoryRegistry,
@@ -225,10 +226,33 @@ export class FakePiSession implements LivePiSession {
 	async setThinkingLevel(level: string): Promise<void> {
 		this.builtins.push(["thinking", level]);
 	}
+	model = "anthropic/claude-sonnet-5";
+	availableModels = ["anthropic/claude-sonnet-5", "anthropic/claude-opus-5"];
+	/** Extension commands run through this session, after the owner approved them. */
+	extensionCommands: string[] = [];
+	async info(): Promise<PiSessionInfo> {
+		return {
+			id: this.id, file: this.sessionFile, name: this.name || undefined, model: this.model, thinkingLevel: "medium",
+			messages: { user: 3, assistant: 4, toolCalls: 5 },
+			tokens: { input: 1200, output: 340, cacheRead: 5000, cacheWrite: 0 },
+			cost: 0.0421,
+			context: { tokens: 18000, window: 200000, percent: 9 },
+		};
+	}
+	async models(): Promise<{ current?: string; available: string[] }> {
+		return { current: this.model, available: [...this.availableModels] };
+	}
+	async setModel(provider: string, modelId: string): Promise<void> {
+		const model = `${provider}/${modelId}`;
+		if (!this.availableModels.includes(model)) throw new Error(`Model not found: ${model}`);
+		this.builtins.push(["model", model]);
+		this.model = model;
+	}
+	async runExtensionCommand(text: string): Promise<void> { this.extensionCommands.push(text); }
 	prompt(text: string): void { this.delivered.push(["prompt", text]); }
 	steer(text: string): void { this.delivered.push(["steer", text]); }
 	followUp(text: string): void { this.delivered.push(["followUp", text]); }
-	rename(name: string): void { this.renamedTo.push(name); this.name = name; }
+	async rename(name: string): Promise<void> { this.renamedTo.push(name); this.name = name; }
 }
 
 /** A Pi conversation running in its own process, started by remote control. */
@@ -243,6 +267,15 @@ export class FakeAgentProcess extends FakePiSession implements AgentProcess {
 		if (this.closeFailure) throw this.closeFailure;
 		this.closed = true;
 	}
+	reloads = 0;
+	/** Pi's `/new`: the next conversation has no history until its first response. */
+	async newConversation(): Promise<{ id: string; sessionFile?: string } | undefined> {
+		this.id = `${this.id}-next`;
+		this.sessionFile = `/sessions/${this.id}.jsonl`;
+		this.name = "";
+		return { id: this.id, sessionFile: this.sessionFile };
+	}
+	async reload(): Promise<void> { this.reloads++; }
 	/** Reports Pi activity the way the real process adapter does. Like Pi, the first response writes the history file. */
 	report(activity: PiActivity): void {
 		if (activity.type === "response" && this.sessionFile) this.histories.add(this.sessionFile);
