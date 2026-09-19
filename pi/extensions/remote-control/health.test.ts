@@ -120,3 +120,27 @@ test("a summary keeps only the latest held messages, and says how many it left o
 	assert.doesNotMatch(summary, /Answer 2\./);
 	assert.match(summary, /Answer 3\.[\s\S]*Answer 4\.[\s\S]*Answer 5\./);
 });
+
+test("an agent that exits while Telegram is unreachable still gets its disconnect notice in the reconnect summary", async (t) => {
+	const h = await harness({ retryDelayMs: 5, maxRetryDelayMs: 5 });
+	t.after(() => h.coordinator.shutdown());
+	const { pi: current } = await startWith(h);
+	const { session } = await h.coordinator.newSession({ name: "fix-ci", current });
+	const topic = Number(session.topicId);
+	h.telegram.offline = true;
+	await until(() => h.coordinator.status().unreachableSince !== undefined);
+
+	h.pi.last.report({ type: "response", text: "Half done." });
+	h.pi.last.events.exited("was killed");
+	await until(() => h.coordinator.status().held === 2);
+	assert.deepEqual(h.coordinator.status().topics, ["demo / fix-flake / main"]);
+	const sent = h.telegram.inTopic(topic).length;
+
+	h.telegram.offline = false;
+	h.telegram.push({ chat: GROUP, from: OWNER, threadId: CONTROL_TOPIC, text: "back" });
+	await until(() => h.telegram.inTopic(topic).length > sent);
+	const summary = h.telegram.inTopic(topic).at(-1)!.text;
+	assert.match(summary, /stopped being routed/);
+	assert.match(summary, /Half done\.[\s\S]*Disconnected: the Pi agent was killed/);
+	await until(() => h.coordinator.status().held === 0);
+});

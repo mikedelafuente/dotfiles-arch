@@ -255,7 +255,8 @@ The first successful poll afterwards brings each topic's latest progress message
 date and sends one summary: how long Telegram was unreachable, whether the agent is
 working or idle now, and the latest three held messages, each condensed; older ones
 are only counted, since they are in the Pi session. A topic with nothing held gets no
-summary. Approvals asked during an outage cannot be posted, so they are decided as
+summary. A topic that stopped being routed meanwhile, such as an agent whose Pi exited,
+still gets its held messages, the disconnect notice included. Approvals asked during an outage cannot be posted, so they are decided as
 when they cannot be posted otherwise (see [Approvals](#approvals)). Held messages are
 dropped if remote control stops before Telegram answers again.
 
@@ -267,7 +268,9 @@ confirmed on its own: with buttons (the operation's own and Cancel) when asked f
 Telegram, and in the local Pi when asked there. The question names exactly what goes and
 what stays; once confirmed, the operation checks again and does nothing if its answer
 would now be different (`session-changed`), so a confirmation only applies to the state it
-described. Each reports what it did, what it kept, and what it could not do.
+described. Each reports what it did, what it kept, and what it could not do; a step that
+fails does not stop the others, and the summary says whether it did everything, only
+part, or nothing.
 
 | Operation | Requires | Removes | Keeps |
 |-----------|----------|---------|-------|
@@ -287,8 +290,8 @@ is never removed.
 
 `/rc attach`, or `/rc` in its workspace, reopens an archived session's topic. Once a
 session is archived, has no Pi history, and has no workspace, nothing of it is left:
-it is forgotten, and no longer listed. Its closed topic stays in Telegram for you to
-delete.
+it is forgotten, and no longer listed; the question of the step that leaves nothing
+says so. Its closed topic stays in Telegram for you to delete.
 
 ### Session leases
 

@@ -540,6 +540,8 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 10_000;
 const APPROVE: PromptChoice[] = [{ label: "Approve", notice: "Approved" }, { label: "Deny", notice: "Denied" }];
 const STOP_RUN: PromptChoice[] = [{ label: "Stop run", notice: "Stopping the run" }, { label: "Keep running", notice: "Kept running" }];
 const CANCEL: PromptChoice = { label: "Cancel", notice: "Cancelled" };
+/** Ends a cleanup question when the step leaves nothing of an archived session, whose record then goes too (see `forgetIfEmpty`). */
+const FORGET_NOTE = "Nothing of it is left then, so it is also removed from /rc sessions; its closed topic stays in Telegram for you to delete.";
 /** Held session-topic messages a reconnect summary shows; older ones are only counted. */
 const HELD_SHOWN = 3;
 /** A post skipped because Telegram is unreachable; what it carried is held, not lost. */
@@ -565,6 +567,12 @@ function conversationOf(session: AgentSession): PiConversation {
 
 function report(summary: string, parts: Partial<Pick<CleanupReport, "done" | "kept" | "failed">> = {}): CleanupReport {
 	return { summary, done: parts.done ?? [], kept: parts.kept ?? [], failed: parts.failed ?? [], forgotten: false };
+}
+
+/** A cleanup's summary line: whether it did everything, part of it, or nothing. */
+function outcome(done: string[], failed: string[], what: string, did: string, verb: string): string {
+	if (!failed.length) return `${did} ${what}.`;
+	return done.length ? `${did} only part of ${what}.` : `Could not ${verb} ${what}.`;
 }
 
 function commitCount(count: number): string {
@@ -735,6 +743,8 @@ type Bridge = {
 	menuShown?: MenuCommand[];
 	/** When Telegram stopped answering; cleared by the next successful poll, which sends what was held. */
 	offlineSince?: number;
+	/** Topics no longer routed that still hold messages, such as an agent's notice that its Pi exited. */
+	unrouted: Set<Route>;
 };
 
 /** The single authority for repository and agent-session invariants. */
@@ -954,6 +964,7 @@ export class RemoteControlCoordinator {
 	private unroute(bridge: Bridge, route: Route): void {
 		clearTimeout(route.progress?.timer);
 		bridge.routes.delete(route.threadId);
+		if (route.held.length) bridge.unrouted.add(route);
 		this.prompts.cancelWhere((binding) => binding.threadId === route.threadId);
 		this.refreshMenu(bridge);
 	}
@@ -1171,8 +1182,9 @@ export class RemoteControlCoordinator {
 				return {
 					question: [
 						`Archive ${session.name} (${session.topicName})?`,
-						`Its topic is closed${live ? " and it is disconnected" : ""}. Kept: ${kept.join("; ") || "nothing else is left"}.`,
-						`/rc attach ${session.name} brings it back.`,
+						kept.length
+							? `Its topic is closed${live ? " and it is disconnected" : ""}. Kept: ${kept.join("; ")}. /rc attach ${session.name} brings it back.`
+							: `Its topic is closed${live ? " and it is disconnected" : ""}. ${FORGET_NOTE}`,
 					].join("\n\n"),
 					action: "Archive",
 				};
@@ -1206,7 +1218,7 @@ export class RemoteControlCoordinator {
 					},
 				);
 				await this.adapters.sessions.update({ ...session, archivedAt: this.now().toISOString() });
-				return report(`Archived ${session.name}.`, { done, failed, kept: await this.kept(session, { history: true, workspace: true }) });
+				return report(failed.length ? `Archived ${session.name}, but not every step worked.` : `Archived ${session.name}.`, { done, failed, kept: await this.kept(session, { history: true, workspace: true }) });
 			},
 		});
 	}
@@ -1227,6 +1239,7 @@ export class RemoteControlCoordinator {
 						`Delete the Pi history of ${session.name}? ${histories.length} conversation${histories.length === 1 ? "" : "s"}:`,
 						histories.map((conversation) => conversation.piSessionFile).join("\n"),
 						`This cannot be undone. Kept: ${kept.join("; ")}.`,
+						...(session.archivedAt && !(await this.adapters.workspaces.inspect(session.workspace)) ? [FORGET_NOTE] : []),
 					].join("\n\n"),
 					action: "Delete history",
 				};
@@ -1247,7 +1260,7 @@ export class RemoteControlCoordinator {
 					if (await this.adapters.pi.hasHistory(withConversation(session, conversation))) remaining.push(conversation);
 				}
 				await this.adapters.sessions.update({ ...rest, ...(remaining.length ? { earlierConversations: remaining } : {}) });
-				return report(`Deleted the Pi history of ${session.name}.`, { done, failed, kept: await this.kept(session, { topic: true, workspace: true }) });
+				return report(outcome(done, failed, `the Pi history of ${session.name}`, "Deleted", "delete"), { done, failed, kept: await this.kept(session, { topic: true, workspace: true }) });
 			},
 		});
 	}
@@ -1289,7 +1302,12 @@ export class RemoteControlCoordinator {
 					changes.length && `⚠️ discards ${changeCount(changes)}: ${listChanges(changes)}`,
 				].filter((item): item is string => typeof item === "string");
 				return {
-					question: [`Remove the workspace of ${name}?`, items.map((item) => `• ${item}`).join("\n"), `Kept: ${kept.join("; ")}.`].join("\n\n"),
+					question: [
+						`Remove the workspace of ${name}?`,
+						items.map((item) => `• ${item}`).join("\n"),
+						`Kept: ${kept.join("; ")}.`,
+						...(session.archivedAt && !(await this.histories(session)).length ? [FORGET_NOTE] : []),
+					].join("\n\n"),
 					action: changes.length ? "Force remove" : unmerged ? "Abandon and remove" : "Remove",
 				};
 			},
@@ -1306,7 +1324,7 @@ export class RemoteControlCoordinator {
 				if (worktreeGone) done.push(`worktree ${session.workspace}`);
 				if (branchGone) done.push(state.merged ? `branch ${branch}` : `branch ${branch}, with ${commitCount(state.unmergedCommits)} not merged into ${state.mainLine}`);
 				if (worktreeGone && changes.length) done.push(`${changeCount(changes)}: ${changes.map((change) => change.trim()).join(", ")}`);
-				return report(`Removed the workspace of ${session.name}.`, { done, failed, kept: await this.kept(session, { topic: true, history: true }) });
+				return report(outcome(done, failed, `the workspace of ${session.name}`, "Removed", "remove"), { done, failed, kept: await this.kept(session, { topic: true, history: true }) });
 			},
 		});
 	}
@@ -1565,7 +1583,7 @@ export class RemoteControlCoordinator {
 			const live = options.session;
 			const bridge: Bridge = {
 				abort: new AbortController(), done: Promise.resolve(), credentials, api, options, routes: new Map(), control: Promise.resolve(),
-				menu: Promise.resolve(), menuQueued: false,
+				menu: Promise.resolve(), menuQueued: false, unrouted: new Set(),
 			};
 			const session = await this.withCreationLock(async () => {
 				const exposed = live ? await this.exposeLocked(bridge, live) : undefined;
@@ -1674,7 +1692,7 @@ export class RemoteControlCoordinator {
 			group: credentials?.group.title,
 			topics: [...(this.bridge?.routes.values() ?? [])].map((route) => route.session.topicName),
 			unreachableSince: this.bridge?.offlineSince === undefined ? undefined : new Date(this.bridge.offlineSince).toISOString(),
-			held: [...(this.bridge?.routes.values() ?? [])].reduce((count, route) => count + route.held.length, 0),
+			held: [...(this.bridge?.routes.values() ?? []), ...(this.bridge?.unrouted ?? [])].reduce((count, route) => count + route.held.length, 0),
 		};
 	}
 
@@ -1802,6 +1820,7 @@ export class RemoteControlCoordinator {
 				if (hold === undefined) return;
 				route.heldSince ??= this.now().getTime();
 				route.held.push(hold);
+				if (bridge.routes.get(route.threadId) !== route) bridge.unrouted.add(route);
 			});
 	}
 
@@ -1829,21 +1848,30 @@ export class RemoteControlCoordinator {
 				const finished = progress.finished;
 				this.post(bridge, route, () => this.showProgress(bridge, route, progress, finished));
 			}
-			if (!route.held.length) continue;
-			this.post(bridge, route, async () => {
-				const held = route.held.length;
-				const text = renderHeldSummary({
-					held: route.held,
-					offlineMs: this.now().getTime() - (route.heldSince ?? this.now().getTime()),
-					now: this.activityText(route),
-					shown: HELD_SHOWN,
-				});
-				await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId: route.threadId, text });
-				// Messages held while the summary was being sent wait for the next one.
-				route.held.splice(0, held);
-				if (!route.held.length) route.heldSince = undefined;
-			});
+			if (route.held.length) this.postHeld(bridge, route);
 		}
+		for (const route of bridge.unrouted) this.postHeld(bridge, route);
+	}
+
+	/** Sends a topic's held messages as one summary; a route no longer routed is let go once it holds nothing. */
+	private postHeld(bridge: Bridge, route: Route): void {
+		this.post(bridge, route, async () => {
+			const routed = bridge.routes.get(route.threadId) === route;
+			const held = route.held.length;
+			if (!held) return void bridge.unrouted.delete(route);
+			const text = renderHeldSummary({
+				held: route.held,
+				offlineMs: this.now().getTime() - (route.heldSince ?? this.now().getTime()),
+				now: routed ? this.activityText(route) : undefined,
+				shown: HELD_SHOWN,
+			});
+			await bridge.api.sendMessage({ chatId: bridge.credentials.group.id, threadId: route.threadId, text });
+			// Messages held while the summary was being sent wait for the next one.
+			route.held.splice(0, held);
+			if (route.held.length) return;
+			route.heldSince = undefined;
+			bridge.unrouted.delete(route);
+		});
 	}
 
 	/** What a topic's conversation is doing now, for a reconnect summary. */

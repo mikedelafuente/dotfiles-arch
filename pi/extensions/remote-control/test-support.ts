@@ -411,7 +411,10 @@ export class FakePiSessions implements PiSessionAdapter {
 	}
 	/** Session files deleted with deleteHistory, in order. */
 	deletedHistories: string[] = [];
+	/** Session files deleteHistory fails on, leaving them in place. */
+	deleteFailures = new Set<string>();
 	async deleteHistory(session: AgentSession): Promise<boolean> {
+		if (session.piSessionFile !== undefined && this.deleteFailures.has(session.piSessionFile)) throw new Error(`EACCES: permission denied, unlink '${session.piSessionFile}'`);
 		if (session.piSessionFile === undefined || !this.histories.delete(session.piSessionFile)) return false;
 		this.deletedHistories.push(session.piSessionFile);
 		return true;

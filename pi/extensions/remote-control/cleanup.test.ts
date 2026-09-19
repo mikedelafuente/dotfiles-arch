@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AgentSession, ConfirmCleanup } from "./coordinator.ts";
+import { renderCleanup } from "./messages.ts";
 import { CONTROL_TOPIC, GROUP, harness, OWNER, startWith, until, type Harness, type SentMessage } from "./test-support.ts";
 
 /** Starts remote control and one agent session from the main line that has answered once, so its Pi history exists. */
@@ -255,10 +256,55 @@ test("a session whose topic is archived, history deleted, and workspace removed 
 	const { session } = await withAgent(h);
 
 	await h.coordinator.archive("fix-ci", confirmAll());
-	const history = await h.coordinator.cleanupHistory("fix-ci", confirmAll());
+	const asked: [string, string][] = [];
+	const history = await h.coordinator.cleanupHistory("fix-ci", confirmAll(asked));
 	assert.equal(history?.forgotten, false);
-	const workspace = await h.coordinator.cleanupWorkspace("fix-ci", {}, confirmAll());
+	assert.doesNotMatch(asked[0][0], /removed from \/rc sessions/, "its workspace is still left");
+	const workspace = await h.coordinator.cleanupWorkspace("fix-ci", {}, confirmAll(asked));
+	assert.match(asked[1][0], /Nothing of it is left then, so it is also removed from \/rc sessions/, "the question says the record goes too");
 	assert.equal(workspace?.forgotten, true);
 	assert.equal(stored(h, session), undefined);
 	assert.deepEqual((await h.coordinator.sessions()).flatMap((group) => group.sessions.map((item) => item.name)), ["fix-flake"]);
+});
+
+test("a cleanup step that fails is reported as failed, while the steps that worked are done", async (t) => {
+	const h = await harness();
+	t.after(() => h.coordinator.shutdown());
+	const { agent, session, topic } = await withAgent(h);
+
+	// Archive: the agent's Pi will not stop, and Telegram refuses to close the topic.
+	agent.closeFailure = new Error("still running");
+	h.telegram.closeForumTopic = async () => { throw Object.assign(new Error("Bad Request: not enough rights"), { errorCode: 400 }); };
+	const archived = await h.coordinator.archive("fix-ci", confirmAll());
+	assert.equal(archived?.summary, "Archived fix-ci, but not every step worked.");
+	assert.deepEqual(archived?.done, []);
+	assert.deepEqual(archived?.failed, [
+		"its Pi process is still running: still running",
+		`topic "${session.topicName}" is still open: Bad Request: not enough rights`,
+	]);
+	assert.ok(stored(h, session)?.archivedAt, "disconnected all the same, so the later cleanups can run");
+	assert.deepEqual(h.coordinator.status().topics, ["demo / fix-flake / main"]);
+	assert.ok(!h.telegram.closedTopics.has(topic));
+
+	// History: one of two conversations cannot be deleted, and stays attachable.
+	const earlier = { piSessionId: "pi-earlier", piSessionFile: "/sessions/pi-earlier.jsonl", name: "fix-ci", branch: "rc/fix-ci", replacedAt: "2026-01-01T00:00:00Z" };
+	stored(h, session)!.earlierConversations = [earlier];
+	h.pi.histories.add(earlier.piSessionFile);
+	h.pi.deleteFailures.add(earlier.piSessionFile);
+	const history = await h.coordinator.cleanupHistory("fix-ci", confirmAll());
+	assert.equal(history?.summary, "Deleted only part of the Pi history of fix-ci.");
+	assert.deepEqual(history?.done, [`Pi history ${session.piSessionFile}`]);
+	assert.deepEqual(history?.failed, [`Pi history ${earlier.piSessionFile}: EACCES: permission denied, unlink '${earlier.piSessionFile}'`]);
+	assert.deepEqual(stored(h, session)?.earlierConversations?.map((conversation) => conversation.piSessionId), ["pi-earlier"]);
+
+	// Workspace: Git refuses to remove it; nothing is claimed as removed, and the session is not forgotten.
+	h.workspaces.removeFailure = new Error("worktree /work/demo.worktrees/rc-fix-ci and branch rc/fix-ci remain: locked");
+	const workspace = await h.coordinator.cleanupWorkspace("fix-ci", {}, confirmAll());
+	assert.deepEqual(workspace?.done, []);
+	assert.deepEqual(workspace?.failed, ["worktree /work/demo.worktrees/rc-fix-ci and branch rc/fix-ci remain: locked"]);
+	assert.equal(workspace?.forgotten, false);
+	assert.ok(stored(h, session));
+
+	const text = renderCleanup(workspace!);
+	assert.match(text, /^Could not remove the workspace of fix-ci\.\nKept:[\s\S]*Failed:\n• worktree .* remain: locked$/);
 });

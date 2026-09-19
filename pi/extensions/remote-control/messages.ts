@@ -128,14 +128,16 @@ const HELD_MESSAGE_BUDGET = 1000;
 
 /**
  * The one message a session topic gets once Telegram answers again: how long it was
- * unreachable, what the agent is doing now, and the latest `shown` of the messages held
+ * unreachable, what the agent is doing now (undefined once the topic is no longer routed), and the latest `shown` of the messages held
  * meanwhile, each condensed; older ones are only counted.
  */
-export function renderHeldSummary(input: { held: string[]; offlineMs: number; now: string; shown: number }): string {
+export function renderHeldSummary(input: { held: string[]; offlineMs: number; now?: string; shown: number }): string {
 	const { held, shown } = input;
 	const left = held.length - shown;
 	const lines = [
-		`🔌 Telegram was unreachable for about ${formatDuration(input.offlineMs)}; this agent kept running. Now: ${input.now}.`,
+		input.now === undefined
+			? `🔌 Telegram was unreachable for about ${formatDuration(input.offlineMs)}; meanwhile this topic stopped being routed to a Pi.`
+			: `🔌 Telegram was unreachable for about ${formatDuration(input.offlineMs)}; this agent kept running. Now: ${input.now}.`,
 		left > 0
 			? `${held.length} messages were held; the latest ${shown} follow (${left} earlier message${left === 1 ? "" : "s"} left out, in the Pi session):`
 			: `Held while it was unreachable:`,
