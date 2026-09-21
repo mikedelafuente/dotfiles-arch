@@ -13,8 +13,10 @@ shorthand for the whole workflow, not a literal `git merge`:
 4. Open a pull request.
 5. Merge the pull request.
 
-After the merge, follow the usual cleanup: delete both the local and remote branch and
-check out `main`.
+After the merge, follow the usual cleanup: delete both the local and remote branch,
+check out `main`, and remove any clean, merged linked worktree created for the branch.
+Verify `git status --short --branch` and `git worktree list` show only the intended
+clean checkout before reporting completion.
 
 Still confirm before any destructive or hard-to-reverse step (force-push, skipping hooks,
 etc.) per standard git safety practice — this shorthand covers *what* the request means,
