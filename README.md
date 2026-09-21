@@ -126,10 +126,12 @@ With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only r
 
 Shared Pi configuration lives under [`pi/`](pi/) and is linked into `~/.pi/agent` by
 `link-dotfiles.sh` (settings and model configuration). Pi extensions, including the
-[remote control](pi/extensions/remote-control/), are synced from `pi/extensions/` plus
-configured extra sources by `dfa-sync-extensions`. Pi's machine-local credentials and
-runtime model catalog — `auth.json` and `models-store.json` — remain local; the model
-store is not symlinked because Pi updates its timestamps. Global `AGENTS.md` is generated from the
+[remote control](pi/extensions/), are synced from `pi/extensions/` plus
+configured extra sources by `dfa-sync-extensions`. See the [remote-control operator
+guide](pi/extensions/remote-control/README.md) for setup and operation. Pi's machine-local
+credentials and
+runtime model catalog — `auth.json` and `models-store.json` — remain local; the model store is
+not symlinked because Pi updates its timestamps. Global `AGENTS.md` is generated from the
 repository's synced rules and linked by `sync-rules.sh`.
 
 ---

@@ -16,6 +16,32 @@
 | `/rc login` | Link a BotFather token, the owner, and a private forum group |
 | `/rc logout` | Stop the bridge and delete local credentials |
 
+## Operator quick start
+
+1. Create a bot with @BotFather, create a private forum group with Topics
+   enabled, and make the bot an administrator with Manage Topics.
+2. In the local Pi UI, run `/rc login`, paste the BotFather token, then send
+   the displayed one-time code to the group as `/rc_login <code>`.
+3. Run `/rc` (or `/rc start`) locally. Inside a Git repository this registers
+   the repository and exposes the current conversation; use `/rc new <name>`
+   for an isolated agent session.
+4. Work from the matching Telegram session topic. Use `/rc status` or
+   `/rc sessions` from the control topic to check bridge and agent health.
+
+The bridge is temporary: `/rc stop` stops Telegram polling but leaves agents
+running, while `/rc logout` also removes local credentials. If Telegram or the
+network goes away, agents keep working and topic results are summarized when
+the connection returns. A revoked token or a second poller stops the bridge;
+fix the cause locally and start it again, or run `/rc login` to replace the
+credentials.
+
+Cleanup is deliberately separate and confirmed at every step: `/rc archive`
+closes a topic while keeping its history and workspace, `/rc cleanup history`
+removes conversation history, and `/rc cleanup workspace` removes a clean,
+merged worktree and branch. Use `--abandon` or `--force` only when you
+explicitly intend the corresponding destructive action. A session becoming
+idle never cleans anything up automatically.
+
 ### Login
 
 `/rc login` runs only in the local Pi UI, so credentials never pass through an
