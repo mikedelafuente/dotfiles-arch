@@ -16,3 +16,8 @@ skills/
 `scripts/sync-skills.sh` (run automatically by `dfa-sync-dotfiles`/`bootstrap.sh`, and daily via `dfa-daily`) symlinks each folder here into `~/.claude/skills/<name>` and `~/.cursor/skills/<name>`, and removes the symlink again once the folder is deleted from its source repo or the repo is unlisted. dotfiles-arch is always synced first; register extra repos with `dfa-sync-sources add /path/to/repo` (later sources override on name collision). It never touches anything else already in those directories — only managed symlinks under `{source}/skills/`.
 
 Run it manually with `dfa-sync-skills`.
+
+Use `$implement-ready-tickets` to start a persistent goal to implement and squash-merge the initial open
+`ready-for-agent` queue sequentially, with TDD, Standards and Spec reviews, and a durable
+progress record. It requires the mattpocock implement, tdd, and code-review skills.
+See [the workflow](implement-ready-tickets/SKILL.md).
