@@ -257,12 +257,108 @@ cmd_reorder() {
   done
 }
 
+cmd_manage() {
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    print_error_message "manage requires an interactive terminal; use list/add/remove instead"
+    return 1
+  fi
+
+  local action raw choice type i step failed
+  while true; do
+    cmd_list
+    cat <<'EOF'
+
+  1) Add a source directory
+  2) Remove a source (keeps its files on disk)
+  3) Reorder source priority
+  4) Apply changes: sync skills, rules, and extensions
+  q) Done
+EOF
+    read -rp 'Choose [1-4, Enter to exit]: ' action || return 0
+    case "$action" in
+      1)
+        print_info_message "Use a local clone or directory; clone remote repos first."
+        read -rp 'Source path (blank cancels): ' raw || return 0
+        [[ -n "$raw" ]] || continue
+        # read does not expand a typed ~/ path; expand only that prefix,
+        # never evaluate shell input.
+        # shellcheck disable=SC2088 # literal tilde prefix entered at the prompt
+        case "$raw" in
+          '~') raw="$USER_HOME_DIR" ;;
+          '~/'*) raw="$USER_HOME_DIR/${raw:2}" ;;
+        esac
+        cat <<'EOF'
+  1) standard — repo with skills/, rules/, or extensions/ subfolders
+  2) skills-root — directory containing skill folders directly
+  3) rules-root — directory containing rule files directly
+  4) extensions-root — directory containing Pi extensions directly
+EOF
+        read -rp 'Source type [1, blank defaults to standard; q cancels]: ' choice || return 0
+        case "$choice" in
+          1|'') type=standard ;;
+          2) type=skills-root ;;
+          3) type=rules-root ;;
+          4) type=extensions-root ;;
+          q) continue ;;
+          *) print_warning_message "Choose a source type from 1 to 4."; continue ;;
+        esac
+        cmd_add "$raw" --type "$type"
+        ;;
+      2)
+        _read_sync_source_repo_lines
+        if [[ ${#SYNC_SOURCE_REPO_LINES[@]} -eq 0 ]]; then
+          print_info_message "No extra sources to remove."
+          continue
+        fi
+        for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
+          printf '  %d) [%s] %s\n' "$((i + 1))" "${SYNC_SOURCE_REPO_LINE_TYPES[$i]}" "${SYNC_SOURCE_REPO_LINES[$i]}"
+        done
+        read -rp 'Remove source number (blank cancels): ' choice || return 0
+        [[ -n "$choice" ]] || continue
+        # Compare strings instead of evaluating user input as arithmetic.
+        raw=""
+        for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
+          if [[ "$choice" == "$((i + 1))" ]]; then
+            raw="${SYNC_SOURCE_REPO_LINES[$i]}"
+            type="${SYNC_SOURCE_REPO_LINE_TYPES[$i]}"
+            break
+          fi
+        done
+        if [[ -z "$raw" ]]; then
+          print_warning_message "Choose one of the listed source numbers."
+          continue
+        fi
+        cmd_remove "$raw" --type "$type"
+        ;;
+      3) cmd_reorder ;;
+      4)
+        failed=0
+        for step in sync-skills sync-rules sync-extensions; do
+          if ! bash "$DF_SCRIPT_DIR/$step.sh"; then
+            print_error_message "Failed: $step"
+            failed=1
+          fi
+        done
+        [[ "$failed" -eq 0 ]] || return 1
+        print_success_message "Sources applied."
+        ;;
+      q|'') return 0 ;;
+      *) print_warning_message "Choose 1-4, or Enter to exit." ;;
+    esac
+  done
+}
+
 usage() {
   cat <<EOF
-Usage: dfa-sync-sources list
+Usage: dfa-sync-sources [manage]
+       dfa-sync-sources list
        dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root]
        dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root|extensions-root]
        dfa-sync-sources reorder
+
+With no arguments, opens the source manager in a terminal (lists sources when
+non-interactive). Add/remove local directories, reorder priority, or apply changes.
+Removing a source keeps the source files on disk.
 
 dotfiles-arch is always synced first; extra sources override on name collision.
 Use 'reorder' to change extra sources' relative priority (bottom of the list
@@ -284,7 +380,13 @@ EOF
 }
 
 case "${1:-}" in
-  list | ls | "")
+  "")
+    if [[ -t 0 && -t 1 ]]; then cmd_manage; else cmd_list; fi
+    ;;
+  manage)
+    cmd_manage
+    ;;
+  list | ls)
     cmd_list
     ;;
   add)
