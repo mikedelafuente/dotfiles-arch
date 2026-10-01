@@ -278,6 +278,8 @@ aliases() {
         echo "║                        🛠️  Installed Tools                                   ║"
         echo "╚══════════════════════════════════════════════════════════════════════════════╝"
         echo ""
+        echo "  dfa: grouped command picker (Routine, AI, Projects, Dotfiles, System)"
+        echo "  dfa sync-sources: add/remove AI sources, reorder priority, apply changes"
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"
         

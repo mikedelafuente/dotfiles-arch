@@ -95,6 +95,7 @@ run_setup setup-spotify.sh
 run_setup setup-obsidian.sh
 run_setup setup-voxtype.sh
 run_setup setup-zed.sh
+run_setup setup-orca.sh
 
 # Additive profile extras (multi-select — all selected profiles are installed)
 if has_setup_profile work; then

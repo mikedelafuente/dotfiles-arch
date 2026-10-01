@@ -159,7 +159,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
 | **Multiplexer** | tmux |
-| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Codex (`codex`), Ollama (local models — NVIDIA or Vulkan GPU only), Zed |
+| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Codex (`codex`), Ollama (local models — NVIDIA or Vulkan GPU only), Zed, [Orca](https://www.onorca.dev/) (`stably-orca`, scanned AUR package `stably-orca-bin`) |
 | **Git** | git, lazygit (`lzg`), GitHub CLI (`gh`) |
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
@@ -250,12 +250,15 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | Command | What it does |
 |---------|----------------|
 | `dev [dir]` | Open the project in Zed |
+| `stably-orca` | Launch Orca; bootstrap/sync installs it, or run `bash scripts/setup-orca.sh` individually |
 | `dev --tmux [dir]` | tmux session instead: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent claude\|codex` to pick the agent) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
 | `lzg` / `lzd` | lazygit / lazydocker |
 | `z` / `zi` | Smart cd (zoxide) |
 | `r` / `dfa-repos` | fzf-pick a repo under `~/repos` and cd into it |
+| `dfa` | Command picker grouped into Routine, AI, Projects, Dotfiles, and System; search `AI` or `sources` to find AI configuration tools (`dfa list` prints the groups) |
+| `dfa sync-sources` | Interactive manager for local rules, skills, and extensions sources: add, remove, reorder, and apply changes. Removing a source keeps its files; `dfa sync-sources list` lists without prompts |
 | `pbcopy` / `pbpaste` | Wayland clipboard in/out |
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |

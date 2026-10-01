@@ -22,7 +22,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `xsel` | X11 clipboard fallback (XWayland apps) | `xsel` |
 | `eza` | Modern `ls` with icons | `ls`, `ll`, `la`, `l`, `lt` |
 | `starship` | Shell prompt (Catppuccin) | prompt; config `~/.config/starship.toml` |
-| `fzf` | Fuzzy finder | Ctrl-R history, Ctrl-T files, Alt-C cd, `dfa-repos`, `r` |
+| `fzf` | Fuzzy finder | Ctrl-R history, Ctrl-T files, Alt-C cd, grouped `dfa` command picker, `dfa-repos`, `r` |
 | `ripgrep` | Fast recursive search | `rg`; also used by AUR IoC scans |
 | `fd` | Fast `find` replacement | `fd`; backs `FZF_DEFAULT_COMMAND` |
 | `bat` | Syntax-highlighted pager | `welcome`, `packages`, `vimcheat`, `MANPAGER` |
@@ -122,6 +122,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
 | `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
 | `zed` | `setup-zed.sh` | Code editor |
+| `stably-orca-bin` (AUR) | `setup-orca.sh` | [Orca](https://www.onorca.dev/), an IDE for parallel coding agents; launch with `stably-orca` (the `orca` package is the GNOME screen reader) |
 | `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
 
 ## Profile extras
