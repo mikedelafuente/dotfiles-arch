@@ -335,3 +335,13 @@ dotfiles-arch/
 | [AGENTS.md](AGENTS.md) | Shared agent guidance (symlink to `CLAUDE.md`) |
 | `welcome` (in shell) | Alias and tmux quick reference |
 | `vimcheat` | Neovim keybindings |
+
+### Agent council
+
+Ask your agent to use `agent-council` to debate a product idea or recommend answers
+for `/grill-me` or `/grill-with-docs`. Five perspectives compare evidence and
+tradeoffs; human choices stay yours. Simple questions use compact lenses, disputes
+use independent agents with a fixed debate budget. Accepted Q/A can feed
+`/to-spec` and `/to-tickets`; `/bro` explains the answer simply. These are agent
+skill invocations, not shell commands. Install through `dfa-sync-skills`.
+See [examples and limits](skills/agent-council/references/examples.md).
