@@ -44,3 +44,16 @@ Only skills and the rule are installed. Help text describes local sync/manual up
 instead of plugin hooks or auto-updates; gain identifies its historical benchmark.
 The always-apply rule is independent of skill mode switches. Review desired upstream
 updates manually; no upstream checkout or plugin runtime is required.
+
+## Combined workflows
+
+The local Matt Pocock workflows call Ponytail through
+[one shared integration](ponytail/MATT-POCOCK.md). Planning, design, prototypes,
+TDD, implementation, and bug fixes use `ponytail`; Standards review includes
+`ponytail-review`; architecture surveys include `ponytail-audit`. Newly introduced
+or changed shortcut comments trigger `ponytail-debt` before completion.
+
+Delegated agents receive the integration path and current mode preference. Matt's
+required tests, Spec review, reports, and decision checkpoints remain authoritative.
+Skill names and invocation settings are unchanged. These are local adaptations
+of the pinned upstream copies; manually reviewed updates must preserve them.

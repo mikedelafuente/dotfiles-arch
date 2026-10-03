@@ -22,6 +22,10 @@ If you have not already explored the codebase, do so to understand the current s
 
 Look for opportunities to prefactor the code to make the implementation easier. "Make the change easy, then make the easy change."
 
+Before proposing prefactoring or drafting slices, follow
+[Ponytail integration](../ponytail/MATT-POCOCK.md#planning-and-implementation).
+Keep only refactors needed by the accepted scope, while retaining complete slices.
+
 ### 3. Draft vertical slices
 
 Break the work into **tracer bullet** tickets.

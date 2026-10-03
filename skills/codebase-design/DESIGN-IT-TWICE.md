@@ -29,6 +29,10 @@ Prompt each sub-agent with a separate technical brief (file paths, coupling deta
 
 Include both [SKILL.md](SKILL.md) vocabulary and GLOSSARY.md vocabulary in the brief so each sub-agent names things consistently with the architecture language and the project's domain language.
 
+Also pass each agent the resolved [Ponytail integration](../ponytail/MATT-POCOCK.md#planning-and-implementation)
+path and current preference. Apply it within that agent's distinct design constraint;
+retain the requested alternative designs for comparison.
+
 Each sub-agent outputs:
 
 1. Interface (types, methods, params, plus invariants, ordering, error modes)
