@@ -5,3 +5,7 @@ disable-model-invocation: true
 ---
 
 Call the Skill tool twice, for "grilling" and "domain-modeling".
+
+For coding designs, once the relevant facts and constraints are understood, follow
+[Ponytail integration](../ponytail/MATT-POCOCK.md#planning-and-implementation)
+when recommending options. Continue the interview and record the user's decisions.
