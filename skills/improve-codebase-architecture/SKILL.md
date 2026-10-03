@@ -26,7 +26,6 @@ Read the project's domain glossary (`GLOSSARY.md`) and any ADRs in the area you'
 
 Then spawn a sub-agent to walk the codebase. Don't follow rigid heuristics; explore organically and note where you experience friction:
 
-- Give this agent the selected scope, current Ponytail preference, and resolved [Ponytail integration](../ponytail/MATT-POCOCK.md#architecture-survey) path. Have it invoke `ponytail-audit` in that scope and compare simpler alternatives with the deepening opportunities below.
 - Where does understanding one concept require bouncing between many small modules?
 - Where are modules **shallow**, with an interface nearly as complex as the implementation?
 - Where have pure functions been extracted just for testability, but the real bugs hide in how they're called (no **locality**)?
