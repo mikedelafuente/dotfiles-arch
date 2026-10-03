@@ -183,3 +183,13 @@ the rest of the host checklist (tools, DNS, watches, CA trust).
 - [README.md](README.md) — setup and daily flows
 - [REFRESHER.md](REFRESHER.md) — keyboard shortcuts and short memory jogger
 - [home/.welcome.md](home/.welcome.md) — the `welcome` cheat sheet
+
+### Shared agent skill: council
+
+`agent-council` is a repository skill, requiring no additional package. Existing
+Claude Code, Codex, opencode (when configured for these skills), and Pi harnesses
+can use five product/engineering perspectives and bounded debate. Distribute
+through `dfa-sync-skills` (Claude/Cursor/detected Codex/Pi). Ask `/grill-me` or
+`/grill-with-docs` for council recommendations, carry accepted Q/A to `/to-spec`
+or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
+agent prompts, not shell commands. See [examples](skills/agent-council/references/examples.md).

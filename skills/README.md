@@ -53,8 +53,8 @@ Ponytail calls the standard review path after implementation and required checks
 If a Matt Pocock workflow already schedules final review, it owns that call.
 `code-review` only delegates. `adversarial-code-review` owns Matt's fixed-point
 validation, originating-spec discovery, full Fowler smell baseline, independent
-Standards/Spec review, separate reports, and per-axis summary. Other Matt Pocock
-skills retain their pinned upstream contents.
+Standards/Spec review, separate reports, and per-axis summary. The council integration below also extends `grilling`, `to-spec`, and
+`to-tickets`; other Matt Pocock skills retain their pinned upstream contents.
 
 [adversarial-code-review](adversarial-code-review/SKILL.md) owns the single pair of
 independent reviewers. Standards adds the Ponytail complexity pass (or
@@ -70,3 +70,14 @@ comparison points prompt for a fixed point. Confirmed absence of a spec skips
 specification conformance; added adversarial correctness checks continue separately.
 Whole-repository audits require an explicit request. Ponytail can be turned off for the review;
 repository rules and required tests still apply.
+
+## Product council
+
+[agent-council](agent-council/SKILL.md) adds five product and engineering
+perspectives for any project. Simple questions use five compact lenses; disputed
+questions use independent agents with bounded challenge and convergence.
+`/grill-me` and `/grill-with-docs` can request council-backed recommendations
+while retaining real human answers. Accepted records carry into `/to-spec` and
+`/to-tickets`; unresolved material choices remain explicit. `/bro` re-explains
+the human summary. See [invocations and limits](agent-council/references/examples.md).
+No new shell command, package, or upstream checkout is required.

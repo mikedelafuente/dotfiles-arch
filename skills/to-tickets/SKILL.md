@@ -10,6 +10,14 @@ Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet ver
 
 The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
+If the input includes an agent-council record, retain actual accepted Q/A,
+constraints, non-goals, evidence, tradeoffs, assumptions, and dissent. Separate
+proposals from user decisions. Material unresolved choices block an
+implementation-ready result; surface them and draft conditional alternatives
+without inventing answers. Preserve the checkpoints below. A council record
+itself authorizes no external publication; honor the user's requested destination
+and action scope before publishing.
+
 ## Process
 
 ### 1. Gather context

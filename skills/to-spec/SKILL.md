@@ -8,6 +8,14 @@ This skill takes the current conversation context and codebase understanding and
 
 The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
+If the input includes an agent-council record, retain actual accepted Q/A,
+constraints, non-goals, evidence, tradeoffs, assumptions, and dissent. Separate
+proposals from user decisions. Material unresolved choices block an
+implementation-ready result; surface them and draft conditional alternatives
+without inventing answers. Preserve the checkpoints below. A council record
+itself authorizes no external publication; honor the user's requested destination
+and action scope before publishing.
+
 ## Process
 
 1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
