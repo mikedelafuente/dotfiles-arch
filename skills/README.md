@@ -45,15 +45,28 @@ instead of plugin hooks or auto-updates; gain identifies its historical benchmar
 The always-apply rule is independent of skill mode switches. Review desired upstream
 updates manually; no upstream checkout or plugin runtime is required.
 
-## Combined workflows
+## Combined review workflow
 
-The local Matt Pocock workflows call Ponytail through
-[one shared integration](ponytail/MATT-POCOCK.md). Planning, design, prototypes,
-TDD, implementation, and bug fixes use `ponytail`; Standards review includes
-`ponytail-review`; architecture surveys include `ponytail-audit`. Newly introduced
-or changed shortcut comments trigger `ponytail-debt` before completion.
+`ponytail → code-review → adversarial-code-review → ponytail-review`
 
-Delegated agents receive the integration path and current mode preference. Matt's
-required tests, Spec review, reports, and decision checkpoints remain authoritative.
-Skill names and invocation settings are unchanged. These are local adaptations
-of the pinned upstream copies; manually reviewed updates must preserve them.
+Ponytail calls the standard review path after implementation and required checks.
+If a Matt Pocock workflow already schedules final review, it owns that call.
+`code-review` only delegates. `adversarial-code-review` owns Matt's fixed-point
+validation, originating-spec discovery, full Fowler smell baseline, independent
+Standards/Spec review, separate reports, and per-axis summary. Other Matt Pocock
+skills retain their pinned upstream contents.
+
+[adversarial-code-review](adversarial-code-review/SKILL.md) owns the single pair of
+independent reviewers. Standards adds the Ponytail complexity pass (or
+`ponytail-audit` for an explicit codebase audit); Spec independently checks behavior
+and requirements. The complexity passes are leaves and return findings without
+calling another coordinator. Reviewers execute their assigned role without
+starting another pair. This keeps review calls one-way.
+
+The adversarial skill generalizes the Trellis review by discovering the target
+repository's language, API, testing, architecture, and compatibility policies.
+Committed and working changes share one baseline and coverage inventory. Missing
+comparison points prompt for a fixed point. Confirmed absence of a spec skips
+specification conformance; added adversarial correctness checks continue separately.
+Whole-repository audits require an explicit request. Ponytail can be turned off for the review;
+repository rules and required tests still apply.

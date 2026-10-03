@@ -63,6 +63,21 @@ every sibling caller still broken. Fix it once, where all callers route through.
 - Two stdlib options, same size? Take the one that's correct on edge cases. Lazy means writing less code, not picking the flimsier algorithm.
 - Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a `ponytail:` comment naming the ceiling and upgrade path (`# ponytail: global lock, per-account locks if throughput matters`).
 
+## Review completed changes
+
+After completing implementation and its required checks, invoke
+[code-review](../code-review/SKILL.md) on the completed changes, passing the
+comparison point, scope, spec references, and selected intensity. Use the harness's
+skill tool, or read the linked skill and follow it. That path retains Matt Pocock's
+Standards/Spec review and smell baseline, delegates adversarial review, and includes
+the Ponytail complexity pass.
+
+If the calling workflow already owns final review, let it invoke that path once.
+During an active review, apply the ladder as guidance and return findings to its
+coordinator; do not start another review. A requested complexity-only review uses
+the corresponding leaf skill directly. Keep the caller's required tests, decision
+checkpoints, and report format; the minimum check below supplements those duties.
+
 ## Output
 
 Code first. Then at most three short lines: what was skipped, when to add it.

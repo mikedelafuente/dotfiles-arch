@@ -40,6 +40,8 @@ End with `net: -<N> lines, -<M> deps possible.` Nothing to cut: `Lean already. S
 ## Boundaries
 
 Scope: over-engineering and complexity only. Correctness bugs, security holes,
-and performance are explicitly out of scope. Route them to a normal review
-pass. Lists findings, applies nothing. One-shot.
+and performance are explicitly out of scope. Surface such concerns to the caller
+without starting another audit. When standalone, suggest a separate correctness
+audit for the user to request. This is a leaf pass: return findings, invoke no
+other review skill, and spawn no reviewers. Lists findings, applies nothing. One-shot.
 "stop ponytail-audit" or "normal mode" to revert.
