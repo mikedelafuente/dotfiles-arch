@@ -32,3 +32,15 @@ extra sync sources: later sources override these local copies. Remove existing
 registrations with `dfa-sync-sources remove <folder> --type skills-root`, then run
 `dfa-sync-skills` to point installed skills at this repo. The upstream checkout
 can then be removed without breaking these skills.
+
+## Vendored Ponytail skills
+
+Six skills from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail),
+version 4.10.3, commit `c982cd411abb53323c4baa1baa3c2f020b8d0b08`, are regular files here with
+upstream MIT licenses: `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`,
+`ponytail-gain`, and `ponytail-help`. The shared rule lives in `rules/ponytail.mdc`.
+
+Only skills and the rule are installed. Help text describes local sync/manual updates
+instead of plugin hooks or auto-updates; gain identifies its historical benchmark.
+The always-apply rule is independent of skill mode switches. Review desired upstream
+updates manually; no upstream checkout or plugin runtime is required.

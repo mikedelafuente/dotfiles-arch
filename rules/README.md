@@ -29,3 +29,13 @@ once its source rule/import disappears. dotfiles-arch is always synced first; re
 repos with `dfa-sync-sources add /path/to/repo` (later sources override on name collision).
 
 Run it manually with `dfa-sync-rules`.
+
+## Vendored Ponytail rule
+
+`ponytail.mdc` is the upstream always-apply simplification rule from
+[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail), version 4.10.3,
+commit `c982cd411abb53323c4baa1baa3c2f020b8d0b08`. Its MIT license is `LICENSE.ponytail`.
+The existing rule sync distributes it to Cursor, Claude, detected Codex, and Pi.
+Maintain it here with manually reviewed updates. Skill mode switches do not disable
+this rule; remove it or set `alwaysApply: false` and run `dfa-sync-rules` to stop its
+always-on guidance.
