@@ -188,7 +188,10 @@ the rest of the host checklist (tools, DNS, watches, CA trust).
 
 `agent-council` is a repository skill, requiring no additional package. Existing
 Claude Code, Codex, opencode (when configured for these skills), and Pi harnesses
-can use five product/engineering perspectives and bounded debate. Distribute
+can engage relevant product/engineering roles with distinct responsibilities,
+BA-led domain research, TPM-led integration research, and bounded debate. Research
+checks existing findings first and is saved in `docs/market-research/` by default
+unless explicitly told not to store it. Distribute
 through `dfa-sync-skills` (Claude/Cursor/detected Codex/Pi). Ask `/grill-me` or
 `/grill-with-docs` for council recommendations, carry accepted Q/A to `/to-spec`
 or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are

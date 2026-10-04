@@ -11,7 +11,19 @@ Claude/Cursor/Codex/Pi mechanism; a harness may need a new session to discover i
   Compare a shared calendar with a custom app.” Works without any project adapter.
 - **Simple:** “Use agent-council: should a read-only CSV export of at most 200
   rows run synchronously? Existing endpoint responds in 100 ms, same authorization
-  as the page; no scheduling needed.” Five single-agent lenses and one cross-check.
+  as the page; no scheduling needed.” SE alone checks existing code and standards,
+  with one strongest-alternative cross-check. Add SA only if structural concerns emerge.
+- **Research:** “Use agent-council to compare maintained booking tools for our
+  volunteers and their fit with our three-year plan.” BA checks existing project
+  research, fills material gaps about options/workflows, and supplies findings for
+  the coordinator to save in `docs/market-research/` unless explicitly told not to;
+  PM evaluates strategic fit. Engage technical roles only if a technical constraint
+  becomes material.
+- **Integration:** “Use agent-council: can our scheduling service synchronize
+  with an external calendar?” TPM checks saved integration research for sufficient,
+  current evidence before looking up gaps in official integration documentation;
+  SE checks existing adapters and standards. Add SA for material design choices,
+  BA for unclear synchronization business rules, PM for roadmap tradeoffs.
 - **Disputed:** “Use independent agent-council perspectives: shared versus dedicated
   databases for a volunteer scheduling service. A sponsor wants low operating cost;
   one customer asks for isolation; no contractual requirement has been confirmed.”
@@ -28,6 +40,10 @@ Claude/Cursor/Codex/Pi mechanism; a harness may need a new session to discover i
   Draft slices from that spec; keep publication local.” Honor each skill's checkpoints.
 - **Plain explanation:** `/bro` after an answer re-explains it; it does not rerun
   the council, change decisions, fetch evidence, or write files.
+
+Participation follows the question: use the smallest relevant set, reassess it
+for each new grilling frontier, and give each research question one owner. Omitted
+roles are intentional; a failed selected role is missing coverage.
 
 Limits: role diversity does not prove correctness; source quality and independent
 validation matter. Simple mode trades agent independence for cost. Disputed mode

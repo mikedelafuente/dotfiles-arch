@@ -14,10 +14,15 @@ just to make the summary shorter.
 ## Detailed agent output (`agent-output.md`)
 
 - **Brief:** exact user question(s), project/context, constraints/non-goals,
-  chosen route, actual model/effort if known, delegation limitations and budget used.
+  chosen route, selected roles and their questions, omitted roles with reasons,
+  actual model/effort if known, delegation limitations and budget used.
 - **Evidence:** stable IDs E1, E2, … with source path/section or URL, relevant
-  fact, and freshness/contradiction notes. Label supplied assertions and assumptions.
-- **Initial positions:** five attributed assessments, written before debate;
+  fact, research owner, and freshness/contradiction notes. For web research include
+  access dates and relevant versions. Label supplied assertions and assumptions.
+  Record research locations checked, whether existing findings were sufficient,
+  gaps requiring new research, and saved paths under `docs/market-research/`
+  (or an explicit storage opt-out or persistence limitation).
+- **Initial positions:** one attributed assessment per selected role, written before debate;
   answer, evidence IDs, alternative, assumption, risk, change condition, human choice.
 - **Challenges:** contested claim, challenger/respondent, evidence/counterexample,
   retained/revised answer and concise reason. Include the strongest-alternative
