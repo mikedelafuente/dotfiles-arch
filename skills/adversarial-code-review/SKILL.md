@@ -132,13 +132,18 @@ include the spec path or fetched contents in the Spec prompt:
   style checks. Cite local rules and distinguish requirements from recommendations.
   Apply every Fowler baseline smell as a judgement call. When Ponytail
   is enabled (the default unless the user turned it off), invoke the leaf
-  [ponytail-review](../ponytail-review/SKILL.md) on the same pinned changes, or
+  [ponytail-review](../ponytail-review/SKILL.md) once on the same pinned scope and
+  content inventory, including working and untracked changes, or
   [ponytail-audit](../ponytail-audit/SKILL.md) for an explicit codebase audit.
-  Use the harness's skill tool or read the linked skill and follow it. Deduplicate
-  complexity findings with other smells, keeping them optional unless they violate
-  a governing requirement. Repository rules, accepted requirements, security, and
-  necessary tests take precedence over simplification suggestions. Return findings
-  to this coordinator after the leaf pass; its one-shot ending ends only that pass.
+  Include the resolved leaf skill path in the Standards prompt. Use the harness's
+  skill tool or read the linked skill and follow it. Return its tagged findings
+  and net line-reduction estimate, or its clean result, to the coordinator.
+  Deduplicate complexity findings with other smells, keeping them optional unless
+  they violate a governing requirement. Repository rules, accepted requirements,
+  security, and necessary tests take precedence over simplification suggestions.
+  Surface any correctness/security concerns from the leaf to the coordinator for
+  reconciliation with Spec. Return after the leaf pass; its one-shot ending ends
+  only that pass, and it starts no other review or reviewers.
 - **Spec:** explicitly check (a) missing or partially implemented requirements,
   (b) behavior not requested by the spec (scope creep), and (c) requirements that
   appear implemented but behave incorrectly. Quote the supporting spec passage
@@ -188,6 +193,12 @@ cleaned. Preserve each axis's findings, attribution, and count. Do not merge or
 rerank findings across axes or choose a single worst issue across both; the axes
 are deliberately separate. Investigate disagreements and cross-reference overlap
 without letting one axis's result hide the other's.
+
+Within Standards, retain a Ponytail subsection with the leaf's tagged findings
+and summary (`net: -<N> lines possible.` or `Lean already. Ship.` for diff reviews).
+Cross-reference overlapping findings instead of counting them twice. Record a
+user-disabled pass as skipped; an unavailable or unfinished pass is unverified,
+never a clean result. A clean complexity pass does not end the Standards/Spec review.
 
 Include a short remediation plan within each axis, assessed scope, coverage matrix,
 applicable API dispositions, complexity hot spots, and unresolved uncertainties.
