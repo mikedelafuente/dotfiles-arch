@@ -65,14 +65,16 @@ every sibling caller still broken. Fix it once, where all callers route through.
 
 ## Review completed changes
 
-After completing implementation and its required checks, invoke
+After completing all planned implementation, test additions, and required checks,
+invoke once per parent task
 [code-review](../code-review/SKILL.md) on the completed changes, passing the
 comparison point, scope, spec references, and selected intensity. Use the harness's
 skill tool, or read the linked skill and follow it. That path retains Matt Pocock's
 Standards/Spec review and smell baseline, delegates adversarial review, and includes
 the Ponytail complexity pass.
 
-If the calling workflow already owns final review, let it invoke that path once.
+If the calling workflow already owns final review, including an integration
+workflow coordinating implementers, let it invoke that path once. Reuse its results.
 During an active review, apply the ladder as guidance and return findings to its
 coordinator; do not start another review. A requested complexity-only review uses
 the corresponding leaf skill directly. Keep the caller's required tests, decision
