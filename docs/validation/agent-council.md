@@ -189,3 +189,42 @@ This registered snapshot overrides main for these four skills during future sync
 Retain it until the changes are approved and incorporated into main; its
 `INSTALLATION.md` documents retirement and returning links to main. No commit,
 push, merge, issue publication, extra package, or project implementation occurred.
+
+## Grilling/advising split — 2026-10-03
+
+The later split supersedes the grilling integration above. `grilling`, `grill-me`,
+and `grill-with-docs` now use the coordinator's own recommendations. `advising` reuses
+the interview contract and adds automatic council recommendations; `advise-me`
+and `advise-with-docs` are its entrypoints. The docs variants retain domain-modeling
+and record accepted decisions, while council proposals remain proposals.
+
+Independent Standards and Spec reviewers inspected the changed skills, wrappers,
+metadata, references, and user docs against `d2e07b9d11dc0ee22d880610e968c836688ae568`;
+neither found actionable issues. Scenario inspection covered ordinary grilling,
+new/unchanged frontiers, partial answers, budget exhaustion, docs acceptance,
+and standalone council. These were semantic reviews, not live model runs.
+
+Pi's installed native `loadSkillsFromDir` and `formatSkillsForPrompt`, plus its
+existing YAML parser, validated all seven changed/new skills: discovery without
+diagnostics, names, explicit wrapper policy, metadata, relative references, and
+prompt inclusion. The bundled skill-creator validator could not run because
+PyYAML was unavailable; native loader validation supplied the check without a
+dependency install. `bash -n home/.bashrc` and `git diff --check` passed.
+
+The registered stable snapshot was updated for these seven skills and linked
+into Claude, Cursor, Codex, and Pi. All source files matched the repository;
+discovery/policy/reference checks passed for the snapshot and all four installed
+directories. Unrelated skill entry identities were unchanged, including to-spec
+and to-tickets. A sibling `domain-modeling` symlink resolves docs references to
+the primary repository; the sync helper's real-directory selection excludes it
+from overrides. No installed link points into this worktree. Existing snapshot
+files were backed up under `/tmp/advising-skills-backup-4y0icnr6`.
+
+Fresh live model execution and token savings were not measured. Cached skill
+catalogs require a new session, or `/reload` in Pi. No commit, push, merge, or
+publication occurred.
+
+Before merge, the original grilling wrappers and fact-finding delegation were
+retained. The split removes council recommendations from grilling, while
+discoverable facts can still be researched by a subagent. User docs reflect that
+distinction; the initial local installation above describes the earlier snapshot.

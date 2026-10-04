@@ -1,0 +1,3 @@
+interface:
+  display_name: "Advising"
+  short_description: "Recommend answers through the agent council"

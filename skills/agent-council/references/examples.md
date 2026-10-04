@@ -28,9 +28,12 @@ Claude/Cursor/Codex/Pi mechanism; a harness may need a new session to discover i
   databases for a volunteer scheduling service. A sponsor wants low operating cost;
   one customer asks for isolation; no contractual requirement has been confirmed.”
   Inspect actual evidence, debate isolation/cost, expose contractual choice.
-- **Grilling:** “/grill-me Use agent-council to recommend answers for the current
-  frontier about a study-group matching idea; ask me the remaining choices.”
-- **With docs:** “/grill-with-docs Use agent-council with docs/brief.md and our
+- **Interview:** “/grill-me Sharpen a study-group matching idea; ask me the
+  remaining choices.” The coordinator supplies recommendations; fact-finding
+  follows grilling's existing delegation.
+- **Advising:** “/advise-me Recommend answers for a study-group matching idea;
+  ask me the remaining choices.” Council recommendations run for each frontier.
+- **With docs:** “/advise-with-docs Advise on docs/brief.md using our
   glossary. Keep my real answers; record accepted terms as they resolve.”
 - **Existing Q/A:** “Use agent-council: Q1 Should we offer email reminders?
   Q2 How long should we keep addresses? My answer to Q1 is yes, opt-in only.”
@@ -42,7 +45,7 @@ Claude/Cursor/Codex/Pi mechanism; a harness may need a new session to discover i
   the council, change decisions, fetch evidence, or write files.
 
 Participation follows the question: use the smallest relevant set, reassess it
-for each new grilling frontier, and give each research question one owner. Omitted
+for each new advising frontier, and give each research question one owner. Omitted
 roles are intentional; a failed selected role is missing coverage.
 
 Limits: role diversity does not prove correctness; source quality and independent

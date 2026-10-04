@@ -1,0 +1,5 @@
+interface:
+  display_name: "Advise with Docs"
+  short_description: "Advise on a design and record accepted decisions"
+policy:
+  allow_implicit_invocation: false
