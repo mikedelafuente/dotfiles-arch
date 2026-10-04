@@ -90,3 +90,14 @@ decisions through `domain-modeling`. Accepted records carry into `/to-spec` and
 `/to-tickets`; unresolved material choices remain explicit. `/bro` re-explains
 the human summary. See [invocations and limits](agent-council/references/examples.md).
 No new shell command, package, or upstream checkout is required.
+
+## Portable cloud installation
+
+With dotfiles-arch available as a separate cloud checkout, run
+`bash /path/to/dotfiles-arch/scripts/install-cloud-agent-config.sh --home "$HOME"`.
+This links all complete skill folders into the cloud user's `.agents/skills`,
+including current council/advising dependencies, and compiles the shared always-on
+rule baseline into global Codex `AGENTS.md`. Skill definitions remain here.
+No workstation package/config setup or laptop sync-source registrations are used.
+Keep the checkout available for the task. See [cloud setup](../README.md#shared-agent-config-in-cloud-checkouts)
+for precedence, collision handling, requirements, and fresh-task verification.

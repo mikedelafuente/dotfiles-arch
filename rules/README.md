@@ -39,3 +39,14 @@ The existing rule sync distributes it to Cursor, Claude, detected Codex, and Pi.
 Maintain it here with manually reviewed updates. Skill mode switches do not disable
 this rule; remove it or set `alwaysApply: false` and run `dfa-sync-rules` to stop its
 always-on guidance.
+
+## Portable cloud baseline
+
+`bash scripts/install-cloud-agent-config.sh --home "$HOME"` in a cloud dotfiles
+checkout assembles the same `alwaysApply: true` bodies, using the existing rule
+readers, into a managed block in global `$CODEX_HOME/AGENTS.md` (default
+`<home>/.codex/AGENTS.md`). It does not assume Codex loads `.mdc` files directly.
+Other project instructions remain separate and load after that global baseline.
+Conditional rules are not promoted to unconditional guidance. This installer does
+not copy dotfiles-arch's Arch-specific root `AGENTS.md` or `.cursor/rules/` into
+another project; see [cloud setup](../README.md#shared-agent-config-in-cloud-checkouts).

@@ -199,3 +199,11 @@ use the council through `advising`. The `with-docs` variants record accepted
 terms/decisions in glossary/ADRs. Carry accepted Q/A to `/to-spec`
 or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
 agent prompts, not shell commands. See [examples](skills/agent-council/references/examples.md).
+
+### Cloud agent config (no additional packages)
+
+`bash scripts/install-cloud-agent-config.sh --home "$HOME"` distributes this
+checkout's shared skills and flattened global rule baseline to a cloud user's
+agent directories. Requires existing Bash, Python 3.8+, and ordinary shell
+utilities; installs no Arch packages, agent CLIs, or desktop configuration.
+See [cloud setup](README.md#shared-agent-config-in-cloud-checkouts).

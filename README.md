@@ -351,3 +351,43 @@ skill invocations, not shell commands. Install through `dfa-sync-skills`.
 BA and TPM check existing research first; project councils save reusable findings
 in `docs/market-research/` by default unless explicitly told not to store research.
 See [examples and limits](skills/agent-council/references/examples.md).
+
+### Shared agent config in cloud checkouts
+
+Keep this repository as a second checkout (for example `/workspace/dotfiles-arch`)
+next to the working project. Add this command to the existing cloud setup script,
+keeping the project's existing setup commands:
+
+```bash
+bash /workspace/dotfiles-arch/scripts/install-cloud-agent-config.sh --home "$HOME"
+```
+
+Requires Bash, Python 3.8+, and ordinary shell utilities (`awk`, `mktemp`, `whoami`);
+no Arch packages, sudo, network calls, desktop config, or agent CLI installation.
+The checkout must remain available during the task. The installer derives source
+paths from its own checkout and links complete skill folders into
+`<home>/.agents/skills`; no laptop paths or Trellis skill copies are used.
+It reads only this checkout, not the laptop's extra sync sources.
+
+Shared `rules/` files with `alwaysApply: true` are flattened through the existing
+rule field/body readers into a managed block in `$CODEX_HOME/AGENTS.md` (default
+`<home>/.codex/AGENTS.md`). Conditional rules and `rules/README.md` are excluded.
+This is the shared global baseline used by workstation rule sync; the repository's
+root `AGENTS.md`/`CLAUDE.md` describes Arch setup and is not a project-agnostic
+baseline. Neither that file nor `.cursor/rules/` is copied into the working project.
+Existing text outside the managed block and project `AGENTS.md` files stay intact.
+Reruns update the block and prune only removed skills owned by this checkout.
+Unrelated skill collisions, global AGENTS symlinks, malformed managed blocks, and
+nonempty global `AGENTS.override.md` fail without replacing user content.
+
+Codex's documented user skill location is `$HOME/.agents/skills`; global
+instructions load before project instructions, with nearer project instructions
+resolving conflicts. [Skill discovery](https://learn.chatgpt.com/docs/build-skills)
+and [AGENTS discovery](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+Start a fresh cloud task after the saved setup is published; an existing task or
+browser refresh does not establish that the setup ran. Verify the actual runtime's
+catalog and loaded global/project instruction sources; local filesystem tests do
+not prove cloud discovery. If the environment changes `HOME`/`CODEX_HOME` between
+setup and task launch, use the task's actual home values for installation.
+
+Local regression check: `python3 tests/test_cloud_agent_config.py`.
