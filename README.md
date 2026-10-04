@@ -338,8 +338,10 @@ dotfiles-arch/
 
 ### Agent council
 
-Ask your agent to use `agent-council` to debate a product idea or recommend answers
-for `/grill-me` or `/grill-with-docs`. Only relevant roles compare evidence and
+Use `/grill-me` or `/grill-with-docs` for a lower-cost interview without the council.
+Use `/advise-me` or `/advise-with-docs` for automatic council recommendations;
+the `with-docs` variants capture resolved terms and accepted decisions in glossary/ADRs.
+Use `agent-council` directly for a standalone debate. Only relevant roles compare evidence and
 tradeoffs: PM owns long-term vision, BA product/domain web research, TPM interoperability
 and integration research, Architect scalable/maintainable design, and Engineer
 existing code and standards. Human choices stay yours. Simple questions use compact

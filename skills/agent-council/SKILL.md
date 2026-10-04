@@ -1,6 +1,6 @@
 ---
 name: agent-council
-description: Evaluate product ideas or design questions with relevant product and engineering roles, scoped research, bounded debate, and explicit human choices. Use when the user requests a council, multi-role product debate, or council recommendations during grill-me or grill-with-docs.
+description: Evaluate product ideas or design questions with relevant product and engineering roles, scoped research, and bounded debate. Use for council requests, multi-role product debate, or recommendations during advising, advise-me, and advise-with-docs.
 ---
 
 # Agent council
@@ -29,7 +29,7 @@ Select the smallest set of roles whose remit could materially change the answer,
 using the table below. Record selected roles and their specific questions; list
 omitted roles with a brief reason, without running assessments for them. One
 role is enough for a narrow question. Honor explicitly requested participants.
-For each new grilling frontier, reassess relevance; add a role only when a new
+For each new advising frontier, reassess relevance; add a role only when a new
 material question enters its remit, within the run's budget.
 
 Choose and disclose the route for those selected roles:
@@ -163,19 +163,21 @@ Q1, Q2, …), with recommendation, evidence, tradeoff, assumption, dissent, and
 status: **proposed**, **accepted by user**, **deferred**, or **blocked**. Never
 turn a council recommendation into an accepted human answer.
 
-When invoked alongside `/grill-me` or `/grill-with-docs`, read the installed
-`grilling` skill (via Skill tool or sibling `../grilling/SKILL.md`) and use its
-actual design-tree frontier, numbered question format, recommended answer, and
-wait-for-human behavior. Evaluate the current frontier only; downstream questions
+During `advising`, including `/advise-me` and `/advise-with-docs`, use the caller's
+loaded design-tree frontier, numbered question format, and wait-for-human behavior.
+When joining an existing interview by explicit request, read
+[advising](../advising/SKILL.md) once for that contract. Return recommendations to
+the same interview; loading its instructions starts no new interview or council.
+Evaluate the current frontier only; downstream questions
 wait until their prerequisites are settled. Put the council's concrete answer in
 each `➡️` recommendation, not an abstract role discussion instead of an answer.
-If the user supplies existing grill questions, preserve their text and numbering.
+If the user supplies existing questions, preserve their text and numbering.
 Ask human-only choices and wait for their real answers; approval never follows
 from elapsed time or a council vote. Budget exhaustion pauses the interview with
 an unresolved frontier; it does not mean shared understanding. Confirmation of
 shared understanding still belongs to the human before action.
 
-`/grill-with-docs` also uses installed `domain-modeling`: record resolved terms
+`/advise-with-docs` also uses installed `domain-modeling`: record resolved terms
 and accepted decisions in the project's established glossary/ADR locations.
 Draft recommendations stay in the council record, not authoritative ADRs. Follow
 that skill's criteria for offering ADRs. Do not create a generic glossary just
@@ -186,7 +188,9 @@ because a council ran.
 Use [the record contract](references/record.md) for two separate outputs: a plain
 human summary and detailed agent record. Keep actual Q/A, evidence, decision
 rationale, and dissent; exclude private reasoning transcripts. By default render
-the summary in chat and the detailed record separately below it. When the user
+the summary in chat and the detailed record separately below it. During advising,
+maintain the record across rounds and deliver both outputs when the interview
+ends or pauses; intermediate rounds use the caller's question format. When the user
 requests saved output, write `summary.md` and `agent-output.md` under an agreed
 project-local location, default `.scratch/council/<topic>/`; never overwrite an
 existing run. Treat recorded sensitive source content with the project's rules.

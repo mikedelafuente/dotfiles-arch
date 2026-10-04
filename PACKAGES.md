@@ -192,7 +192,10 @@ can engage relevant product/engineering roles with distinct responsibilities,
 BA-led domain research, TPM-led integration research, and bounded debate. Research
 checks existing findings first and is saved in `docs/market-research/` by default
 unless explicitly told not to store it. Distribute
-through `dfa-sync-skills` (Claude/Cursor/detected Codex/Pi). Ask `/grill-me` or
-`/grill-with-docs` for council recommendations, carry accepted Q/A to `/to-spec`
+through `dfa-sync-skills` (Claude/Cursor/detected Codex/Pi). `/grill-me` and
+`/grill-with-docs` use the coordinator's own recommendations;
+`/advise-me` and `/advise-with-docs` automatically
+use the council through `advising`. The `with-docs` variants record accepted
+terms/decisions in glossary/ADRs. Carry accepted Q/A to `/to-spec`
 or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
 agent prompts, not shell commands. See [examples](skills/agent-council/references/examples.md).
