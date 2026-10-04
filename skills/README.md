@@ -49,8 +49,11 @@ updates manually; no upstream checkout or plugin runtime is required.
 
 `ponytail → code-review → adversarial-code-review → ponytail-review`
 
-Ponytail calls the standard review path after implementation and required checks.
-If a Matt Pocock workflow already schedules final review, it owns that call.
+Ponytail calls the standard review path once per parent task, after all planned
+implementation, coverage inspection, test additions, and required checks finish.
+If a Matt Pocock workflow already schedules final review, it owns that call,
+including for its implementers. Reuse completed results; follow-ups use the existing
+responsible reviewer only to verify unresolved findings after fixes and checks.
 `code-review` only delegates. `adversarial-code-review` owns Matt's fixed-point
 validation, originating-spec discovery, full Fowler smell baseline, independent
 Standards/Spec review, separate reports, and per-axis summary. The council

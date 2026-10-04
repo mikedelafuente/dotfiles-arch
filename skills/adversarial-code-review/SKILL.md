@@ -106,8 +106,16 @@ retaining semantic review and recording tool-backed coverage evidence.
 
 ## Delegate independent reviews
 
+For implementation workflows, start review after all planned code and test changes
+are complete and required validation has finished. Finish coverage inspection and
+any resulting test additions before delegation. Explicit review requests may still
+review work in progress.
+
 This skill owns the single Standards/Spec pair, whether invoked directly or
-through another workflow. An agent given a reviewer role executes only that role
+through another workflow. Run that pair once per parent task; an integration
+workflow owns the pair for its implementers. Reuse completed results when another
+skill reaches this coordinator in the same task. A new explicit user review request
+starts a new review. An agent given a reviewer role executes only that role
 and returns to its coordinator; it creates no additional pair and invokes no
 review coordinator. Pass this role boundary to both agents.
 
@@ -199,6 +207,10 @@ Resource limits or missing evidence mean a partial audit with an explicit remain
 inventory, not a clean bill of health.
 
 When fixes are authorized, follow the target project's testing and validation
-requirements, update callers/tests/contracts/docs coherently, and re-review affected
-areas. Honor documented exceptions, including documentation-only checks. Fix
+requirements and update callers/tests/contracts/docs coherently. Batch fixes and
+rerun the affected checks before asking the existing responsible reviewer to verify
+only unresolved findings and their affected callers. Keep the other axis's completed
+result. Once findings are resolved, finish the task; passing checks, added tests,
+commits, and PR preparation do not trigger another full review pair. Honor documented
+exceptions, including documentation-only checks. Fix
 authorization alone does not authorize committing or publishing.
