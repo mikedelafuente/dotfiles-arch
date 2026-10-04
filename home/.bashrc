@@ -280,7 +280,7 @@ aliases() {
         echo ""
         echo "  dfa: grouped command picker (Routine, AI, Projects, Dotfiles, System)"
         echo "  dfa sync-sources: add/remove AI sources, reorder priority, apply changes"
-        echo "  Agent skill: agent-council (product debate; council-backed /grill-me or /grill-with-docs)"
+        echo "  Agent skill: agent-council (relevant roles, reusable research; /grill-me or /grill-with-docs)"
         echo "  Agent skills: /to-spec, /to-tickets use accepted Q/A; /bro simplifies answers"
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"

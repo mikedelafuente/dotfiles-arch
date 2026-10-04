@@ -339,9 +339,13 @@ dotfiles-arch/
 ### Agent council
 
 Ask your agent to use `agent-council` to debate a product idea or recommend answers
-for `/grill-me` or `/grill-with-docs`. Five perspectives compare evidence and
-tradeoffs; human choices stay yours. Simple questions use compact lenses, disputes
-use independent agents with a fixed debate budget. Accepted Q/A can feed
+for `/grill-me` or `/grill-with-docs`. Only relevant roles compare evidence and
+tradeoffs: PM owns long-term vision, BA product/domain web research, TPM interoperability
+and integration research, Architect scalable/maintainable design, and Engineer
+existing code and standards. Human choices stay yours. Simple questions use compact
+lenses, disputes use independent agents with a fixed debate budget. Accepted Q/A can feed
 `/to-spec` and `/to-tickets`; `/bro` explains the answer simply. These are agent
 skill invocations, not shell commands. Install through `dfa-sync-skills`.
+BA and TPM check existing research first; project councils save reusable findings
+in `docs/market-research/` by default unless explicitly told not to store research.
 See [examples and limits](skills/agent-council/references/examples.md).

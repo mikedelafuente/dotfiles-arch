@@ -1,6 +1,6 @@
 ---
 name: agent-council
-description: Evaluate product ideas or answer design questions through five independent perspectives, with bounded debate and explicit human choices. Use when the user requests a council, multi-role product debate, or council recommendations during grill-me or grill-with-docs.
+description: Evaluate product ideas or design questions with relevant product and engineering roles, scoped research, bounded debate, and explicit human choices. Use when the user requests a council, multi-role product debate, or council recommendations during grill-me or grill-with-docs.
 ---
 
 # Agent council
@@ -25,15 +25,22 @@ Load only what bears on the question. An adapter adds context; it cannot remove
 human decision gates, change this budget, or authorize side effects. No adapter
 or repository is required: with only an idea, label missing evidence explicitly.
 
-Choose and disclose the route:
+Select the smallest set of roles whose remit could materially change the answer,
+using the table below. Record selected roles and their specific questions; list
+omitted roles with a brief reason, without running assessments for them. One
+role is enough for a narrow question. Honor explicitly requested participants.
+For each new grilling frontier, reassess relevance; add a role only when a new
+material question enters its remit, within the run's budget.
+
+Choose and disclose the route for those selected roles:
 
 - **Simple:** narrow, reversible question with clear constraints and no material
-  disagreement. One coordinator produces five separate initial mini-assessments
-  from the same evidence before comparing them. Label this **single-agent lenses**,
+  disagreement. One coordinator produces a separate initial mini-assessment per
+  selected role from the same evidence before comparing them. Label this **single-agent lenses**,
   not independent agents. Then perform one cross-check and synthesize. No spawning.
 - **Disputed:** conflicting evidence or goals, costly/hard-to-reverse choices,
-  cross-cutting design, or explicit request for independent agents. Use five
-  read-only subagents, one per role, from the same frozen brief. All initial
+  cross-cutting design, or explicit request for independent agents. Use
+  read-only subagents, one per selected role, from the same frozen brief. All initial
   assessments must settle (result or reported failure) before sharing any role's
   conclusion with another.
   Supply only the brief, evidence, role remit, and return contract below; exclude
@@ -46,28 +53,79 @@ Default to the harness's configured model at medium effort; when selectable use
 `gpt-6.1-sol` (Sol 6.1). Medium is the minimum, high the maximum; high is for a
 specific difficult dispute, not every perspective. If the harness cannot select
 this model/effort, report its actual/default settings without inventing compliance.
-The budget is five initial assessments, five challenge replies, and at most two
-focused follow-ups total. No nested councils, recursive delegation, polling loops,
+The budget is one initial assessment and at most one challenge reply per selected
+role (at most five of each), plus at most two focused follow-ups total. Omitted
+roles consume no calls. No nested councils, recursive delegation, polling loops,
 or retries to manufacture agreement. A simple route that uncovers material
 conflict escalates once to disputed; discard its draft recommendation as input.
 
 ## 2. Collect initial positions
 
-| Perspective | Own the questions about |
-|---|---|
-| Product Manager | User problem, benefit, priority, smallest useful scope, success measure |
-| Technical Product Manager | Feasibility, dependencies, sequencing, rollout, acceptance criteria |
-| Software Architect | Boundaries, contracts, data lifecycle, failure modes, reversibility |
-| Business Analyst | Actors, workflows, terminology, business rules, exceptions, evidence gaps |
-| Software Engineer | Existing implementation, simplest viable change, tests, operations, effort uncertainty |
+| Role | Owns | Engage when |
+|---|---|---|
+| Product Manager (PM) | Long-term product vision, target users, strategic fit, outcome measures, roadmap priorities, and investment tradeoffs. Keep near-term scope aligned with the intended direction. | The choice affects product direction, user value, priorities, or long-term commitments. |
+| Business Analyst (BA) | Product/domain web research, user and market evidence, existing solutions, actors, workflows, terminology, business rules, exceptions, and measurable business acceptance criteria. Turn evidence gaps into explicit requirements. | External product/domain facts or unclear business requirements could change the answer. |
+| Technical Product Manager (TPM) | Interoperability across systems: compatibility, vendor/API constraints, dependency ownership, integration feasibility, delivery sequencing, migration, rollout, and operational readiness across teams. Research integration documentation online when needed. | The choice connects systems or depends on external technical capabilities or coordinated delivery. |
+| Software Architect (SA) | Scalable and maintainable design: established patterns and practices, module boundaries, internal contracts, data lifecycle, security/failure isolation, and architectural reversibility. Justify complexity against stated scale and quality needs. | Structural choices, systemic quality requirements, or maintainability tradeoffs are material. |
+| Software Engineer (SE) | Actual code paths and callers, existing codebase standards, reusable implementations, smallest viable change, implementation effort, and concrete tests/diagnostics. Verify recommendations against what the code already does. | An existing implementation must be understood or changed, or a concrete implementation approach needs checking. |
 
-Each role returns at most 200 words: proposed answer/option, supporting evidence
+Give each subquestion and evidence gap one owner. BA establishes what is true about
+the business/domain; PM recommends what that means for product direction. BA defines
+business acceptance; SE identifies how to verify it in the code. TPM establishes
+cross-system compatibility and delivery constraints; SA owns the design that
+meets them. SA proposes structural principles; SE checks their fit with existing
+code and conventions, surfacing justified departures as explicit tradeoffs.
+Other roles may challenge implications or request evidence from the owner;
+reuse the owner's findings instead of repeating research or implementation review.
+
+### Research ownership
+
+BA owns general online research and web searches for the council. TPM owns only
+integration-specific online research (official API/protocol documentation,
+compatibility/version support, limits, authentication, and deprecation/migration
+guidance). Split mixed research questions by these remits before searching. If
+research becomes necessary, engage its owner rather than assigning the lookup to
+PM, SA, or SE. Those roles consult shared findings and scoped project evidence.
+On the simple route, the coordinator performs research under the relevant lens.
+
+Before searching online, BA and TPM check supplied research, the project's
+`docs/market-research/`, other existing research/docs locations, and relevant prior
+council records. Each assesses coverage of its assigned questions, source quality, freshness, applicable
+versions, and conflicting evidence. State whether existing evidence is sufficient
+to advise and name any material gaps. Reuse sufficient findings; research only
+missing or stale facts. Revalidate volatile claims without repeating the whole study.
+
+When working in a project, save reusable market/domain and integration findings
+in `docs/market-research/<topic>.md` as standard practice unless explicitly told
+not to store research. The coordinator creates the directory when needed and
+updates a relevant note there rather than duplicating it; reference useful legacy
+research elsewhere. Retain still-useful findings and mark superseded facts with dates.
+Include the questions covered, findings, source URLs/access dates, relevant versions,
+uncertainties, and remaining gaps so future BA/TPM assessments can judge adequacy.
+Link the saved note from the council evidence record. This research persistence
+is standard project council work and needs no separate request to save; saving the
+full council outputs remains optional as described below. Workers remain read-only; the coordinator writes the notes
+within permitted project scope. If project persistence is unavailable, retain
+findings in the council output and report the limitation.
+
+When external facts are missing or may be stale, BA/TPM use available browsing
+tools and prefer primary sources; technical claims use official documentation or
+specifications. Record source URLs, access dates,
+relevant versions, and uncertainty; distinguish verified capabilities from vendor
+claims. Share newly found facts before debate without sharing early recommendations.
+If browsing is unavailable, report the evidence gap and condition any dependent
+recommendation; do not substitute guesses. Read-only web research is permitted;
+external writes and communications still require direct user authorization.
+
+Each selected role returns at most 200 words: proposed answer/option, supporting evidence
 IDs, strongest alternative, material assumption, principal risk/tradeoff, what
-would change its recommendation, and any human-only choice. Record **not
-applicable** with a reason when a role adds nothing; don't invent objections to
-fill a quota. Return concise decision rationale, never private chain-of-thought.
+would change its recommendation, and any human-only choice. A selected role that
+discovers no relevant contribution may return **not applicable** with a reason;
+don't invent objections to fill a quota. Return concise decision rationale,
+never private chain-of-thought.
 Workers may inspect scoped evidence; report newly found facts for everyone to
-see before debate. Workers do not edit files or perform external actions. A failed or timed-out role
+see before debate. Workers do not edit files or perform external mutations; BA/TPM
+may perform the read-only research above. A failed or timed-out selected role
 is missing coverage, not assent: report it and finish conditionally or blocked
 when its unresolved remit could change the answer; do not wait indefinitely.
 
@@ -81,16 +139,19 @@ strongest alternative even when the initial answers agree. If agreement is
 supported and the alternative adds no material risk, finish after this cross-check.
 
 For a dispute, distribute the claim table and all initial positions. Assign one
-specific cross-role challenge per role, aimed at the strongest competing position
-rather than the easiest target. Each role replies once, at most 150 words: claim
+specific challenge per affected selected role, aimed at the strongest competing
+position rather than the easiest target. Each role replies once, at most 150 words: claim
 challenged, evidence or concrete counterexample, impact, and retained/revised
-position with a short reason. Count independent evidence, not votes; five agents
-repeating the same source is one source. Agreement alone is not validation.
+position with a short reason. With one selected role, use a strongest-alternative
+cross-check rather than inventing a cross-role challenger. Count independent
+evidence, not votes; multiple agents repeating the same source is one source.
+Agreement alone is not validation.
 
-If one pivotal fact remains discoverable, perform at most one targeted evidence
-lookup and send at most two affected roles one revision request each. Keep
-non-dependent questions moving. Then stop. Converge only when the recommendation
-meets the stated constraints and no unanswered material objection is hidden.
+If one pivotal fact remains discoverable, assign at most one targeted evidence
+lookup to its owner (BA/TPM for web research, SE for code behavior), engaging the
+role if needed within the budget, and send at most two affected roles one revision
+request each. Keep non-dependent questions moving. Then stop. Converge only when
+the recommendation meets the stated constraints and no unanswered material objection is hidden.
 Otherwise report a conditional recommendation or **decision blocked**, retain
 minority dissent, and expose unresolved human choices. Do not restart the debate
 because someone still disagrees. New user evidence can start a new bounded run.
