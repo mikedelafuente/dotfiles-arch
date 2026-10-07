@@ -350,7 +350,14 @@ lenses, disputes use independent agents with a fixed debate budget. Accepted Q/A
 skill invocations, not shell commands. Install through `dfa-sync-skills`.
 BA and TPM check existing research first; project councils save reusable findings
 in `docs/market-research/` by default unless explicitly told not to store research.
-See [examples and limits](skills/agent-council/references/examples.md).
+See [examples and limits](skills/mikedelafuente/agent-council/references/examples.md).
+
+Personal workflows: `/ask-mike` chooses an entrypoint; `/council-handoff spec|tickets`
+carries accepted decisions into Matt's original workflow; `/build-with-ponytail`
+adds simplicity guidance and combined final `/review-changes`. Skills are grouped
+by source under `skills/{mattpocock,ponytail,mikedelafuente}` and installed under
+their original names. Recursive discovery rejects duplicate skill names before
+changing links. See [imports and update review](skills/README.md).
 
 ### Shared agent config in cloud checkouts
 

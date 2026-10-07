@@ -8,7 +8,7 @@
 #   standard    (default) — the path has rules/, skills/, and/or extensions/ subdirs
 #               (dotfiles-arch uses pi/extensions/ for Pi extensions), same layout
 #               as dotfiles-arch itself.
-#   skills-root — the path itself IS a flat folder of skill dirs (no skills/
+#   skills-root — the path itself IS a folder of nested skill dirs (no skills/
 #               subdir). Useful for a subfolder of someone else's skills repo,
 #               e.g. ~/repos/mattpocock/skills/skills/engineering.
 #   rules-root  — the path itself IS a flat folder of *.mdc files (no rules/
@@ -153,14 +153,14 @@ cmd_remove() {
 
 # Redraw the reorder TUI: current _REORDER_PATHS/_REORDER_TYPES order with
 # _REORDER_CURSOR highlighted. Bottom of the list = highest priority, since
-# sync_rules_from_repo/sync_skills_from_repo apply sources in file order and
+# sync_rules_from_repo apply sources in file order and
 # later sources override earlier ones on a name collision.
 _reorder_draw() {
   clear
   print_line_break "Reorder sync sources"
   print_info_message "Primary (always synced first, lowest priority, standard): $REPO_ROOT"
   echo
-  print_info_message "Later entries override earlier ones on a name collision — bottom = highest priority."
+  print_info_message "Rules/extensions: later entries override earlier ones. Duplicate skill names fail sync."
   echo
   local i
   for i in "${!_REORDER_PATHS[@]}"; do
@@ -289,7 +289,7 @@ EOF
         esac
         cat <<'EOF'
   1) standard — repo with skills/, rules/, or extensions/ subfolders
-  2) skills-root — directory containing skill folders directly
+  2) skills-root — directory containing skill folders recursively
   3) rules-root — directory containing rule files directly
   4) extensions-root — directory containing Pi extensions directly
 EOF
@@ -367,7 +367,7 @@ wins on a name collision).
 Types:
   standard    (default) path has rules/, skills/, and/or extensions/ subdirs
                (dotfiles-arch uses pi/extensions/ for Pi extensions)
-  skills-root path itself is a flat folder of skill dirs
+  skills-root path itself is a folder of nested skill dirs
   rules-root  path itself is a flat folder of *.mdc files
   extensions-root path itself is a flat folder of Pi extensions
 

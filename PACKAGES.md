@@ -198,7 +198,11 @@ through `dfa-sync-skills` (Claude/Cursor/detected Codex/Pi). `/grill-me` and
 use the council through `advising`. The `with-docs` variants record accepted
 terms/decisions in glossary/ADRs. Carry accepted Q/A to `/to-spec`
 or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
-agent prompts, not shell commands. See [examples](skills/agent-council/references/examples.md).
+agent prompts, not shell commands. See [examples](skills/mikedelafuente/agent-council/references/examples.md).
+Personal `/ask-mike`, `/council-handoff spec|tickets`, `/build-with-ponytail`, and
+`/review-changes` compose unchanged upstream skills without additional packages.
+`dfa-sync-skills` discovers nested skill folders and rejects duplicate names before
+changing links; see [source groups and updates](skills/README.md).
 
 ### Cloud agent config (no additional packages)
 
