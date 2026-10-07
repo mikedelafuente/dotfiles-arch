@@ -1,0 +1,31 @@
+pre_install() {
+  systemctl unmask ninjarmm-agent.service &>/dev/null || true
+}
+
+post_install() {
+  local conf=/opt/NinjaRMMAgent/programfiles/config/agent.conf machine_id
+  machine_id="$(ip link show | awk '$1 == "link/ether" { print $2; exit }')"
+  sed -i "/^MachineId/ s#=.*#=${machine_id}#" "$conf"
+
+  systemctl daemon-reload
+  systemctl enable --now ninjarmm-agent.service ninjarmm-patcher.timer ninjarmm-patcher.service
+}
+
+pre_upgrade() {
+  systemctl stop ninjarmm-agent.service &>/dev/null || true
+}
+
+post_upgrade() {
+  systemctl daemon-reload
+  systemctl enable --now ninjarmm-agent.service ninjarmm-patcher.timer
+}
+
+pre_remove() {
+  systemctl disable --now ninjarmm-agent.service ninjarmm-patcher.timer ninjarmm-patcher.service &>/dev/null || true
+}
+
+post_remove() {
+  rm -rf /opt/NinjaRMMAgent
+  systemctl daemon-reload
+  systemctl reset-failed &>/dev/null || true
+}

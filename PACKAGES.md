@@ -137,6 +137,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `zoom` (AUR) | Meetings | — |
 | `slack-desktop` (AUR) | Team chat | — |
 | `google-chrome` (AUR) | Work browser (Super+B when work is selected) | — |
+| `ninjaone-agent` (local, repackaged vendor `.deb`) | NinjaOne MDM/endpoint agent; installed once with `dfa-install-ninjaone` (not part of `sync.sh`), health-checked by `dfa-weekly` | `dfa-install-ninjaone`, `dfa-update-ninjaone` |
 
 ### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`
 

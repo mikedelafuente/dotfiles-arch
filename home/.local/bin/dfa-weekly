@@ -23,6 +23,7 @@ fi
 WEEKLY_STEPS=(
   dfa-update-system
   dfa-remove-orphans
+  dfa-update-ninjaone
 )
 
 usage() {
@@ -38,6 +39,7 @@ Steps:
                              cooldown so a real upgrade attempt happens at
                              least once a week
   dfa-remove-orphans        remove orphaned pacman packages (needs sudo)
+  dfa-update-ninjaone       NinjaOne agent health check (no-op unless installed)
 
 Example:
   dfa-weekly --yes   non-interactive (forwarded to dfa-daily and dfa-update-system)
