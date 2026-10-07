@@ -8,7 +8,8 @@ pkgdesc='NinjaOne RMM/MDM endpoint agent (repackaged from the vendor .deb)'
 arch=('x86_64')
 url='https://www.ninjaone.com'
 license=('custom')
-depends=('systemd')
+# The agent execs these: dpkg to install SentinelOne's .deb, the rest for device inventory.
+depends=('dmidecode' 'dpkg' 'inetutils' 'lsof' 'systemd')
 # The agent edits its own binaries and configs at runtime.
 options=('!strip' '!debug' '!lto' '!emptydirs')
 backup=('opt/NinjaRMMAgent/programfiles/config/agent.conf'
