@@ -32,12 +32,13 @@ See [cloud setup](../README.md#shared-agent-config-in-cloud-checkouts).
 
 | Group | Source | Pinned revision | Contents |
 |---|---|---|---|
-| `mattpocock` | [mattpocock/skills](https://github.com/mattpocock/skills) | `d81f3a183412e71a5b1e84ca21bc1a35eea03a60` | 31 selected engineering/productivity/misc skills; experimental skills and repository instructions excluded |
-| `ponytail` | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | `c982cd411abb53323c4baa1baa3c2f020b8d0b08` (4.10.3) | Six skill folders; plugin hooks, runtimes, and auto-updaters excluded |
+| `mattpocock` | [mattpocock/skills](https://github.com/mattpocock/skills) | `f3fc5632f401156837ee3872f14fe33ccf1024ea` | 31 selected engineering/productivity/misc skills; experimental skills and repository instructions excluded |
+| `ponytail` | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | `552acd5efd0aeae2583a12efe39373d2f076f25e` | Six skill folders; plugin hooks, runtimes, and auto-updaters excluded |
 
 Imported prompts and supporting files retain upstream contents, metadata, and
-MIT licenses. The migration restores the original four locally modified Matt
-prompts and Ponytail prompts at those pins; it does not upgrade either source.
+MIT licenses (stored at each source group's root). The copied Matt and Ponytail
+snapshots match the upstream revisions recorded above. Personal customizations
+live in wrappers rather than edits to those upstream prompts.
 `mikedelafuente` contains personal integrations and existing separately maintained
 skills, retaining their individual licenses. The shared simplicity rule remains
 in `rules/ponytail.mdc`; it adds guidance, not review routing.
