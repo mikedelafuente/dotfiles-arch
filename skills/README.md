@@ -15,9 +15,26 @@ Both `dfa-sync-skills` and the cloud installer recursively discover exact
 `SKILL.md` filenames and link their parent folders under the folder basename.
 Supporting files stay beside their prompt. Author/category folders and notes are not skills. Matt's category layout is
 preserved so reviewed upstream skill files can be copied directly.
-Duplicate names anywhere across active skill sources stop sync before links change;
-there is no skill override by source order. Rules/extensions retain their existing
-source-order behavior. Existing flat skill sources still work. Internal leaf
+Extra skill sources are considered in config order; dotfiles-arch is considered
+last and has final priority. A duplicate can replace its current owner only when
+that owner's source is marked `overwritable=true`. The default is false: protected
+duplicates report a warning/error and stop sync before any target links change.
+Mark a company source overwritable to let dotfiles-arch replace its duplicate
+`grill-me` while still installing its non-conflicting skills. Replacements from
+an overwritable source are silent. Duplicate names within one source always fail.
+Rules/extensions retain their existing source-order behavior; this setting applies
+to skills only.
+
+```bash
+dfa-sync-sources add /path/to/company --overwritable true
+# Add --type skills-root if the path is itself a skill tree.
+dfa-sync-sources add /path/to/company --overwritable false
+```
+
+Re-adding a source updates its setting; omitting the option preserves a saved
+setting (new sources default to false). `dfa-sync-sources list` shows it. Existing
+config lines remain valid; writable entries add a tab-separated `overwritable=true`
+suffix. Remove/reorder operations preserve each source's setting. Existing flat skill sources still work. Internal leaf
 symlink aliases are supported; external skill/marker targets are rejected; directory symlinks are not recursively traversed.
 Existing unrelated skill entries are preserved. Owned links are updated on moves
 and pruned when a skill disappears, including nested sources explicitly removed

@@ -46,13 +46,20 @@ SYNC_SKILLS_PRUNED_COUNT=0
 
 # Discover and validate the complete mapping before changing any target.
 skill_roots=()
-for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+discovery_options=()
+# Extra sources retain their relative order; primary skills always have final priority.
+for ((i=1; i<${#SYNC_SOURCE_REPOS_ALL[@]}; i++)); do
   if skills_dir="$(sync_source_effective_dir "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}" skills)" && [[ -d "$skills_dir" ]]; then
     skill_roots+=("$skills_dir")
+    key="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}:${SYNC_SOURCE_REPOS_ALL[$i]}"
+    if [[ "${SYNC_SOURCE_OVERWRITABLE[$key]:-false}" == true ]]; then
+      discovery_options+=(--overwritable "$skills_dir")
+    fi
   fi
 done
+[[ ! -d "$REPO_ROOT/skills" ]] || skill_roots+=("$REPO_ROOT/skills")
 manifest="$(mktemp)" || exit 1
-if ! python3 "$DF_SCRIPT_DIR/skill_discovery.py" "${skill_roots[@]}" >"$manifest"; then
+if ! python3 "$DF_SCRIPT_DIR/skill_discovery.py" "${discovery_options[@]}" "${skill_roots[@]}" >"$manifest"; then
   rm -f "$manifest"
   exit 1
 fi

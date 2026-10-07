@@ -42,7 +42,7 @@ cmd_list() {
   local i path type
   print_line_break "Sync sources"
   print_info_message "Primary (always, standard): $REPO_ROOT"
-  _read_sync_source_repo_lines
+  _read_sync_source_repo_lines || return 1
   if [[ ${#SYNC_SOURCE_REPO_LINES[@]} -eq 0 ]]; then
     print_info_message "Extra sources: (none — use: dfa-sync-sources add /path/to/repo)"
     return 0
@@ -52,9 +52,9 @@ cmd_list() {
     path="${SYNC_SOURCE_REPO_LINES[$i]}"
     type="${SYNC_SOURCE_REPO_LINE_TYPES[$i]}"
     if [[ -d "$path" ]]; then
-      print_info_message "  • [$type] $path"
+      print_info_message "  • [$type, overwritable=${SYNC_SOURCE_OVERWRITABLE[${type}:${path}]:-false}] $path"
     else
-      print_warning_message "  • [$type] $path (missing)"
+      print_warning_message "  • [$type, overwritable=${SYNC_SOURCE_OVERWRITABLE[${type}:${path}]:-false}] $path (missing)"
     fi
   done
 }
@@ -62,9 +62,20 @@ cmd_list() {
 cmd_add() {
   local raw="${1:-}"
   shift || true
-  local type="standard"
+  local type="standard" overwritable=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --overwritable)
+        [[ $# -ge 2 ]] || { print_error_message "--overwritable requires true or false"; exit 1; }
+        overwritable="$2"
+        [[ "$overwritable" == true || "$overwritable" == false ]] || { print_error_message "overwritable must be true or false"; exit 1; }
+        shift 2
+        ;;
+      --overwritable=*)
+        overwritable="${1#--overwritable=}"
+        [[ "$overwritable" == true || "$overwritable" == false ]] || { print_error_message "overwritable must be true or false"; exit 1; }
+        shift ;;
+
       --type)
         type="${2:-}"
         shift 2
@@ -81,10 +92,10 @@ cmd_add() {
     esac
   done
   if [[ -z "$raw" ]]; then
-    print_error_message "Usage: dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root]"
+    print_error_message "Usage: dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root] [--overwritable true|false]"
     exit 1
   fi
-  if ! add_sync_source_repo "$raw" "$type"; then
+  if ! add_sync_source_repo "$raw" "$type" "$overwritable"; then
     exit 1
   fi
   print_info_message "$SYNC_SOURCES_HINT"
@@ -129,7 +140,7 @@ cmd_remove() {
   # Snapshot which type-entries actually match before removal, so we can prune
   # each one's symlinks precisely (a path could in principle be listed under
   # more than one type).
-  _read_sync_source_repo_lines
+  _read_sync_source_repo_lines || return 1
   local removed_types=() i
   for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
     if [[ "${SYNC_SOURCE_REPO_LINES[$i]}" == "$normalized" ]] \
@@ -158,9 +169,9 @@ cmd_remove() {
 _reorder_draw() {
   clear
   print_line_break "Reorder sync sources"
-  print_info_message "Primary (always synced first, lowest priority, standard): $REPO_ROOT"
+  print_info_message "Primary (final skill priority; rules/extensions first, standard): $REPO_ROOT"
   echo
-  print_info_message "Rules/extensions: later entries override earlier ones. Duplicate skill names fail sync."
+  print_info_message "Rules/extensions: later entries override earlier ones. Skills: dotfiles-arch has final priority; protected duplicates block sync."
   echo
   local i
   for i in "${!_REORDER_PATHS[@]}"; do
@@ -186,7 +197,7 @@ _reorder_swap() {
 }
 
 cmd_reorder() {
-  _read_sync_source_repo_lines
+  _read_sync_source_repo_lines || return 1
   local n=${#SYNC_SOURCE_REPO_LINES[@]}
   if [[ "$n" -eq 0 ]]; then
     print_info_message "No extra sources to reorder — use: dfa-sync-sources add /path/to/repo"
@@ -305,7 +316,7 @@ EOF
         cmd_add "$raw" --type "$type"
         ;;
       2)
-        _read_sync_source_repo_lines
+        _read_sync_source_repo_lines || return 1
         if [[ ${#SYNC_SOURCE_REPO_LINES[@]} -eq 0 ]]; then
           print_info_message "No extra sources to remove."
           continue
@@ -352,7 +363,7 @@ usage() {
   cat <<EOF
 Usage: dfa-sync-sources [manage]
        dfa-sync-sources list
-       dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root]
+       dfa-sync-sources add /path/to/repo [--type standard|skills-root|rules-root|extensions-root] [--overwritable true|false]
        dfa-sync-sources remove /path/to/repo [--type standard|skills-root|rules-root|extensions-root]
        dfa-sync-sources reorder
 
@@ -360,9 +371,12 @@ With no arguments, opens the source manager in a terminal (lists sources when
 non-interactive). Add/remove local directories, reorder priority, or apply changes.
 Removing a source keeps the source files on disk.
 
-dotfiles-arch is always synced first; extra sources override on name collision.
+Skills: extras are considered first, then dotfiles-arch takes final priority.
+Duplicate replacement requires the losing source to be overwritable (default false).
+Use add with --overwritable true|false to set or update that source setting.
+Rules/extensions retain their existing source-order overrides.
 Use 'reorder' to change extra sources' relative priority (bottom of the list
-wins on a name collision).
+wins when the losing skill source is overwritable).
 
 Types:
   standard    (default) path has rules/, skills/, and/or extensions/ subdirs
