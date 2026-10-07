@@ -6,6 +6,8 @@ Skills are grouped by provenance; installed names remain flat:
 skills/
 ├── mattpocock/{engineering,productivity,misc}/<skill>/SKILL.md
 ├── ponytail/<skill>/SKILL.md
+├── caveman/<skill>/SKILL.md
+├── asd-ste100-skill/SKILL.md
 └── mikedelafuente/<skill>/SKILL.md
 ```
 
@@ -34,6 +36,16 @@ See [cloud setup](../README.md#shared-agent-config-in-cloud-checkouts).
 |---|---|---|---|
 | `mattpocock` | [mattpocock/skills](https://github.com/mattpocock/skills) | `f3fc5632f401156837ee3872f14fe33ccf1024ea` | 31 selected engineering/productivity/misc skills; experimental skills and repository instructions excluded |
 | `ponytail` | [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail) | `552acd5efd0aeae2583a12efe39373d2f076f25e` | Six skill folders; plugin hooks, runtimes, and auto-updaters excluded |
+
+Additional user-supplied imports: `caveman/` contains 22 skills from
+[JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman), local source
+revision `99aafe151a1be72be783e662858e8a0955add59f`, with its licenses and notice.
+`asd-ste100-skill/` contains the self-contained
+[danyuchn/asd-ste100-skill](https://github.com/danyuchn/asd-ste100-skill) snapshot
+(version 0.4.0 in its metadata; no commit recorded), retaining its MIT license.
+These imports bring the installed tree to 71 skill parent folders. Validation
+below checks discovery and installation, not a full behavior/security audit of
+these additional imported workflows.
 
 Imported prompts and supporting files retain upstream contents, metadata, and
 MIT licenses (stored at each source group's root). The copied Matt and Ponytail
