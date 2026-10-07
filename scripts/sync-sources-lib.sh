@@ -64,10 +64,16 @@ normalize_sync_source_repo_path() {
   realpath -m "$path"
 }
 
-# Parse one config line into _SYNC_SOURCE_LINE_TYPE / _SYNC_SOURCE_LINE_PATH.
+# Parse a legacy source line plus optional tab-separated overwritable=true|false.
 # Bare paths default to type "standard". Returns 1 if the path half is empty.
 _parse_sync_source_line() {
   local line="${1:-}" type path
+  _SYNC_SOURCE_LINE_OVERWRITABLE=false
+  case "$line" in
+    *$'\t'overwritable=true) _SYNC_SOURCE_LINE_OVERWRITABLE=true; line="${line%$'\t'*}" ;;
+    *$'\t'overwritable=false) line="${line%$'\t'*}" ;;
+    *$'\t'overwritable=*) print_error_message "Invalid overwritable value: $line" >&2; return 1 ;;
+  esac
   case "$line" in
     skills-root:*) type="skills-root" path="${line#skills-root:}" ;;
     rules-root:*)      type="rules-root"      path="${line#rules-root:}" ;;
@@ -86,6 +92,7 @@ _parse_sync_source_line() {
 _read_sync_source_repo_lines() {
   SYNC_SOURCE_REPO_LINES=()
   SYNC_SOURCE_REPO_LINE_TYPES=()
+  declare -gA SYNC_SOURCE_OVERWRITABLE=()
   local f line normalized
   local -A seen=()
   f="$(sync_sources_config_file)"
@@ -97,7 +104,7 @@ _read_sync_source_repo_lines() {
     line="${line%"${line##*[![:space:]]}"}"
     [[ -z "$line" ]] && continue
     if ! _parse_sync_source_line "$line"; then
-      continue
+      return 1
     fi
     if ! normalized="$(normalize_sync_source_repo_path "$_SYNC_SOURCE_LINE_PATH")"; then
       continue
@@ -108,6 +115,7 @@ _read_sync_source_repo_lines() {
     seen["${_SYNC_SOURCE_LINE_TYPE}:${normalized}"]=1
     SYNC_SOURCE_REPO_LINES+=("$normalized")
     SYNC_SOURCE_REPO_LINE_TYPES+=("$_SYNC_SOURCE_LINE_TYPE")
+    SYNC_SOURCE_OVERWRITABLE["${_SYNC_SOURCE_LINE_TYPE}:${normalized}"]="$_SYNC_SOURCE_LINE_OVERWRITABLE"
   done <"$f"
 }
 
@@ -117,7 +125,7 @@ load_sync_source_repos() {
   SYNC_SOURCE_REPOS=()
   SYNC_SOURCE_REPO_TYPES=()
   local i path
-  _read_sync_source_repo_lines
+  _read_sync_source_repo_lines || return 1
   for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
     path="${SYNC_SOURCE_REPO_LINES[$i]}"
     if [[ ! -d "$path" ]]; then
@@ -143,15 +151,20 @@ write_sync_source_repos() {
     echo "# skills-root (path is itself a folder of nested skill dirs), rules-root"
     echo "# dotfiles-arch uses pi/extensions/), rules-root (path is itself a flat folder"
     echo "# of *.mdc files), extensions-root (path is itself a flat folder of Pi extensions)."
-    echo "# Managed by dfa-sync-sources add/remove — dotfiles-arch is always primary"
+    echo "# Optional tab-separated suffix: overwritable=true (default false; skills only)"
+    echo "# Managed by dfa-sync-sources add/remove — dotfiles-arch has final skill priority"
     for i in "${!SYNC_SOURCE_REPOS[@]}"; do
       path="${SYNC_SOURCE_REPOS[$i]}"
       type="${SYNC_SOURCE_REPO_TYPES[$i]}"
       if [[ "$type" == "standard" ]]; then
-        printf '%s\n' "$path"
+        printf '%s' "$path"
       else
-        printf '%s:%s\n' "$type" "$path"
+        printf '%s:%s' "$type" "$path"
       fi
+      if [[ "${SYNC_SOURCE_OVERWRITABLE[${type}:${path}]:-false}" == true ]]; then
+        printf '\toverwritable=true'
+      fi
+      printf '\n'
     done
   } >"$f"
   chmod 600 "$f" 2>/dev/null || true
@@ -160,8 +173,12 @@ write_sync_source_repos() {
 # Append a repo to sync-sources if not already listed under that type.
 # Returns 1 on error.
 add_sync_source_repo() {
-  local raw="${1:-}" type="${2:-standard}" normalized i
+  local raw="${1:-}" type="${2:-standard}" overwritable="${3:-}" normalized i
   [[ -n "$raw" ]] || return 1
+  case "$overwritable" in
+    '' | true | false) ;;
+    *) print_error_message "overwritable must be true or false"; return 1 ;;
+  esac
   if ! is_valid_sync_source_type "$type"; then
     print_error_message "Unknown source type: $type (expected: ${SYNC_SOURCE_KNOWN_TYPES[*]})"
     return 1
@@ -175,17 +192,22 @@ add_sync_source_repo() {
   fi
   SYNC_SOURCE_REPOS=()
   SYNC_SOURCE_REPO_TYPES=()
-  _read_sync_source_repo_lines
+  _read_sync_source_repo_lines || return 1
   SYNC_SOURCE_REPOS=("${SYNC_SOURCE_REPO_LINES[@]}")
   SYNC_SOURCE_REPO_TYPES=("${SYNC_SOURCE_REPO_LINE_TYPES[@]}")
   for i in "${!SYNC_SOURCE_REPOS[@]}"; do
     if [[ "${SYNC_SOURCE_REPOS[$i]}" == "$normalized" && "${SYNC_SOURCE_REPO_TYPES[$i]}" == "$type" ]]; then
-      print_info_message "Already listed ($type): $normalized"
+      if [[ -n "$overwritable" ]]; then
+        SYNC_SOURCE_OVERWRITABLE["${type}:${normalized}"]="$overwritable"
+        write_sync_source_repos
+      fi
+      print_info_message "Listed ($type, overwritable=${SYNC_SOURCE_OVERWRITABLE[${type}:${normalized}]:-false}): $normalized"
       return 0
     fi
   done
   SYNC_SOURCE_REPOS+=("$normalized")
   SYNC_SOURCE_REPO_TYPES+=("$type")
+  SYNC_SOURCE_OVERWRITABLE["${type}:${normalized}"]="${overwritable:-false}"
   write_sync_source_repos
   case "$type" in
     standard)
@@ -224,7 +246,7 @@ remove_sync_source_repo() {
   fi
   SYNC_SOURCE_REPOS=()
   SYNC_SOURCE_REPO_TYPES=()
-  _read_sync_source_repo_lines
+  _read_sync_source_repo_lines || return 1
   for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
     if [[ "${SYNC_SOURCE_REPO_LINES[$i]}" == "$normalized" ]] \
       && { [[ -z "$type" ]] || [[ "${SYNC_SOURCE_REPO_LINE_TYPES[$i]}" == "$type" ]]; }; then

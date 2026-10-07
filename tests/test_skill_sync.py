@@ -92,6 +92,62 @@ def main():
         snapshot = {str(t): {p.name: os.readlink(p) for p in t.iterdir()} for t in targets}
         assert "Duplicate skill name" in run(False).stderr
         assert {str(t): {p.name: os.readlink(p) for p in t.iterdir()} for t in targets} == snapshot
+        # An overwritable company source loses silently to dotfiles-arch.
+        config.write_text(f"skills-root:{extra}\toverwritable=true\n")
+        allowed = run()
+        assert "Duplicate skill name" not in allowed.stderr
+        assert all((t / "example").resolve() == skill for t in targets)
+        # Between extras, a later source may replace only an overwritable owner.
+        second = tmp / "second source"
+        for directory in (extra / "shared", second / "shared"):
+            directory.mkdir(parents=True)
+            (directory / "SKILL.md").write_text("shared")
+        config.write_text(f"skills-root:{extra}\toverwritable=true\nskills-root:{second}\n")
+        run()
+        assert all((t / "shared").resolve() == second / "shared" for t in targets)
+        config.write_text(f"skills-root:{extra}\nskills-root:{second}\n")
+        assert "overwritable=false" in run(False).stderr
+        assert all((t / "shared").resolve() == second / "shared" for t in targets)
+        # Permission to overwrite another source never hides duplicates within one root.
+        internal = extra / "another/shared"
+        internal.mkdir(parents=True)
+        (internal / "SKILL.md").write_text("ambiguous")
+        config.write_text(f"skills-root:{extra}\toverwritable=true\n")
+        assert "Duplicate skill name" in run(False).stderr
+        shutil.rmtree(internal.parent)
+        # CLI add/update/list and config rewrites preserve/default the setting.
+        def sources(*args, success=True):
+            result = subprocess.run(["bash", str(repo / "scripts/sync-sources.sh"), *args],
+                                    env=env, text=True, capture_output=True)
+            assert (result.returncode == 0) == success, result.stdout + result.stderr
+            return result
+        config.write_text("")
+        sources("add", str(extra), "--type", "skills-root")
+        assert "overwritable=false" in sources("list").stdout
+        sources("add", str(extra), "--type", "skills-root", "--overwritable", "true")
+        sources("add", str(second), "--type", "skills-root")
+        assert "overwritable=true" in sources("list").stdout
+        # The reorder writer keeps the flag attached to its source, not its index.
+        subprocess.run(["bash", "-c",
+                        'source "$1/scripts/fn-lib.sh"; source "$1/scripts/sync-sources-lib.sh"; '
+                        '_read_sync_source_repo_lines; '
+                        'SYNC_SOURCE_REPOS=("${SYNC_SOURCE_REPO_LINES[1]}" "${SYNC_SOURCE_REPO_LINES[0]}"); '
+                        'SYNC_SOURCE_REPO_TYPES=("${SYNC_SOURCE_REPO_LINE_TYPES[1]}" "${SYNC_SOURCE_REPO_LINE_TYPES[0]}"); '
+                        'write_sync_source_repos', "test", str(repo)],
+                       env=dict(env, USER_HOME_DIR=str(home)), check=True, capture_output=True)
+        entries = [line for line in config.read_text().splitlines() if not line.startswith("#")]
+        assert entries == [f"skills-root:{second}", f"skills-root:{extra}\toverwritable=true"]
+        sources("add", str(extra), "--type", "skills-root")
+        assert "overwritable=true" in config.read_text()
+        sources("remove", str(second), "--type", "skills-root")
+        assert "overwritable=true" in config.read_text()
+        sources("add", str(extra), "--type", "skills-root", "--overwritable=false")
+        assert "overwritable=false" in sources("list").stdout
+        before = config.read_text()
+        sources("add", str(extra), "--overwritable=maybe", success=False)
+        assert config.read_text() == before
+        config.write_text(f"skills-root:{extra}\toverwritable=maybe\n")
+        assert "Invalid overwritable value" in run(False).stderr
         config.write_text("")
         # An unrelated destination blocks all destinations, even later ones.
         (targets[-1] / "example").unlink()

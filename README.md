@@ -356,8 +356,9 @@ Personal workflows: `/ask-mike` chooses an entrypoint; `/council-handoff spec|ti
 carries accepted decisions into Matt's original workflow; `/build-with-ponytail`
 adds simplicity guidance and combined final `/review-changes`. Skills are grouped
 by source under `skills/{mattpocock,ponytail,mikedelafuente}` and installed under
-their original names. Recursive discovery rejects duplicate skill names before
-changing links. See [imports and update review](skills/README.md).
+their original names. Dotfiles-arch has final skill priority; duplicate replacement requires the losing
+source to allow overwrites (`dfa-sync-sources add <path> --overwritable true`).
+Protected duplicates stop sync before links change. See [imports and update review](skills/README.md).
 
 ### Shared agent config in cloud checkouts
 

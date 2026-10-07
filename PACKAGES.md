@@ -201,8 +201,10 @@ or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
 agent prompts, not shell commands. See [examples](skills/mikedelafuente/agent-council/references/examples.md).
 Personal `/ask-mike`, `/council-handoff spec|tickets`, `/build-with-ponytail`, and
 `/review-changes` compose unchanged upstream skills without additional packages.
-`dfa-sync-skills` discovers nested skill folders and rejects duplicate names before
-changing links; see [source groups and updates](skills/README.md).
+`dfa-sync-skills` discovers nested skill folders and gives dotfiles-arch final
+priority. `dfa-sync-sources add <path> --overwritable true` allows duplicate
+replacement from that source; false is the default and blocks replacement before
+links change; see [source groups and updates](skills/README.md).
 
 ### Cloud agent config (no additional packages)
 
