@@ -274,7 +274,7 @@ cmd_manage() {
     return 1
   fi
 
-  local action raw choice type i step failed
+  local action raw choice type i step failed overwritable
   while true; do
     cmd_list
     cat <<'EOF'
@@ -283,9 +283,10 @@ cmd_manage() {
   2) Remove a source (keeps its files on disk)
   3) Reorder source priority
   4) Apply changes: sync skills, rules, and extensions
+  5) Toggle skill overwrites for an existing source
   q) Done
 EOF
-    read -rp 'Choose [1-4, Enter to exit]: ' action || return 0
+    read -rp 'Choose [1-5, Enter to exit]: ' action || return 0
     case "$action" in
       1)
         print_info_message "Use a local clone or directory; clone remote repos first."
@@ -353,8 +354,37 @@ EOF
         [[ "$failed" -eq 0 ]] || return 1
         print_success_message "Sources applied."
         ;;
+      5)
+        _read_sync_source_repo_lines || return 1
+        if [[ ${#SYNC_SOURCE_REPO_LINES[@]} -eq 0 ]]; then
+          print_info_message "No extra sources to change."
+          continue
+        fi
+        for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
+          raw="${SYNC_SOURCE_REPO_LINES[$i]}"
+          type="${SYNC_SOURCE_REPO_LINE_TYPES[$i]}"
+          printf '  %d) [%s, overwritable=%s] %s\n' "$((i + 1))" "$type" "${SYNC_SOURCE_OVERWRITABLE[${type}:${raw}]:-false}" "$raw"
+        done
+        read -rp 'Toggle source number (blank cancels): ' choice || return 0
+        [[ -n "$choice" ]] || continue
+        raw=""
+        for i in "${!SYNC_SOURCE_REPO_LINES[@]}"; do
+          if [[ "$choice" == "$((i + 1))" ]]; then
+            raw="${SYNC_SOURCE_REPO_LINES[$i]}"
+            type="${SYNC_SOURCE_REPO_LINE_TYPES[$i]}"
+            break
+          fi
+        done
+        if [[ -z "$raw" ]]; then
+          print_warning_message "Choose one of the listed source numbers."
+          continue
+        fi
+        overwritable=true
+        [[ "${SYNC_SOURCE_OVERWRITABLE[${type}:${raw}]:-false}" != true ]] || overwritable=false
+        cmd_add "$raw" --type "$type" --overwritable "$overwritable"
+        ;;
       q|'') return 0 ;;
-      *) print_warning_message "Choose 1-4, or Enter to exit." ;;
+      *) print_warning_message "Choose 1-5, or Enter to exit." ;;
     esac
   done
 }
@@ -368,7 +398,8 @@ Usage: dfa-sync-sources [manage]
        dfa-sync-sources reorder
 
 With no arguments, opens the source manager in a terminal (lists sources when
-non-interactive). Add/remove local directories, reorder priority, or apply changes.
+non-interactive). Add/remove local directories, reorder priority, toggle existing
+source overwrite settings (option 5), or apply changes.
 Removing a source keeps the source files on disk.
 
 Skills: extras are considered first, then dotfiles-arch takes final priority.

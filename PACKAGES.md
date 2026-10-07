@@ -206,6 +206,9 @@ priority. `dfa-sync-sources add <path> --overwritable true` allows duplicate
 replacement from that source; false is the default and blocks replacement before
 links change; see [source groups and updates](skills/README.md).
 
+`dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
+source. It displays the current setting; changes apply on the next skill sync.
+
 ### Cloud agent config (no additional packages)
 
 `bash scripts/install-cloud-agent-config.sh --home "$HOME"` distributes this
