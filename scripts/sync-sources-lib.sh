@@ -7,7 +7,7 @@
 #   standard    — repo root has rules/, skills/, and/or extensions/ under it
 #                  (Pi's own repo may use pi/extensions/),
 #                 same layout as dotfiles-arch itself.
-#   skills-root — the path itself IS a flat folder of skill dirs (no skills/
+#   skills-root — the path itself IS a folder of nested skill dirs (no skills/
 #                 subdir). Useful for a subfolder of someone else's skills repo,
 #                 e.g. mattpocock/skills/skills/engineering.
 #   rules-root  — the path itself IS a flat folder of rule files (no rules/
@@ -140,7 +140,7 @@ write_sync_source_repos() {
   {
     echo "# Extra rules/skills source repos, one per line: path | type:path"
     echo "# Types: standard (default, has rules/ + skills/ + extensions/ subdirs;"
-    echo "# skills-root (path is itself a flat folder of skill dirs), rules-root"
+    echo "# skills-root (path is itself a folder of nested skill dirs), rules-root"
     echo "# dotfiles-arch uses pi/extensions/), rules-root (path is itself a flat folder"
     echo "# of *.mdc files), extensions-root (path is itself a flat folder of Pi extensions)."
     echo "# Managed by dfa-sync-sources add/remove — dotfiles-arch is always primary"
@@ -422,6 +422,14 @@ _sync_sources_abs_symlink_target() {
   realpath -m "$target"
 }
 
+# Read the lexical target so leaf aliases retain their installed name/ownership.
+_sync_skill_link_target() {
+  local entry="${1:-}" target
+  target="$(readlink "$entry")" || return 1
+  [[ "$target" == /* ]] || target="${entry%/*}/$target"
+  realpath -ms "$target"
+}
+
 # Link rules/*.mdc from a source into target_dir. Later sources override earlier
 # ones. Uses global associative array _sync_rules_linked_names for collision
 # tracking. type is standard|rules-root (see sync_source_effective_dir).
@@ -450,32 +458,20 @@ sync_rules_from_repo() {
   done < <(find "$rules_dir" -mindepth 1 -maxdepth 1 -type f -name '*.mdc' -print0)
 }
 
-# Link skills/*/ from a source into target_dir. Later sources override earlier
-# ones. Uses global associative array _sync_skills_linked_names for collision
-# tracking. type is standard|skills-root (see sync_source_effective_dir).
-sync_skills_from_repo() {
-  local repo_root="${1:-}" type="${2:-}" target_dir="${3:-}" skills_dir skill_dir skill_name
-
-  skills_dir="$(sync_source_effective_dir "$repo_root" "$type" skills)" || return 0
-  [[ -d "$skills_dir" ]] || return 0
-
-  while IFS= read -r -d '' skill_dir; do
+# Link the recursively discovered, preflighted skill parents into target_dir.
+sync_skill_dirs() {
+  local target_dir="${1:-}" skill_dir skill_name
+  for skill_dir in "${SYNC_SKILL_DIRS[@]}"; do
     skill_name="$(basename "$skill_dir")"
-    if [[ -n "${_sync_skills_linked_names[$skill_name]:-}" ]]; then
-      print_warning_message "Overriding skill $skill_name (was ${_sync_skills_linked_names[$skill_name]}) with $repo_root"
-    fi
-    if [[ ! -f "$skill_dir/SKILL.md" ]]; then
-      print_warning_message "$skills_dir/$skill_name has no SKILL.md — linking anyway"
-    fi
     if [[ -e "$target_dir/$skill_name" && ! -L "$target_dir/$skill_name" ]]; then
-      print_action_message "Removing local (non-symlinked) skill, superseded by source: $target_dir/$skill_name"
-      rm -rf "${target_dir:?}/$skill_name"
+      print_error_message "Preserving existing real skill entry: $target_dir/$skill_name"
+      return 1
     fi
-    ln -sfn "$skill_dir" "$target_dir/$skill_name"
+    ln -sfn "$skill_dir" "$target_dir/$skill_name" || return 1
     print_info_message "Linked: $target_dir/$skill_name"
-    _sync_skills_linked_names["$skill_name"]="$repo_root"
+    _sync_skills_linked_names["$skill_name"]="$skill_dir"
     SYNC_SKILLS_LINKED_COUNT=$((SYNC_SKILLS_LINKED_COUNT + 1))
-  done < <(find "$skills_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+  done
 }
 
 # Link extension files/directories from a source into Pi's extensions dir. Later
@@ -550,9 +546,29 @@ prune_managed_symlinks() {
 
   while IFS= read -r -d '' entry; do
     [[ -L "$entry" ]] || continue
-    resolved="$(_sync_sources_abs_symlink_target "$entry")"
+    if [[ "$kind" == skills ]]; then
+      resolved="$(_sync_skill_link_target "$entry")"
+    else
+      resolved="$(_sync_sources_abs_symlink_target "$entry")"
+    fi
     [[ -n "$resolved" ]] || continue
     parent="$(dirname "$resolved")"
+
+    if [[ "$kind" == skills ]]; then
+      local owned=false root
+      for root in "${!expected_dirs[@]}"; do
+        if [[ "$resolved" == "$root/"* && "${resolved##*/}" == "${entry##*/}" ]]; then
+          owned=true
+          break
+        fi
+      done
+      [[ "$owned" == true ]] || continue
+      [[ -n "${_sync_skills_linked_names[${entry##*/}]:-}" ]] && continue
+      print_action_message "Removing stale skills symlink: $entry"
+      rm -f "$entry"
+      SYNC_SKILLS_PRUNED_COUNT=$((SYNC_SKILLS_PRUNED_COUNT + 1))
+      continue
+    fi
 
     if [[ -z "${expected_dirs[$parent]:-}" ]]; then
       print_action_message "Removing symlink from unlisted/removed source ($parent): $entry"
@@ -592,9 +608,17 @@ prune_sync_source_repo_symlinks() {
       [[ -d "$target_dir" ]] || continue
       while IFS= read -r -d '' entry; do
         [[ -L "$entry" ]] || continue
-        resolved="$(_sync_sources_abs_symlink_target "$entry")"
+        if [[ "$kind" == skills ]]; then
+          resolved="$(_sync_skill_link_target "$entry")"
+        else
+          resolved="$(_sync_sources_abs_symlink_target "$entry")"
+        fi
         [[ -n "$resolved" ]] || continue
-        [[ "$(dirname "$resolved")" == "$eff_dir" ]] || continue
+        if [[ "$kind" == skills ]]; then
+          [[ "$resolved" == "$eff_dir/"* && "${resolved##*/}" == "${entry##*/}" ]] || continue
+        else
+          [[ "$(dirname "$resolved")" == "$eff_dir" ]] || continue
+        fi
         print_action_message "Removing $kind symlink from removed source: $entry"
         rm -f "$entry"
       done < <(find "$target_dir" -mindepth 1 -maxdepth 1 -print0)

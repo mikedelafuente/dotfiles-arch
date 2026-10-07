@@ -282,7 +282,8 @@ aliases() {
         echo "  dfa sync-sources: add/remove AI sources, reorder priority, apply changes"
         echo "  Agent skills: /grill-me, /grill-with-docs (interview without council)"
         echo "  Agent skills: /advise-me, /advise-with-docs (automatic agent-council recommendations)"
-        echo "  Agent skills: /to-spec, /to-tickets use accepted Q/A; /bro simplifies answers"
+        echo "  Agent skills: /council-handoff spec|tickets carries accepted Q/A; /bro simplifies answers"
+        echo "  Agent skills: /ask-mike, /build-with-ponytail, /review-changes (personal workflows)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"

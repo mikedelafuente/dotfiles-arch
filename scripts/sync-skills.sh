@@ -3,7 +3,7 @@
 # Sync personal Claude/Cursor/Codex/Pi skills
 # --------------------------
 # Symlinks each skill folder from dotfiles-arch and any extra repos registered
-# via dfa-sync-sources into the native skills directories for Claude, Cursor,
+# via dfa-sync-sources recursively into the native skills directories for Claude, Cursor,
 # detected Codex, and Pi, and prunes managed symlinks when the source
 # is removed or the repo is unlisted. Standard-type sources contribute their
 # skills/ subfolder; skills-root sources contribute their own folder directly
@@ -44,23 +44,54 @@ fi
 SYNC_SKILLS_LINKED_COUNT=0
 SYNC_SKILLS_PRUNED_COUNT=0
 
+# Discover and validate the complete mapping before changing any target.
+skill_roots=()
 for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
-  repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
-  source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
-  if ! { skills_dir="$(sync_source_effective_dir "$repo_root" "$source_type" skills)" && [[ -d "$skills_dir" ]]; }; then
-    print_info_message "No skills under $repo_root ($source_type) — skipping"
+  if skills_dir="$(sync_source_effective_dir "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}" skills)" && [[ -d "$skills_dir" ]]; then
+    skill_roots+=("$skills_dir")
   fi
+done
+manifest="$(mktemp)" || exit 1
+if ! python3 "$DF_SCRIPT_DIR/skill_discovery.py" "${skill_roots[@]}" >"$manifest"; then
+  rm -f "$manifest"
+  exit 1
+fi
+mapfile -d '' -t SYNC_SKILL_DIRS <"$manifest"
+rm -f "$manifest"
+# Check every destination before linking, preserving unrelated entries.
+for target_dir in "${TARGET_DIRS[@]}"; do
+  if [[ -L "$target_dir" || -L "${target_dir%/*}" ]]; then
+    print_error_message "Preserving redirected skill directory: $target_dir"
+    exit 1
+  fi
+  for skill_dir in "${SYNC_SKILL_DIRS[@]}"; do
+    dest="$target_dir/${skill_dir##*/}"
+    if [[ -e "$dest" && ! -L "$dest" ]]; then
+      print_error_message "Preserving existing real skill entry: $dest"
+      exit 1
+    fi
+    if [[ -L "$dest" ]]; then
+      resolved="$(_sync_skill_link_target "$dest")"
+      owned=false
+      for root in "${skill_roots[@]}"; do
+        if [[ "$resolved" == "$root/"* && "${resolved##*/}" == "${dest##*/}" ]]; then
+          owned=true
+          break
+        fi
+      done
+      if [[ "$owned" != true ]]; then
+        print_error_message "Preserving unrelated skill symlink: $dest"
+        exit 1
+      fi
+    fi
+  done
 done
 
 for target_dir in "${TARGET_DIRS[@]}"; do
   mkdir -p "$target_dir"
   declare -A _sync_skills_linked_names=()
 
-  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
-    repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
-    source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
-    sync_skills_from_repo "$repo_root" "$source_type" "$target_dir"
-  done
+  sync_skill_dirs "$target_dir" || exit 1
 
   prune_managed_symlinks "$target_dir" skills
 done

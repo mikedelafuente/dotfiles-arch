@@ -51,23 +51,24 @@ def main():
 
         (home / ".bashrc").write_text("SHELL SETTINGS SENTINEL")
         (home / ".codex/config.toml").write_text("CODEX SETTINGS SENTINEL")
-        (target / "manual-alias").symlink_to(source / "skills/advising")
+        (target / "manual-alias").symlink_to(source / "skills/mikedelafuente/advising")
         # Conditional rules and README never become unconditional instructions.
         (source / "rules/conditional.md").write_text(
             "---\nalwaysApply: false\nglobs: *.py\n---\nCONDITIONAL SENTINEL\n")
         (source / "rules/README.md").write_text(
             "---\nalwaysApply: true\n---\nREADME SENTINEL\n")
         run(source, home)
-        expected = {p.name for p in (source / "skills").iterdir() if p.is_dir()}
+        expected_paths = {p.parent.name: p.parent for p in (source / "skills").rglob("SKILL.md")}
+        expected = set(expected_paths)
         assert expected <= {p.name for p in target.iterdir()}
         for name in expected:
             assert (target / name).is_symlink()
-            assert (target / name).resolve() == source / "skills" / name
+            assert (target / name).resolve() == expected_paths[name]
             assert (target / name / "SKILL.md").is_file()
-        for skill, ref in (("advising", "../grilling/SKILL.md"),
+        for skill, ref in (("advising", "../../mattpocock/productivity/grilling/SKILL.md"),
                            ("agent-council", "../advising/SKILL.md"),
-                           ("advise-with-docs", "../domain-modeling/SKILL.md"),
-                           ("code-review", "../adversarial-code-review/SKILL.md")):
+                           ("advise-with-docs", "../../mattpocock/engineering/domain-modeling/SKILL.md"),
+                           ("review-changes", "../adversarial-code-review/SKILL.md")):
             assert (target / skill / ref).is_file()
         assert (target / "agent-council/references/record.md").is_file()
         content = agents.read_text()
@@ -82,12 +83,32 @@ def main():
         assert agents.read_text() == content
         assert agents.read_text().count("<!-- dotfiles-arch cloud baseline begin -->") == 1
 
+        # Moves update owned links, including the former flat layout.
+        old = source / "skills/mattpocock/productivity/wait-what"
+        old.rename(source / "skills/wait-what")
+        run(source, home)
+        assert (target / "wait-what").resolve() == source / "skills/wait-what"
+        (source / "skills/wait-what").rename(old)
+        run(source, home)
+        assert (target / "wait-what").resolve() == old
+        assert not any((target / group).exists() for group in
+                       ("mattpocock", "mikedelafuente"))
+        snapshot = {p.name: os.readlink(p) for p in target.iterdir() if p.is_symlink()}
+        duplicate = source / "skills/other/advising"
+        duplicate.mkdir(parents=True)
+        (duplicate / "SKILL.md").write_text("duplicate")
+        result = run(source, home, success=False)
+        assert "Duplicate skill name" in result.stderr
+        assert {p.name: os.readlink(p) for p in target.iterdir() if p.is_symlink()} == snapshot
+        assert agents.read_text() == content
+        shutil.rmtree(duplicate.parent)
+
         # Source removals prune only this checkout's managed links.
-        shutil.rmtree(source / "skills/wait-what")
+        shutil.rmtree(source / "skills/mattpocock/productivity/wait-what")
         run(source, home)
         assert not (target / "wait-what").is_symlink()
         assert unrelated.exists()
-        assert (target / "manual-alias").resolve() == source / "skills/advising"
+        assert (target / "manual-alias").resolve() == source / "skills/mikedelafuente/advising"
         assert (home / ".bashrc").read_text() == "SHELL SETTINGS SENTINEL"
         assert (home / ".codex/config.toml").read_text() == "CODEX SETTINGS SENTINEL"
 
@@ -125,10 +146,10 @@ def main():
 
         # Supported internal source-directory symlinks remain rerunnable/prunable.
         alias = source / "skills/internal-alias"
-        alias.symlink_to("advising", target_is_directory=True)
+        alias.symlink_to("mikedelafuente/advising", target_is_directory=True)
         run(source, home)
         run(source, home)
-        assert (target / "internal-alias").resolve() == source / "skills/advising"
+        assert (target / "internal-alias").resolve() == source / "skills/mikedelafuente/advising"
         alias.unlink()
         run(source, home)
         assert not (target / "internal-alias").is_symlink()
@@ -153,7 +174,7 @@ def main():
         assert agents.read_text() == content
 
         # Refuse external/broken source dependencies, even in supporting assets.
-        (source / "skills/agent-council/outside").symlink_to(unrelated)
+        (source / "skills/mikedelafuente/agent-council/outside").symlink_to(unrelated)
         run(source, tmp / "external-link-user", success=False)
         assert not (tmp / "external-link-user").exists()
         print(f"PASS: {len(expected)} skills, relocated checkout/home, references, rules, reruns,")

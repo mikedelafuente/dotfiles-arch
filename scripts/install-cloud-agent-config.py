@@ -7,6 +7,7 @@ import re
 import stat
 import sys
 import tempfile
+from skill_discovery import discover_skills
 
 BEGIN = "<!-- dotfiles-arch cloud baseline begin -->"
 END = "<!-- dotfiles-arch cloud baseline end -->"
@@ -15,12 +16,10 @@ END = "<!-- dotfiles-arch cloud baseline end -->"
 def install(source, home, baseline):
     source = source.resolve()
     skills = source / "skills"
-    skill_dirs = sorted(p for p in skills.iterdir() if p.is_dir())
+    skill_dirs = discover_skills([skills])
     if not skill_dirs:
         raise ValueError("No source skills found")
     for skill in skill_dirs:
-        if not (skill / "SKILL.md").is_file():
-            raise ValueError(f"Missing SKILL.md: {skill}")
         # Never propagate laptop-only or broken source symlinks into a cloud task.
         for entry in [skill, *skill.rglob("*")]:
             if entry.is_symlink() and (
@@ -51,7 +50,9 @@ def install(source, home, baseline):
     for skill in skill_dirs:
         dest = skill_target / skill.name
         if dest.is_symlink():
-            if dest.resolve() != skill.resolve():
+            old = Path(os.path.abspath(dest.parent / os.readlink(dest)))
+            owned = skills in old.parents and old.name == dest.name
+            if dest.resolve() != skill.resolve() and not owned:
                 raise ValueError(f"Preserving unrelated skill symlink: {dest}")
         elif dest.exists():
             raise ValueError(f"Preserving existing real skill entry: {dest}")
@@ -59,7 +60,8 @@ def install(source, home, baseline):
     if skill_target.exists():
         names = {skill.name for skill in skill_dirs}
         stale = [p for p in skill_target.iterdir() if p.is_symlink()
-                 and os.readlink(p) == str(skills / p.name) and p.name not in names]
+                 and skills in Path(os.path.abspath(p.parent / os.readlink(p))).parents
+                 and Path(os.readlink(p)).name == p.name and p.name not in names]
 
     body = baseline.read_text().strip()
     block = f"{BEGIN}\n\n# Shared dotfiles baseline\n\n{body}\n\n{END}"
@@ -72,6 +74,8 @@ def install(source, home, baseline):
     skill_target.mkdir(parents=True, exist_ok=True)
     for skill in skill_dirs:
         dest = skill_target / skill.name
+        if dest.is_symlink() and os.readlink(dest) != str(skill):
+            dest.unlink()
         if not dest.is_symlink():
             dest.symlink_to(skill, target_is_directory=True)
     for dest in stale:
