@@ -1,0 +1,38 @@
+# Repackages the NinjaOne Linux agent .deb as a pacman package.
+# Driven by scripts/ninjaone-lib.sh, which exports NINJAONE_DEB (absolute path
+# to the already-validated .deb) and NINJAONE_VERSION (the .deb's Version field).
+pkgname=ninjaone-agent
+pkgver=${NINJAONE_VERSION:?NINJAONE_VERSION not set}
+pkgrel=1
+pkgdesc='NinjaOne RMM/MDM endpoint agent (repackaged from the vendor .deb)'
+arch=('x86_64')
+url='https://www.ninjaone.com'
+license=('custom')
+depends=('systemd')
+# The agent edits its own binaries and configs at runtime.
+options=('!strip' '!debug' '!lto' '!emptydirs')
+backup=('opt/NinjaRMMAgent/programfiles/config/agent.conf'
+        'opt/NinjaRMMAgent/programfiles/config/server.conf')
+install=ninjaone-agent.install
+
+package() {
+  local pf="$pkgdir/opt/NinjaRMMAgent/programfiles"
+
+  bsdtar -xOf "$NINJAONE_DEB" 'data.tar*' | bsdtar -xf - -C "$pkgdir" --no-same-owner
+
+  # The vendor postinst copies these out of /tmp at install time.
+  install -Dm644 -t "$pkgdir/usr/lib/systemd/system" \
+    "$pkgdir/tmp/ninja-startup/ninjarmm-agent.service" \
+    "$pkgdir/tmp/ninja-startup/ninjarmm-patcher.service" \
+    "$pkgdir/tmp/ninja-startup/ninjarmm-patcher.timer"
+  install -Dm644 "$pkgdir/tmp/ninja-uninstall/ninjarmm-deb-uninstall.service" \
+    "$pkgdir/usr/lib/systemd/system/ninjarmm-uninstall.service"
+  install -Dm644 "$pkgdir/tmp/ninja-startup/ninjarmm-curl-ca-bundle.crt" "$pf/ninjarmm-curl-ca-bundle.crt"
+  install -Dm754 "$pkgdir/tmp/ninja-startup/ninja-systemd-patcher.sh" "$pf/ninja-systemd-patcher.sh"
+  install -Dm754 "$pkgdir/tmp/ninja-uninstall/ninja-deb-uninstall.sh" "$pf/ninja-deb-uninstall.sh"
+  install -Dm754 "$pkgdir/tmp/ninja-uninstall/ninja-deb-harakiri.sh" "$pf/ninja-deb-harakiri.sh"
+  rm -rf "$pkgdir/tmp"
+
+  chmod 700 "$pf/config"
+  chmod 600 "$pf/config/agent.conf" "$pf/config/server.conf"
+}

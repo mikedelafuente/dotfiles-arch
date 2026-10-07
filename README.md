@@ -23,7 +23,8 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ```bash
 dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-extensions + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
-dfa-weekly                        # dfa-daily + a forced dfa-update-system + dfa-remove-orphans — reach for this ~weekly
+dfa-weekly                        # dfa-daily + a forced dfa-update-system + dfa-remove-orphans + dfa-update-ninjaone — reach for this ~weekly
+dfa-install-ninjaone --url <URL>  # once, work machines: NinjaOne agent from the console's installer .deb URL (saved to ~/.config/dotfiles-arch/ninjaone.env)
 dfa-sync-sources add /path/to/repo # optional: extra rules/skills/extensions repo; then dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
