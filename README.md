@@ -360,6 +360,9 @@ their original names. Dotfiles-arch has final skill priority; duplicate replacem
 source to allow overwrites (`dfa-sync-sources add <path> --overwritable true`).
 Protected duplicates stop sync before links change. See [imports and update review](skills/README.md).
 
+`dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
+source. It displays the current setting; changes apply on the next skill sync.
+
 ### Shared agent config in cloud checkouts
 
 Keep this repository as a second checkout (for example `/workspace/dotfiles-arch`)

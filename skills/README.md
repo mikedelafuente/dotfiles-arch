@@ -47,6 +47,9 @@ For cloud use, keep this checkout available and run
 in `.agents/skills` and the shared global rule baseline, without OS setup.
 See [cloud setup](../README.md#shared-agent-config-in-cloud-checkouts).
 
+`dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
+source. It displays the current setting; changes apply on the next skill sync.
+
 ## Pinned imports
 
 | Group | Source | Pinned revision | Contents |

@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import tempfile
 
@@ -121,8 +122,24 @@ def main():
                                     env=env, text=True, capture_output=True)
             assert (result.returncode == 0) == success, result.stdout + result.stderr
             return result
+        def manage(keys):
+            result = subprocess.run(
+                ["script", "--quiet", "--return", "--command",
+                 shlex.join(["bash", str(repo / "scripts/sync-sources.sh"), "manage"]),
+                 "/dev/null"], input=keys, env=env, text=True, capture_output=True, timeout=10)
+            assert result.returncode == 0, result.stdout + result.stderr
+            return result
         config.write_text("")
+        assert "No extra sources to change" in manage("5\nq\n").stdout
         sources("add", str(extra), "--type", "skills-root")
+        assert "overwritable=false" in sources("list").stdout
+        before = config.read_text()
+        manage("5\n\nq\n")
+        manage("5\ninvalid\nq\n")
+        assert config.read_text() == before
+        manage("5\n1\nq\n")
+        assert "overwritable=true" in sources("list").stdout
+        manage("5\n1\nq\n")
         assert "overwritable=false" in sources("list").stdout
         sources("add", str(extra), "--type", "skills-root", "--overwritable", "true")
         sources("add", str(second), "--type", "skills-root")
