@@ -52,7 +52,7 @@ if systemctl cat sentinelone.service &>/dev/null; then
   sudo systemctl disable --now sentinelone.service || true
 fi
 
-if [[ -x /var/lib/dpkg/info/sentinelagent.prerm ]] || sudo test -d /opt/sentinelone; then
+if dpkg -s sentinelagent &>/dev/null || sudo test -d /opt/sentinelone; then
   if command -v dpkg &>/dev/null && dpkg -s sentinelagent &>/dev/null; then
     print_action_message "Purging SentinelOne package (dpkg)"
     sudo dpkg --purge --force-remove-reinstreq --force-depends sentinelagent || \
@@ -63,6 +63,13 @@ if [[ -x /var/lib/dpkg/info/sentinelagent.prerm ]] || sudo test -d /opt/sentinel
   sudo rm -f /usr/lib/systemd/system/sentinelone.service /etc/systemd/system/multi-user.target.wants/sentinelone.service /bin/sentinelctl /usr/bin/sentinelctl
   getent passwd sentinelone &>/dev/null && sudo userdel sentinelone
   getent group sentinelone &>/dev/null && sudo groupdel sentinelone
+  # The vendor postrm needs update-rc.d/chkconfig and exits 103 on Arch; with its scripts
+  # gone dpkg can drop the package record without running them.
+  if dpkg -s sentinelagent &>/dev/null; then
+    print_action_message "Dropping the stuck sentinelagent record from the dpkg database"
+    sudo rm -f /var/lib/dpkg/info/sentinelagent.*
+    sudo dpkg --purge --force-all sentinelagent
+  fi
   sudo systemctl daemon-reload
 else
   print_info_message "SentinelOne not present — skip"
