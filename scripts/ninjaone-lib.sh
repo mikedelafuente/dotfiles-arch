@@ -9,6 +9,9 @@
 NINJAONE_PKG="ninjaone-agent"
 NINJAONE_BIN="/opt/NinjaRMMAgent/programfiles/ninjarmm-linagent"
 NINJAONE_AGENT_CONF="/opt/NinjaRMMAgent/programfiles/config/agent.conf"
+# Keep in sync with depends in ninjaone/PKGBUILD.
+# shellcheck disable=SC2034
+NINJAONE_RUNTIME_DEPS=(dmidecode dpkg inetutils lsof)
 NINJAONE_PKG_DIR="$DF_SCRIPT_DIR/ninjaone"
 
 ninjaone_env_file() {

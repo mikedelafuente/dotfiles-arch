@@ -74,6 +74,8 @@ if ! ninjaone_binary_present; then
   ninjaone_build_and_install "$NINJAONE_INSTALLER_URL" || exit 1
 fi
 
+ensure_pacman_pkgs "${NINJAONE_RUNTIME_DEPS[@]}"
+
 status=0
 for unit in ninjarmm-agent.service ninjarmm-patcher.timer; do
   if ! systemctl is-active --quiet "$unit"; then
