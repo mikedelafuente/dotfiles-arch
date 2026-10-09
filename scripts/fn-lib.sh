@@ -709,31 +709,32 @@ has_intel_gpu_hardware() {
 # -e boolean expression; a match means the hook is already registered, so
 # this is a no-op), merge_filter (a jq program producing the updated
 # document), label (human-readable description used in log messages).
-# Leaves the file untouched (with a warning) if jq is missing or the merge
+# Leaves the file untouched and returns failure if jq is missing or the merge
 # filter fails against a malformed existing file.
 ensure_json_hook_registered() {
   local file="$1" seed_json="$2" present_filter="$3" merge_filter="$4" label="$5"
 
   if ! command -v jq &>/dev/null; then
-    print_warning_message "jq not found — skipping $label"
-    return
+    print_error_message "jq not found — cannot register $label"
+    return 1
   fi
 
-  mkdir -p "$(dirname "$file")"
-  [ -f "$file" ] || echo "$seed_json" > "$file"
+  mkdir -p "$(dirname "$file")" || return 1
+  [ -f "$file" ] || echo "$seed_json" > "$file" || return 1
 
   if jq -e "$present_filter" "$file" &>/dev/null; then
     return
   fi
 
   local tmp
-  tmp="$(mktemp)"
+  tmp="$(mktemp "${file}.XXXXXX")" || return 1
   if jq "$merge_filter" "$file" > "$tmp"; then
-    mv "$tmp" "$file"
+    mv "$tmp" "$file" || return 1
     print_success_message "Added $label to $file"
   else
     rm -f "$tmp"
-    print_warning_message "Could not update $file — add $label manually"
+    print_error_message "Could not update $file — add $label manually"
+    return 1
   fi
 }
 
@@ -771,7 +772,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
-    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
@@ -859,6 +860,8 @@ source "$DF_SCRIPT_DIR/core-cli-lib.sh"
 source "$DF_SCRIPT_DIR/editor-tools-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/desktop-ides-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/harness-lib.sh"
 
 # Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {

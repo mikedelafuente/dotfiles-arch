@@ -9,8 +9,8 @@
 # `npm update -g` for whichever of those CLIs are actually installed.
 # Recognized native Claude uses its own updater, without NVM/npm or sudo.
 #
-# opencode is deliberately excluded — it's a pacman package
-# (setup-opencode.sh), so it's already refreshed by dfa-update-system.
+# opencode uses native updates on Arch and user npm on Ubuntu. Unknown
+# launchers fail rather than silently acquiring another source.
 # --------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
@@ -23,70 +23,50 @@ else
   exit 1
 fi
 
-# harness id -> npm package name (kept in sync by hand with setup-claude.sh /
-# setup-codex.sh / setup-pi.sh)
-declare -A NPM_HARNESS_PACKAGES=(
-  [claude]="@anthropic-ai/claude-code"
-  [codex]="@openai/codex"
-  [pi]="@earendil-works/pi-coding-agent"
-)
-
-print_line_break "Update agent CLIs (npm / native Claude)"
-
+[[ "$EUID" != 0 ]] || { print_error_message 'Run CLI updates as the user, without sudo'; exit 1; }
+print_line_break "Update agent CLIs through their selected owners"
 updated=0
 failed=0
-native_claude=false
-claude_launcher="$(type -P claude || true)"
-claude_resolved="$(readlink -f "$claude_launcher" || true)"
-if claude_native_owns_launcher "$USER_HOME_DIR/.local/share/claude" "$claude_resolved"; then
-  native_claude=true
-  print_action_message "Updating native Claude through its selected owner (claude update)"
-  if "$claude_launcher" update; then
-    ((updated++)) || true
-  else
-    print_error_message "Failed to update native Claude"
-    ((failed++)) || true
-  fi
-fi
+load_nvm || true
 
-if ! load_nvm || ! command -v npm &>/dev/null; then
-  print_info_message "NVM/npm not available — skip npm CLI updates"
-  ((failed == 0)) && exit 0
-  exit 1
-fi
-
-npm_root="$(npm root -g)" || {
-  print_error_message "Cannot determine npm's global package owner"
-  exit 1
-}
-
-for harness in claude codex pi; do
-  [[ "$harness" != claude || "$native_claude" != true ]] || continue
-  package="${NPM_HARNESS_PACKAGES[$harness]}"
-
+for harness in claude codex pi opencode; do
   if ! command -v "$harness" &>/dev/null; then
     print_info_message "$harness not installed — skip"
     continue
   fi
-
-  package_dir="$(readlink -f "$npm_root/$package" || true)"
-  launcher="$(readlink -f "$(type -P "$harness")" || true)"
-  if ! npm_harness_owns_launcher "$package_dir" "$launcher"; then
-    print_error_message "Source conflict: $harness launcher is not owned by $package in this npm prefix; retained. Use its selected update owner."
+  owner="$(harness_installed_owner "$harness")" || {
+    print_error_message "Cannot identify $harness update owner; retained"
     ((failed++)) || true
     continue
-  fi
-
+  }
+  case "$owner" in
+    native)
+      print_info_message "$harness is native-package-owned — dfa-update-system handles it"
+      continue ;;
+    claude-native)
+      if claude update; then
+        ((updated++)) || true
+      else
+        print_error_message 'Failed to update native Claude'
+        ((failed++)) || true
+      fi
+      continue ;;
+  esac
+  package="$(harness_npm_package "$harness")" || exit 1
   before_version="$("$harness" --version 2>/dev/null || true)"
-  print_action_message "Updating $harness ($package) via npm"
-  if npm update -g "$package"; then
+  print_action_message "Updating $harness ($package) via user npm"
+  # Pi's lifecycle scripts stay blocked on refresh as well as acquisition.
+  npm_args=()
+  [[ "$harness" != pi ]] || npm_args+=(--ignore-scripts)
+  if npm update -g "${npm_args[@]}" "$package"; then
     after_version="$("$harness" --version 2>/dev/null || true)"
-    if [[ -n "$after_version" && "$after_version" != "$before_version" ]]; then
-      print_success_message "$harness updated: $before_version -> $after_version"
+    if [[ -n "$after_version" ]]; then
+      print_success_message "$harness checked: $before_version -> $after_version"
+      ((updated++)) || true
     else
-      print_success_message "$harness already up to date ($after_version)"
+      print_error_message "$harness unavailable after npm refresh"
+      ((failed++)) || true
     fi
-    ((updated++)) || true
   else
     print_error_message "Failed to update $harness ($package)"
     ((failed++)) || true

@@ -523,3 +523,82 @@ FUSE/sandbox behavior, shared settings compatibility, desktop/MIME integration a
 Vulkan/Wayland runtime are **unverified**. No setup/update/cleanup/service/driver/
 GNOME workflow or networked test was executed. Resolve reported source conflicts
 explicitly; do not silently migrate a managed/work installation.
+
+### Agent harnesses and ChatGPT distro slice
+
+Implemented for [#146](https://github.com/mikedelafuente/dotfiles-arch/issues/146).
+
+| App | Arch source | Ubuntu 26.04 amd64 source | Update owner |
+| --- | --- | --- | --- |
+| Claude Code | User npm `@anthropic-ai/claude-code`; retain recognized user-native installs | Same | `dfa-update-npm-clis`: npm or `claude update`; native background preferences retained |
+| Codex CLI | User npm `@openai/codex` | Same | `dfa-update-npm-clis` |
+| Pi | User npm `@earendil-works/pi-coding-agent`, lifecycle scripts blocked | Same | `dfa-update-npm-clis`, also with `--ignore-scripts` |
+| opencode CLI | Official `opencode` package; retain existing user npm if recognized | Stable user npm `opencode-ai`, documented source exception | Native: `dfa-update-system`; npm: `dfa-update-npm-clis` |
+| Selected official ChatGPT desktop | Guarded `chatgpt-desktop` AUR recipe; retain existing official `chatgpt` package | Official `chatgpt` from scoped, signed OpenAI APT repository | `dfa-update-system` (Arch AUR/native or Ubuntu APT) |
+
+[Stable opencode instructions](https://opencode.ai/docs/) document `opencode-ai`
+and Arch's native package. This slice retains the `opencode` CLI identity and
+existing provider configuration; it does not switch to the beta `opencode2` CLI.
+Claude/Codex/Pi retain existing npm sources. Setup/update refuse root invocation
+and system npm prefixes, verify resolved launcher ownership, and preserve unknown
+installations with a source-conflict failure. Existing npm script allowlists are
+extended only when installing missing Claude/opencode. CLI sources must be
+resolved explicitly when a native package shadows npm or another installation.
+Recognized native Claude remains usable without NVM/npm. Missing npm for an
+installed unrecognized launcher is a failure, not a successful maintenance skip.
+
+[Official ChatGPT Linux instructions](https://learn.chatgpt.com/docs/linux/linux-app)
+confirm Ubuntu 26.04 and signed package-manager updates. The existing
+[AUR recipe](https://aur.archlinux.org/packages/chatgpt-desktop) repackages that same
+OpenAI binary; no alternative ChatGPT wrapper is substituted. Read-only source
+inspection on 2026-10-08 found vendor amd64 package `26.1007.21434` and inspected
+only its DEB control archive via an HTTP byte range, without executing it.
+The vendor postinst uses `/etc/apt/sources.list.d/chatgpt.sources` and
+`/usr/share/keyrings/chatgpt-archive-keyring.gpg`; this slice prepares that exact
+scoped source before APT acquisition, avoiding an unverified standalone DEB.
+`scripts/keys/chatgpt.asc` is the public signing key extracted from that vendor
+postinst, fingerprint `3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4`.
+The source is `https://persistent.oaistatic.com/codex-app-prod/linux/deb`, suite
+`stable`, component `main`, architecture `amd64`. APT verifies metadata/artifact
+integrity with this key; no global trust or pipe-to-shell installer is added.
+Unknown launchers, duplicate source declarations, altered source/key files, and
+an existing repository opt-out are retained and reported as conflicts. Key
+rotation needs a reviewed fingerprint/key update. Ubuntu automatic security
+updates, holds, pins, and management policies remain with existing owners.
+
+No command names, bootstrap preferences, profile selection, schema versions, or
+shared harness detection/fallback change. Codex setup enables only
+`[features].hooks`, removes its deprecated `codex_hooks` entry, and preserves
+unrelated TOML data/comments; malformed or unsafe inline/dotted feature tables
+fail with preservation diagnostics. JSON reveal hooks merge into existing
+`PostToolUse`, preserving other hooks/preferences. Missing jq or malformed hook
+JSON fails setup. Local Ollama model integration remains optional: absent or
+unavailable service skips; a failed required config refresh returns nonzero to
+`dfa-daily`. Model names are validated before writing TOML. Codex uses its built-in
+Ollama provider; opencode retains the shared OpenAI-compatible provider shape.
+Real commented JSONC remains unsupported and is reported as a model-sync failure.
+
+Inspect without running setup/update:
+
+```bash
+jq '.hooks.PostToolUse' ~/.claude/settings.json ~/.codex/hooks.json
+sed -n '/^\[features\]/,/^\[/p' ~/.codex/config.toml
+cat /etc/apt/sources.list.d/chatgpt.sources  # Ubuntu
+python3 tests/test_harness_decisions.py
+bash scripts/check.sh
+```
+
+Owner selection/source conflicts and Codex TOML transformations are checked with
+supplied host/package/source facts, strings, and temporary files, with forbidden
+command guards. No test invokes setup, updater, package/service/desktop commands,
+or a network endpoint. Bash syntax/ShellCheck cover all shell entrypoints; there
+is no typechecker for these shell/Python scripts. Static inspection confirms
+CLI/hook/ChatGPT/model-refresh failures propagate through existing setup/daily
+aggregators; npm CLI refreshes do not write system-update stamps. Shared default
+harness detection, launchers, and Ollama dispatch were inspected without execution.
+
+Installation, npm/native/AUR/APT updates, vendor maintainer-script behavior, app
+launch/login, hooks inside live agents, default-harness runtime fallback, and
+Ollama model use on either workstation remain **unverified**. Wayland behavior
+is also unverified; upstream calls native Wayland experimental. Full Ubuntu
+orchestration and optional Ollama acquisition remain separately guarded slices.

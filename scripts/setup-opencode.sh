@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # --------------------------
-# Setup opencode CLI for Arch Linux
+# Setup opencode CLI for Arch and Ubuntu
 # --------------------------
-# opencode is in the official [extra] repo — plain pacman, no AUR needed.
+# Arch uses [extra]; Ubuntu uses the stable opencode-ai user npm package.
 # --------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
@@ -18,7 +18,7 @@ fi
 
 print_tool_setup_start "opencode"
 
-ensure_pacman_pkgs opencode
+ensure_harness_cli opencode || exit $?
 
 if command -v opencode &>/dev/null; then
   print_success_message "opencode available as: $(command -v opencode)"

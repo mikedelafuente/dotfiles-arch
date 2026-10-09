@@ -4,7 +4,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux setup, and package maintenance**
+Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, and package maintenance**
 are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
@@ -42,6 +42,14 @@ APT repository, and the remaining CLI packages use native sources. Native update
 belong to `dfa-update-system`; NVM files to standalone Node setup after pin updates;
 Node LTS to `nvm install --lts` with an explicitly selected default. See the
 [full command/source/version/update matrix and unverified paths](PACKAGES.md#shared-shell-and-core-cli-distro-slice).
+
+Standalone `setup-claude.sh`, `setup-codex.sh`, `setup-pi.sh`, and
+`setup-opencode.sh` now support both hosts after user-owned Node setup. Ubuntu
+opencode uses stable `opencode-ai` through user npm; Arch retains native packages.
+Codex setup retains the selected official ChatGPT desktop application: guarded
+AUR on Arch, OpenAI's signed APT repository on Ubuntu. ChatGPT updates use
+`dfa-update-system`; npm-owned harnesses use `dfa-update-npm-clis`.
+See [sources, conflicts, hook inspection, and unverified paths](PACKAGES.md#agent-harnesses-and-chatgpt-distro-slice).
 
 `dfa-update-npm-clis` also recognizes official user-native Claude installations
 and runs `claude update` without NVM/npm or root ownership changes. Unknown agent

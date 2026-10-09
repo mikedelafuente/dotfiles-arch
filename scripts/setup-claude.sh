@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Claude Code CLI for Arch Linux
+# Setup Claude Code CLI for Arch and Ubuntu
 # --------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
@@ -16,29 +16,7 @@ fi
 
 print_tool_setup_start "Claude Code"
 
-# Prefer user-level NVM npm (never sudo npm — mixes root globals with NVM).
-if ! load_nvm || ! command -v npm &>/dev/null; then
-  print_error_message "npm not found. Run setup-node.sh first (NVM at ~/.config/nvm)."
-  exit 1
-fi
-
-if command -v claude &>/dev/null; then
-  print_info_message "Claude Code is already installed: $(command -v claude)"
-else
-  # npm blocks lifecycle scripts by default; @anthropic-ai/claude-code needs
-  # its postinstall to run, so explicitly allowlist it (user-level npmrc).
-  npm config set allow-scripts=@anthropic-ai/claude-code --location=user
-  print_action_message "Installing Claude Code via user npm (no sudo)"
-  npm install -g @anthropic-ai/claude-code
-fi
-
-if command -v claude &>/dev/null; then
-  print_success_message "Claude Code available as: $(command -v claude)"
-  claude --version 2>/dev/null || true
-else
-  print_error_message "Claude Code installation may have failed"
-  exit 1
-fi
+ensure_harness_cli claude || exit $?
 
 # --------------------------
 # PostToolUse hook: reveal edited files in the paired Neovim pane

@@ -40,9 +40,15 @@ if ! OLLAMA_LIST_OUTPUT="$(ollama list 2>/dev/null)"; then
   exit 0
 fi
 
+failed=0
 OLLAMA_MODELS=()
 while IFS= read -r name; do
-  [[ -n "$name" ]] && OLLAMA_MODELS+=("$name")
+  [[ -n "$name" ]] || continue
+  [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] || {
+    print_error_message "Invalid Ollama model name; config retained"
+    exit 1
+  }
+  OLLAMA_MODELS+=("$name")
 done < <(printf '%s\n' "$OLLAMA_LIST_OUTPUT" | tail -n +2 | awk '{print $1}')
 
 if ((${#OLLAMA_MODELS[@]} == 0)); then
@@ -62,7 +68,7 @@ if command -v codex &>/dev/null; then
   mkdir -p "$(dirname "$CODEX_CONFIG_TOML")"
   [ -f "$CODEX_CONFIG_TOML" ] || : > "$CODEX_CONFIG_TOML"
 
-  CODEX_TMP="$(mktemp)"
+  CODEX_TMP="$(mktemp "${CODEX_CONFIG_TOML}.XXXXXX")"
   awk -v b="$CODEX_MARKER_BEGIN" -v e="$CODEX_MARKER_END" '
     $0==b {skip=1}
     skip!=1 {print}
@@ -70,7 +76,6 @@ if command -v codex &>/dev/null; then
   ' "$CODEX_CONFIG_TOML" > "$CODEX_TMP"
   # Trim trailing blank lines so re-runs don't grow a gap at EOF.
   sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$CODEX_TMP"
-  mv "$CODEX_TMP" "$CODEX_CONFIG_TOML"
 
   if ((${#OLLAMA_MODELS[@]} > 0)); then
     {
@@ -83,11 +88,12 @@ if command -v codex &>/dev/null; then
         echo ""
       done
       echo "$CODEX_MARKER_END"
-    } >> "$CODEX_CONFIG_TOML"
+    } >> "$CODEX_TMP"
     print_success_message "Codex: synced ${#OLLAMA_MODELS[@]} local model profile(s) (codex --profile ollama-<model>)"
   else
     print_info_message "Codex: no local models to sync — removed any stale profiles"
   fi
+  mv "$CODEX_TMP" "$CODEX_CONFIG_TOML"
 else
   print_info_message "Codex CLI not installed — skipping"
 fi
@@ -97,13 +103,14 @@ fi
 # --------------------------
 if command -v opencode &>/dev/null; then
   if ! command -v jq &>/dev/null; then
-    print_warning_message "jq not found — skipping opencode model sync"
+    print_error_message "jq not found — opencode model sync failed"
+    failed=1
   else
     OPENCODE_CONFIG="$USER_HOME_DIR/.config/opencode/opencode.jsonc"
     mkdir -p "$(dirname "$OPENCODE_CONFIG")"
     [ -f "$OPENCODE_CONFIG" ] || printf '%s\n' "{\"\$schema\": \"https://opencode.ai/config.json\"}" > "$OPENCODE_CONFIG"
 
-    OPENCODE_TMP="$(mktemp)"
+    OPENCODE_TMP="$(mktemp "${OPENCODE_CONFIG}.XXXXXX")"
     if ((${#OLLAMA_MODELS[@]} > 0)); then
       MODELS_JSON="$(printf '%s\n' "${OLLAMA_MODELS[@]}" | jq -R . | jq -s 'map({(.): {name: .}}) | add')"
       if jq --argjson models "$MODELS_JSON" \
@@ -113,14 +120,16 @@ if command -v opencode &>/dev/null; then
         print_success_message "opencode: synced ${#OLLAMA_MODELS[@]} local model(s) to the \"ollama\" provider"
       else
         rm -f "$OPENCODE_TMP"
-        print_warning_message "Could not update $OPENCODE_CONFIG (invalid JSON? comments in .jsonc aren't supported here) — sync it manually"
+        print_error_message "Could not update $OPENCODE_CONFIG (invalid JSON? comments in .jsonc aren't supported here) — sync it manually"
+        failed=1
       fi
     else
       if jq 'del(.provider.ollama)' "$OPENCODE_CONFIG" > "$OPENCODE_TMP"; then
         mv "$OPENCODE_TMP" "$OPENCODE_CONFIG"
       else
         rm -f "$OPENCODE_TMP"
-        print_warning_message "Could not update $OPENCODE_CONFIG (invalid JSON? comments in .jsonc aren't supported here) — sync it manually"
+        print_error_message "Could not update $OPENCODE_CONFIG (invalid JSON? comments in .jsonc aren't supported here) — sync it manually"
+        failed=1
       fi
     fi
   fi
@@ -129,3 +138,5 @@ else
 fi
 
 print_tool_setup_complete "Harness agent models (Ollama)"
+
+exit "$failed"
