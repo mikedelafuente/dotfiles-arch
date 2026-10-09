@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup OpenAI Codex CLI for Arch Linux
+# Setup OpenAI Codex CLI for Arch and Ubuntu
 # --------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
@@ -16,43 +16,7 @@ fi
 
 print_tool_setup_start "Codex CLI"
 
-# Prefer user-level NVM npm (never sudo npm — mixes root globals with NVM).
-if ! load_nvm || ! command -v npm &>/dev/null; then
-  print_error_message "npm not found. Run setup-node.sh first (NVM at ~/.config/nvm)."
-  exit 1
-fi
-
-if command -v codex &>/dev/null; then
-  print_info_message "Codex CLI is already installed: $(command -v codex)"
-else
-  print_action_message "Installing Codex CLI via user npm (no sudo)"
-  npm install -g @openai/codex
-fi
-
-if command -v codex &>/dev/null; then
-  print_success_message "Codex CLI available as: $(command -v codex)"
-  codex --version 2>/dev/null || true
-else
-  print_error_message "Codex CLI installation may have failed"
-  exit 1
-fi
-
-# --------------------------
-# ChatGPT desktop app (AUR — repackaged official binary)
-# --------------------------
-if command -v chatgpt &>/dev/null; then
-  print_info_message "ChatGPT desktop app is already installed: $(command -v chatgpt)"
-else
-  print_action_message "Installing ChatGPT desktop app from AUR (chatgpt-desktop)"
-  ensure_yay_pkgs chatgpt-desktop
-
-  if command -v chatgpt &>/dev/null; then
-    print_success_message "ChatGPT desktop app installed successfully"
-  else
-    print_error_message "ChatGPT desktop app installation failed"
-    print_info_message "You can manually install with: yay -S chatgpt-desktop"
-  fi
-fi
+ensure_harness_cli codex || exit $?
 
 # --------------------------
 # PostToolUse hook: reveal edited files in the paired Neovim pane
@@ -66,33 +30,13 @@ CODEX_CONFIG_DIR="$USER_HOME_DIR/.codex"
 CODEX_CONFIG_TOML="$CODEX_CONFIG_DIR/config.toml"
 CODEX_HOOKS_FILE="$CODEX_CONFIG_DIR/hooks.json"
 
-mkdir -p "$CODEX_CONFIG_DIR"
-[ -f "$CODEX_CONFIG_TOML" ] || : > "$CODEX_CONFIG_TOML"
-
-# Codex renamed the flag [features].codex_hooks -> [features].hooks and warns
-# on the old key, so rewrite a legacy line in place before checking.
-if grep -qE '^\s*codex_hooks\s*=' "$CODEX_CONFIG_TOML" 2>/dev/null; then
-  sed -i -E 's/^\s*codex_hooks\s*=.*/hooks = true/' "$CODEX_CONFIG_TOML"
-  print_success_message "Renamed deprecated codex_hooks to hooks in $CODEX_CONFIG_TOML"
-fi
-
-if grep -qE '^\s*hooks\s*=\s*true\b' "$CODEX_CONFIG_TOML" 2>/dev/null; then
-  : # already enabled
-elif grep -q '^\[features\]' "$CODEX_CONFIG_TOML" 2>/dev/null; then
-  sed -i '/^\[features\]/a hooks = true' "$CODEX_CONFIG_TOML"
-  print_success_message "Enabled hooks in $CODEX_CONFIG_TOML"
-else
-  {
-    echo ""
-    echo "[features]"
-    echo "hooks = true"
-  } >> "$CODEX_CONFIG_TOML"
-  print_success_message "Enabled hooks in $CODEX_CONFIG_TOML"
-fi
+python3 "$DF_SCRIPT_DIR/harness-config.py" "$CODEX_CONFIG_TOML" || exit $?
 
 ensure_json_hook_registered "$CODEX_HOOKS_FILE" '{"hooks": {}}' \
   '(.hooks.PostToolUse // []) | any(.hooks[]?.command == "nvim-reveal-edit")' \
   '.hooks.PostToolUse = ((.hooks.PostToolUse // []) + [{"matcher": "apply_patch", "hooks": [{"type": "command", "command": "nvim-reveal-edit", "timeout": 5}]}])' \
   "the Neovim reveal-on-edit PostToolUse hook"
+
+ensure_chatgpt_desktop || exit $?
 
 print_tool_setup_complete "Codex CLI"

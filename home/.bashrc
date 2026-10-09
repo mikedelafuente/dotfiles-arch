@@ -294,7 +294,7 @@ aliases() {
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
         echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'
-        echo '  Agent updates: npm-owned CLIs plus recognized native Claude via claude update; no duplicate installs'
+        echo '  Agent updates: dfa-update-npm-clis (user npm; native Claude updater); Arch opencode/ChatGPT and Ubuntu ChatGPT use dfa-update-system'
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"
         
