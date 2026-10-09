@@ -287,7 +287,9 @@ aliases() {
         echo "  Skill source: dfa-sync-sources option 5 toggles overwrite permissions"
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
-        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node}.sh'
+        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node,neovim,dev}.sh'
+        echo '  Editor: stable nvim 0.12+, tree-sitter CLI 0.26.1+, tmux 3.2+; preserve sources/configs'
+        echo '  Editor updates: dfa-update-system --force (native plus verified managed upstream releases)'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
         echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'

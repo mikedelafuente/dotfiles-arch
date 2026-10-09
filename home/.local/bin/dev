@@ -137,6 +137,26 @@ if ! command -v nvim &>/dev/null; then
     exit 1
 fi
 
+# Use the same installed-version contract as setup before replacing a session.
+DF_SCRIPT_DIR="$(resolve_dotfiles_arch)/scripts"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/core-cli-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/editor-tools-lib.sh"
+for tool in nvim tree-sitter tmux; do
+    recipe="$(editor_tool_recipe "$tool")"
+    read -r _package minimum _repo <<<"$recipe"
+    tool_path="$(type -P "$tool" || true)"
+    version="$(editor_installed_version "$tool" "$tool_path")" || {
+        echo "Error: cannot verify stable $tool; run scripts/setup-neovim.sh and scripts/setup-dev.sh"
+        exit 1
+    }
+    core_cli_version_at_least "$version" "$minimum" || {
+        echo "Error: $tool $minimum+ required; run dfa-update-system --force and resolve any source conflict"
+        exit 1
+    }
+done
+
 # Tmux-safe session name derived from the directory basename; see
 # tmux_session_name_for in dotfiles-arch-lib.sh (also used by nvim-reveal-edit
 # to find this session's Neovim socket).
@@ -162,7 +182,8 @@ NVIM_SOCKET="${XDG_RUNTIME_DIR:-/tmp}/dotfiles-arch-nvim-${SESSION_NAME}.sock"
 rm -f "$NVIM_SOCKET"
 
 NVIM_PANE="$(tmux new-session -d -s "$SESSION_NAME" -c "$TARGET_DIR" -n code -P -F '#{pane_id}')"
-tmux send-keys -t "$NVIM_PANE" "nvim --listen '$NVIM_SOCKET' ." C-m
+printf -v NVIM_COMMAND 'nvim --listen %q .' "$NVIM_SOCKET"
+tmux send-keys -t "$NVIM_PANE" "$NVIM_COMMAND" C-m
 
 AGENT_PANE="$(tmux split-window -t "$NVIM_PANE" -h -p 25 -c "$TARGET_DIR" -P -F '#{pane_id}')"
 if [[ -n "$AGENT" ]]; then
@@ -197,7 +218,8 @@ fi
 
 # Plain terminal: launch Kitty attached to the session, killing it on exit.
 if command -v kitty &>/dev/null; then
-    exec kitty -e bash -c "tmux attach-session -t '$SESSION_NAME'; tmux kill-session -t '$SESSION_NAME' 2>/dev/null || true"
+    # shellcheck disable=SC2016 # Arguments expand in the child Bash process.
+    exec kitty -e bash -c 'tmux attach-session -t "$1"; tmux kill-session -t "$1" 2>/dev/null || true' dev "$SESSION_NAME"
 fi
 
 exec tmux attach-session -t "$SESSION_NAME"

@@ -771,7 +771,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
-    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-kitty.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
@@ -855,6 +855,8 @@ ensure_multilib_enabled() {
 source "$DF_SCRIPT_DIR/aur-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/core-cli-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/editor-tools-lib.sh"
 
 # Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {
@@ -941,6 +943,7 @@ safe_system_upgrade() (
       print_action_message "Upgrading via APT (holds/pins retained; no removals)"
       sudo apt-get upgrade --with-new-pkgs --no-remove "${flags[@]}" || return $?
       print_info_message "APT policy-held/deferred packages remain unchanged; automatic security updates are retained."
+      refresh_editor_tools || return $?
       print_success_message "Guarded system update complete"
       return 0
       ;;
@@ -991,6 +994,7 @@ EOF
       return 1
     fi
     print_info_message "No foreign packages installed — AUR updates not needed"
+    refresh_editor_tools || return $?
     return 0
   fi
 
@@ -1004,6 +1008,7 @@ EOF
   # Official repos were already updated; keep this transaction AUR-only.
   yay -Sua "${flags[@]}" || return $?
 
+  refresh_editor_tools || return $?
   print_success_message "Guarded system update complete"
 )
 

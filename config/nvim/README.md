@@ -30,13 +30,24 @@ A clean, beginner-friendly Neovim setup with LSP support for multiple programmin
 
 These are automatically installed by `setup-neovim.sh`:
 
-- Neovim >= 0.10.0
+- Neovim >= 0.12.0 (stable)
+- tree-sitter CLI >= 0.26.1 (stable; native or verified upstream, never npm)
 - Git
 - A C compiler (gcc/clang)
-- Node.js (for LSP servers)
+- Node.js via NVM (run `setup-node.sh` first; setup loads an existing NVM)
 - Python 3 with pip
 - ripgrep (for Telescope live grep)
 - fd (for Telescope find files)
+- curl, tar, gzip, unzip, make, jq, and Wayland/XWayland clipboard clients
+
+Rolling Arch and Ubuntu 26.04 share this configuration and pinned plugins.
+Setup retains compatible native tools, or selects a verified stable upstream
+release for a missing tool with an old/absent native candidate. Native packages
+and managed upstream tools update through `dfa-update-system` (daily/weekly;
+`--force` bypasses cooldown). Unknown sources, old existing native tools, and
+user config conflicts fail without migration or replacement. Existing per-file
+repo links, identical copies, and additional user files are retained. See the
+[source/update matrix and unverified runtime paths](../../PACKAGES.md#neovim-and-tmux-distro-slice).
 
 ## 🚀 Installation
 
@@ -44,10 +55,11 @@ The configuration is managed through the dotfiles repository:
 
 ```bash
 # Run the setup script
-bash ~/repos/dotfiles-fedora/scripts/setup-neovim.sh
+bash scripts/setup-node.sh
+bash scripts/setup-neovim.sh
 
 # Link the configuration files
-bash ~/repos/dotfiles-fedora/scripts/link-dotfiles.sh
+# Standalone editor setup links its config; full Arch sync links all dotfiles.
 
 # Start Neovim (plugins will install automatically)
 nvim

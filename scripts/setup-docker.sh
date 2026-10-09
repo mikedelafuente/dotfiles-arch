@@ -102,12 +102,7 @@ sudo usermod -aG docker "$TARGET_USER"
 # Install Lazy Docker
 # --------------------------
 
-if ! command -v lazydocker &> /dev/null; then
-    print_info_message "Installing lazydocker from official repos"
-    sudo pacman -S --needed --noconfirm lazydocker
-else
-    print_info_message "lazydocker is already installed. Skipping installation."
-fi
+ensure_editor_tool lazydocker || exit 1
 
 
 # --------------------------
@@ -123,4 +118,3 @@ print_warning_message "or restart your terminal session. You may also need to re
 echo ""
 
 print_tool_setup_complete "Docker"
-

@@ -15,46 +15,27 @@ fi
 
 print_tool_setup_start "dev Command (Development Launcher)"
 
-DEPENDENCIES=(tmux lazygit lazydocker)
-MISSING_DEPS=()
+REPO_ROOT="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
+editor_config_allowed "$REPO_ROOT/home/.tmux.conf" "$USER_HOME_DIR/.tmux.conf" || {
+    print_error_message "tmux config conflict; preserved"
+    exit 1
+}
+ensure_core_cli lazygit || exit 1
+# Prerequisites for the verified Ubuntu lazydocker release exception.
+ensure_core_cli curl || exit 1
+ensure_core_cli jq || exit 1
+case "$WORKSTATION_DISTRO" in
+    arch) ensure_native_pkgs python tar gzip ca-certificates ;;
+    ubuntu) ensure_native_pkgs python3 tar gzip ca-certificates ;;
+esac
+ensure_editor_tool tmux || exit 1
+ensure_editor_tool lazydocker || exit 1
+link_editor_config "$REPO_ROOT/home/.tmux.conf" "$USER_HOME_DIR/.tmux.conf" || exit 1
 
-for dep in "${DEPENDENCIES[@]}"; do
-    if ! command -v "$dep" &> /dev/null; then
-        MISSING_DEPS+=("$dep")
-    fi
-done
-
-if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
-    print_info_message "Installing missing dependencies: ${MISSING_DEPS[*]}"
-
-    for dep in "${MISSING_DEPS[@]}"; do
-        case "$dep" in
-            tmux)
-                sudo pacman -S --needed --noconfirm tmux
-                ;;
-            lazygit)
-                sudo pacman -S --needed --noconfirm lazygit
-                ;;
-            lazydocker)
-                ensure_yay_pkgs lazydocker
-                ;;
-        esac
-
-        if command -v "$dep" &> /dev/null; then
-            print_success_message "$dep installed successfully"
-        else
-            print_error_message "Failed to install $dep"
-        fi
-    done
+if [[ ":$PATH:" != *":$USER_HOME_DIR/.local/bin:"* ]]; then
+    print_warning_message "$USER_HOME_DIR/.local/bin is not in PATH; source the shared shell configuration before using dev"
 else
-    print_info_message "All dependencies are already installed"
-fi
-
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    print_warning_message "\$HOME/.local/bin is not in PATH"
-    print_info_message "This will be added to PATH when dotfiles are linked"
-else
-    print_info_message "\$HOME/.local/bin is already in PATH"
+    print_info_message "$USER_HOME_DIR/.local/bin is already in PATH"
 fi
 
 DOTFILES_DIR="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
@@ -65,6 +46,7 @@ if [ -f "$DEV_SCRIPT" ]; then
     print_success_message "Made dev script executable"
 else
     print_error_message "dev script not found at $DEV_SCRIPT"
+    exit 1
 fi
 
 # DEFAULT_HARNESS drives which agent harness `dev --tmux` starts in its agent
