@@ -1,17 +1,7 @@
 #!/bin/bash
-# --------------------------
-# Setup NVIDIA drivers (optional)
-# --------------------------
-# Installs nvidia-open-dkms + utils when this machine should use NVIDIA drivers.
-#
-# Decision order:
-#   1. INSTALL_NVIDIA=true|false from env / bootstrap config (explicit)
-#   2. --yes / non-interactive: install only if packages already present OR hardware detected
-#   3. Interactive: prompt, defaulting to yes when packages or hardware are detected
-# --------------------------
-
+# Optional native NVIDIA setup. --yes retains saved opt-in; never opts in from PCI.
+# Existing packages, modules and manual/work-managed stacks remain untouched.
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-
 if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
   # shellcheck source=/dev/null
   source "$CURRENT_FILE_DIR/dotheader.sh"
@@ -21,79 +11,84 @@ else
 fi
 
 ASSUME_YES=false
-FORCE_INSTALL=""
+FORCE_INSTALL=''
 for arg in "$@"; do
   case "$arg" in
     --yes|-y) ASSUME_YES=true ;;
     --install) FORCE_INSTALL=true ;;
     --skip) FORCE_INSTALL=false ;;
+    -h|--help)
+      printf '%s\n' 'Usage: bash scripts/setup-nvidia.sh [--install|--skip] [--yes]' \
+        'Only an explicit opt-in permits a new install; existing driver stacks are preserved.'
+      exit 0 ;;
+    *) print_error_message "Unknown NVIDIA option: $arg"; exit 1 ;;
   esac
 done
+export ASSUME_YES
 
-# Load saved bootstrap preference when not already set
-if [ -z "${INSTALL_NVIDIA:-}" ]; then
-  load_bootstrap_config || true
-fi
-
-print_tool_setup_start "NVIDIA drivers"
-
-PACKAGES_PRESENT=false
-DRIVER_PRESENT=false
-HARDWARE_PRESENT=false
-if has_nvidia_packages; then
-  PACKAGES_PRESENT=true
-fi
-if [[ -n "$(nvidia_driver_packages)" ]]; then
-  DRIVER_PRESENT=true
-fi
-if has_nvidia_hardware; then
-  HARDWARE_PRESENT=true
-fi
-
-print_info_message "NVIDIA packages installed: $PACKAGES_PRESENT"
-print_info_message "NVIDIA driver module present: $DRIVER_PRESENT$([ "$DRIVER_PRESENT" = true ] && printf ' (%s)' "$(nvidia_driver_packages | paste -sd, -)")"
-print_info_message "NVIDIA hardware detected:  $HARDWARE_PRESENT"
-
-should_install=""
-if [ -n "$FORCE_INSTALL" ]; then
-  should_install="$FORCE_INSTALL"
-elif [[ "${INSTALL_NVIDIA:-}" == "true" || "${INSTALL_NVIDIA:-}" == "1" || "${INSTALL_NVIDIA:-}" == "yes" || "${INSTALL_NVIDIA:-}" == "y" ]]; then
-  should_install=true
-elif [[ "${INSTALL_NVIDIA:-}" == "false" || "${INSTALL_NVIDIA:-}" == "0" || "${INSTALL_NVIDIA:-}" == "no" || "${INSTALL_NVIDIA:-}" == "n" ]]; then
-  should_install=false
-fi
-
-if [ -z "$should_install" ]; then
-  # No explicit preference — detect / prompt (or auto with --yes)
-  export ASSUME_YES
-  resolve_nvidia_preference
-  should_install="$INSTALL_NVIDIA"
-fi
-
-# Persist preference for bootstrap/sync (preserve other identity fields)
-_nvidia_decision="$should_install"
+[[ -n "${INSTALL_NVIDIA:-}" ]] || load_bootstrap_config || true
+case "${FORCE_INSTALL:-${INSTALL_NVIDIA:-}}" in
+  true|1|yes|y) should_install=true ;;
+  false|0|no|n) should_install=false ;;
+  '') resolve_nvidia_preference; should_install="$INSTALL_NVIDIA" ;;
+  *) print_error_message 'Invalid INSTALL_NVIDIA preference; no driver changes'; exit 1 ;;
+esac
+# Keep all saved identity/profile fields through the existing accessors.
 load_bootstrap_config || true
-INSTALL_NVIDIA="$_nvidia_decision"
-unset _nvidia_decision
-write_bootstrap_config
+INSTALL_NVIDIA="$should_install"
+write_bootstrap_config || exit 1
 
-if [ "$should_install" != true ]; then
-  print_info_message "Skipping NVIDIA driver install (INSTALL_NVIDIA=false)"
-  print_tool_setup_complete "NVIDIA drivers"
-  exit 0
+print_tool_setup_start 'NVIDIA drivers'
+packages="$(gpu_installed_nvidia_packages)" || { print_error_message 'Cannot inspect native NVIDIA packages'; exit 1; }
+stack=false
+hardware=false
+[[ -z "$packages" ]] || stack=true
+# Presence protects an external installation; it never proves a working GPU.
+if [[ -e /proc/driver/nvidia/version || -e /var/log/nvidia-installer.log ]] \
+  || command -v nvidia-smi >/dev/null \
+  || { command -v modinfo >/dev/null && modinfo nvidia &>/dev/null; }; then stack=true; fi
+has_nvidia_hardware && hardware=true
+decision="$(nvidia_setup_selection "$WORKSTATION_DISTRO" "$should_install" "$stack" "$hardware")" || exit 1
+case "$decision" in
+  preserve)
+    print_info_message "Existing NVIDIA stack retained (${packages:-external/manual}); no driver, utils, headers or source changes"
+    ;;
+  skip)
+    print_info_message 'Skipping NVIDIA installation (explicit opt-in and NVIDIA hardware required)'
+    print_tool_setup_complete 'NVIDIA drivers'
+    exit 0 ;;
+  install)
+    case "$WORKSTATION_DISTRO" in
+      arch)
+        if ! command -v lspci >/dev/null \
+          || ! gpu_nvidia_open_supported "$(LC_ALL=C lspci -nn)"; then
+          print_error_message 'Arch driver selection pending: cannot verify every NVIDIA GPU is Turing+. Select a compatible driver manually; no driver packages changed.'
+          exit 1
+        fi
+        ensure_native_pkgs nvidia-open-dkms nvidia-utils nvidia-settings linux-headers || exit 1 ;;
+      ubuntu)
+        ensure_native_pkgs ubuntu-drivers-common || exit 1
+        recommendation="$(/usr/bin/ubuntu-drivers devices)" || exit 1
+        driver="$(ubuntu_nvidia_recommendation "$recommendation")" || {
+          print_error_message 'No single native Ubuntu NVIDIA hardware recommendation; driver selection pending'
+          exit 1
+        }
+        # Prefer Ubuntu's signed module for the running kernel. DKMS fallback stays
+        # Ubuntu-owned and may need MOK enrollment; never add NVIDIA's CUDA repo.
+        modules="linux-modules-${driver/nvidia-driver-/nvidia-}-$(uname -r)"
+        candidate="$(editor_native_candidate "$modules")" || exit 1
+        if [[ -n "$candidate" ]]; then
+          ensure_native_pkgs "$modules" "$driver" || exit 1
+        else
+          print_warning_message 'Signed module unavailable for this kernel; Ubuntu DKMS activation may require Secure Boot/MOK enrollment'
+          ensure_native_pkgs "$driver" || exit 1
+        fi ;;
+    esac ;;
+esac
+
+if [[ "$should_install" == true ]] \
+  && ! { command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=driver_version --format=csv,noheader >/dev/null 2>&1; }; then
+  print_warning_message 'NVIDIA activation pending: reboot, complete Secure Boot/MOK enrollment if required, and verify nvidia-smi. Existing drivers were retained.'
+  exit 1
 fi
-
-# Never swap driver flavors (nvidia-open vs nvidia-open-dkms conflict).
-if [ "$DRIVER_PRESENT" = true ]; then
-  print_info_message "NVIDIA kernel module already installed — leaving flavor alone, ensuring utils/settings/headers"
-  sudo pacman -S --needed --noconfirm nvidia-utils nvidia-settings linux-headers
-elif [ "$PACKAGES_PRESENT" = true ]; then
-  print_info_message "NVIDIA utils present without a module package — installing nvidia-open-dkms"
-  sudo pacman -S --needed --noconfirm nvidia-open-dkms nvidia-utils nvidia-settings linux-headers
-else
-  print_action_message "Installing NVIDIA open DKMS drivers (Turing+)"
-  sudo pacman -S --needed --noconfirm nvidia-open-dkms nvidia-utils nvidia-settings linux-headers
-fi
-
-print_success_message "NVIDIA drivers ready"
-print_tool_setup_complete "NVIDIA drivers"
+print_tool_setup_complete 'NVIDIA drivers'
