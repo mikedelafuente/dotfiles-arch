@@ -191,6 +191,9 @@ install_obsidian_deb() (
 # AUR recipe, matched against official bytes. Upstream changes require pin review.
 install_keymapp_archive() (
   local stage root="$USER_HOME_DIR/.local/share/dotfiles-arch/keymapp" digest="$KEYMAPP_RELEASE_SHA256" version="$KEYMAPP_RELEASE_VERSION" target swap=''
+  [[ "$EUID" != 0 && -z "${SUDO_USER:-}" ]] || {
+    print_error_message 'Run Keymapp setup/update as the workstation user, without sudo' >&2; return 1;
+  }
   core_cli_link_allowed "$root/current/keymapp" "$USER_HOME_DIR/.local/bin/keymapp" || return 1
   core_cli_link_allowed "$root/current/keymapp" "$root/.dfa-preflight" || return 1
   [[ ! -e "$root/current" || -L "$root/current" ]] || return 1
@@ -235,6 +238,9 @@ PY
 
 ensure_desktop_utility() {
   local app="$1" selection package owner binary desktop root target
+  [[ "$app" != keymapp || ( "$EUID" != 0 && -z "${SUDO_USER:-}" ) ]] || {
+    print_error_message 'Run Keymapp setup/update as the workstation user, without sudo' >&2; return 1;
+  }
   selection="$(desktop_utility_installed_selection "$app")" || {
     print_error_message "Required $app source/launcher/update-owner gap; preserved"; return 1;
   }
