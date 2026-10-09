@@ -1,25 +1,6 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Rust and Cargo for Arch Linux
-# --------------------------
-# Rust is installed via rustup, which is the recommended method for Arch.
-# Arch provides two options:
-# 1. Prepackaged Rust (pacman -S rust) - auto-updates via pacman
-# 2. Rustup (pacman -S rustup, then rustup-init) - standard Rust tooling
-#
-# This script uses rustup because:
-# - Allows multiple toolchain versions (stable, beta, nightly)
-# - Easy updates with 'rustup update'
-# - Component management (rust-analyzer, clippy, rustfmt, etc.)
-# - Cross-compilation support
-# - Official support from the Rust team
-# - Industry standard approach
-#
-# Reference: https://wiki.archlinux.org/title/Rust
-# --------------------------
-
-# --------------------------
 # Import Common Header 
 # --------------------------
 
@@ -40,56 +21,58 @@ fi
 # --------------------------
 
 print_tool_setup_start "Rust and Cargo"
-
-# --------------------------
-# Install Rustup (Arch's Recommended Method)
-# --------------------------
-
-# Check if Rust is already installed
-if ! command -v cargo &> /dev/null; then
-    print_info_message "Installing rustup via pacman"
-
-    # Install rustup from Arch repositories
-    sudo pacman -S --needed --noconfirm rustup
-
-    # Install stable toolchain and set as default
-    print_info_message "Installing stable Rust toolchain"
-    rustup default stable
-
-    # Source the cargo environment for immediate use
-    # shellcheck source=/dev/null
-    # Source cargo env only if it exists
-    if [ -f "$USER_HOME_DIR/.cargo/env" ]; then
-      # shellcheck disable=SC1090
-      source "$USER_HOME_DIR/.cargo/env"
-    fi 
-
-    print_info_message "Rust installed successfully"
-    print_info_message "Rust version: $(rustc --version)"
-    print_info_message "Cargo version: $(cargo --version)"
-    print_info_message "Rustup version: $(rustup --version)"
-else
-    print_info_message "Rust and Cargo are already installed"
-    print_info_message "Rust version: $(rustc --version)"
-    print_info_message "Cargo version: $(cargo --version)"
+[[ "$EUID" != 0 ]] || { print_error_message 'Run Rust setup as the user, without sudo'; exit 1; }
+# Keep existing homes/defaults; never replace a user's nightly or pinned toolchain.
+export CARGO_HOME="${CARGO_HOME:-$USER_HOME_DIR/.cargo}"
+export RUSTUP_HOME="${RUSTUP_HOME:-$USER_HOME_DIR/.rustup}"
+language_user_path_allowed "$USER_HOME_DIR" "$CARGO_HOME" || exit 1
+language_user_path_allowed "$USER_HOME_DIR" "$RUSTUP_HOME" || exit 1
+export PATH="$CARGO_HOME/bin:$PATH"
+OWNER="$(language_rust_owner)" || { print_error_message 'Conflicting Rust proxies; retained'; exit 1; }
+DEFAULT=''
+RUST_VERSION=''
+CARGO_VERSION=''
+case "$OWNER" in
+    native-rustup|user-rustup)
+        if [[ -n "${RUSTUP_TOOLCHAIN:-}" ]]; then
+            DEFAULT="$RUSTUP_TOOLCHAIN"
+            RUST_VERSION="$(language_installed_version rustc)" || exit 1
+            CARGO_VERSION="$(language_installed_version cargo)" || exit 1
+        elif DEFAULT="$(rustup default 2>&1)"; then
+            RUST_VERSION="$(language_installed_version rustc)" || exit 1
+            CARGO_VERSION="$(language_installed_version cargo)" || exit 1
+        elif [[ "$DEFAULT" == *'no default toolchain configured'* ]]; then
+            DEFAULT=''
+        else
+            print_error_message "Cannot read Rust default: $DEFAULT"
+            exit 1
+        fi ;;
+    native)
+        RUST_VERSION="$(language_installed_version rustc)" || exit 1
+        CARGO_VERSION="$(language_installed_version cargo)" || exit 1 ;;
+esac
+ACTION="$(rust_toolchain_selection "$WORKSTATION_DISTRO" "$OWNER" "$DEFAULT" "$RUST_VERSION" "$CARGO_VERSION")" || exit 1
+ensure_language_packages build || exit 1
+if [[ "$OWNER" == none ]]; then
+    ensure_language_packages rust || exit 1
+    hash -r
+    [[ "$(language_rust_owner)" == native-rustup ]] || { print_error_message 'Rustup installation incomplete'; exit 1; }
 fi
-
-# --------------------------
-# Provide Update Instructions
-# --------------------------
-
-echo ""
-print_info_message "To update Rust in the future, run:"
-print_info_message "  rustup update"
-echo ""
-print_info_message "To install additional components, use:"
-print_info_message "  rustup component add rust-analyzer  # LSP for IDE integration"
-print_info_message "  rustup component add clippy         # Linter"
-print_info_message "  rustup component add rustfmt        # Code formatter"
-echo ""
-print_info_message "To switch toolchains:"
-print_info_message "  rustup install nightly              # Install nightly"
-print_info_message "  rustup default stable               # Set default to stable"
-
-print_tool_setup_complete "Rust and Cargo"  
-
+if [[ "$ACTION" == initialize ]]; then
+    rustup default stable || exit 1
+fi
+for command in rustc cargo; do
+    VERSION="$(language_installed_version "$command")" || exit 1
+    print_info_message "$command $VERSION"
+done
+if [[ "$OWNER" == native ]]; then
+    print_info_message 'Existing distro Rust retained; update with dfa-update-system'
+else
+    print_info_message 'Default toolchain retained; update toolchains with rustup update'
+    if [[ "$OWNER" == user-rustup ]]; then
+        print_info_message 'User rustup binary: rustup self update'
+    else
+        print_info_message 'Distro rustup binary: dfa-update-system (do not self-update)'
+    fi
+fi
+print_tool_setup_complete "Rust and Cargo"

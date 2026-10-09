@@ -21,107 +21,29 @@ fi
 # --------------------------
 
 print_tool_setup_start "Ruby on Rails"
-
-# --------------------------
-# Install Ruby
-# --------------------------
-
-# Check if Ruby is already installed
-if command -v ruby &> /dev/null; then
-    print_info_message "Ruby is already installed: $(ruby --version)"
-else
-    print_info_message "Installing Ruby from official Arch repositories"
-    sudo pacman -S --needed --noconfirm ruby
-    print_info_message "Ruby installed: $(ruby --version)"
-fi
-
-# --------------------------
-# Setup Ruby Gem PATH Early
-# --------------------------
-
-# Get Ruby version and setup gem bin directory path BEFORE checking for gems
-RUBY_VERSION=$(ruby -e 'puts RbConfig::CONFIG["ruby_version"]' 2>/dev/null)
-GEM_BIN_DIR="$USER_HOME_DIR/.local/share/gem/ruby/$RUBY_VERSION/bin"
-
-# Add gem bin directory to PATH for this session if it exists
-if [ -d "$GEM_BIN_DIR" ]; then
-    if ! echo "$PATH" | grep -q "$GEM_BIN_DIR"; then
-        print_info_message "Adding gem bin directory to PATH: $GEM_BIN_DIR"
-        export PATH="$GEM_BIN_DIR:$PATH"
-    fi
-fi
-
-# --------------------------
-# Install Bundler
-# --------------------------
-
-# Check if bundler is already installed (check both command and gem list)
-if gem list -i '^bundler$' &> /dev/null; then
-    print_info_message "Bundler is already installed: $(bundle --version 2>/dev/null || echo 'installed')"
-else
-    print_info_message "Installing Bundler gem to user directory"
-    gem install --user-install bundler --no-document
-    print_success_message "Bundler installed successfully"
-fi
-
-# --------------------------
-# Install Rails Dependencies
-# --------------------------
-
-print_info_message "Installing Rails dependencies"
-
-# Node.js (JavaScript runtime for Rails asset pipeline) — prefer NVM, never pacman node
+ensure_language_runtime ruby ruby || exit 1
+# RubyGems selects the user path (XDG or legacy ~/.gem); never pin the ABI here.
+GEM_USER_DIR="$(ruby -rrubygems -e 'print Gem.user_dir')" || exit 1
+language_user_path_allowed "$USER_HOME_DIR" "$GEM_USER_DIR/bin" || exit 1
+language_native_file_owned "$(readlink -f "$(type -P gem || true)")" || {
+    print_error_message 'RubyGems launcher is missing or has a conflicting source'; exit 1;
+}
+# Custom GEM_HOME/GEM_PATH can silently select system or unrelated installations.
+[[ -z "${GEM_HOME:-}" || "$GEM_HOME" == "$GEM_USER_DIR" ]] || {
+    print_error_message 'GEM_HOME conflicts with user gems; retained'; exit 1;
+}
+[[ -z "${GEM_PATH:-}" ]] || { print_error_message 'Custom GEM_PATH; resolve gem ownership before setup'; exit 1; }
+export PATH="$GEM_USER_DIR/bin:$PATH"
+for library in openssl psych; do
+    ruby -r "$library" -e '' || { print_error_message "Ruby requires $library"; exit 1; }
+done
+for tool in bundler rails; do
+    ensure_user_gem "$tool" "$GEM_USER_DIR" || exit 1
+done
 load_nvm || true
-if command -v node &>/dev/null; then
-    print_info_message "Node.js is already installed: $(node --version)"
-else
-    print_warning_message "Node.js not found (run setup-node.sh / NVM). Skipping Rails JS runtime install."
-fi
-
-# Additional build dependencies for native gems
-if pacman -Q base-devel &> /dev/null; then
-    print_info_message "Build dependencies already installed"
-else
-    print_info_message "Installing build dependencies for Ruby gems"
-    sudo pacman -S --needed --noconfirm base-devel
-fi
-
-# SQLite (default Rails database for development)
-if pacman -Q sqlite &> /dev/null; then
-    print_info_message "SQLite is already installed"
-else
-    print_info_message "Installing SQLite"
-    sudo pacman -S --needed --noconfirm sqlite
-fi
-
-# --------------------------
-# Install Rails
-# --------------------------
-
-# Check if Rails is already installed (check both command and gem list)
-if gem list -i '^rails$' &> /dev/null; then
-    print_info_message "Rails is already installed: $(rails --version 2>/dev/null || echo 'installed')"
-else
-    print_info_message "Installing Rails gem to user directory (this may take a few minutes)"
-    gem install --user-install rails --no-document
-    print_success_message "Rails installed successfully"
-
-    # Verify installation
-    if command -v rails &> /dev/null; then
-        print_info_message "Rails version: $(rails --version)"
-    else
-        print_warning_message "Rails installed but not in PATH. You may need to restart your shell."
-    fi
-fi
-
-# --------------------------
-# Configure PATH in Shell RC Files
-# --------------------------
-
-# Gem bin PATH is handled portably in ~/.bashrc (any ~/.local/share/gem/ruby/*/bin).
-# Do not append version-pinned PATH lines into the symlinked bashrc.
-if [ -d "$GEM_BIN_DIR" ]; then
-    print_info_message "Gem binaries available at: $GEM_BIN_DIR (loaded from ~/.bashrc)"
-fi
-
+command -v node &>/dev/null || {
+    print_error_message 'Rails JavaScript runtime missing; run setup-node.sh (NVM)'
+    exit 1
+}
+print_info_message "Gem commands: $GEM_USER_DIR/bin (loaded by ~/.bashrc)"
 print_tool_setup_complete "Ruby on Rails"

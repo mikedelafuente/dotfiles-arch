@@ -287,11 +287,13 @@ aliases() {
         echo "  Skill source: dfa-sync-sources option 5 toggles overwrite permissions"
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
-        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node,neovim,dev,zed,orca}.sh'
+        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node,neovim,dev,zed,orca,python,rust,golang,php,ruby}.sh'
         echo '  Editor: stable nvim 0.12+, tree-sitter CLI 0.26.1+, tmux 3.2+; preserve sources/configs'
         echo '  IDEs: zed/zeditor, stably-orca/orca-ide; Ubuntu favors self-updates; existing Orca DEBs: dfa-update-system'
         echo '  Editor updates: dfa-update-system --force (native plus verified managed upstream releases)'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
+        echo '  Python projects: python3 -m venv .venv; .venv/bin/python -m pip install <package>'
+        echo '  User language updates (manual): rustup update; gem update --user-install <user-gem> --no-document (bundler/rails only when user-owned); composer global update laravel/installer'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
         echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'
         echo '  Agent updates: dfa-update-npm-clis (user npm; native Claude updater); Arch opencode/ChatGPT and Ubuntu ChatGPT use dfa-update-system'
@@ -405,26 +407,25 @@ if [ -d "$HOME/.config/herd-lite/bin" ]; then
     export PHP_INI_SCAN_DIR="$HOME/.config/herd-lite/bin:$PHP_INI_SCAN_DIR"
 fi
 
-# Composer global binaries (portable across usernames/machines)
-COMPOSER_BIN="$HOME/.config/composer/vendor/bin"
-if [ -d "$COMPOSER_BIN" ]; then
-    case ":$PATH:" in
-        *":$COMPOSER_BIN:"*) ;;
-        *) export PATH="$PATH:$COMPOSER_BIN" ;;
-    esac
-fi
+# Composer global binaries (XDG, explicit COMPOSER_HOME, and legacy homes)
+for composer_bin in "${COMPOSER_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}/composer}/vendor/bin" "$HOME/.composer/vendor/bin"; do
+    if [ -d "$composer_bin" ]; then
+        case ":$PATH:" in
+            *":$composer_bin:"*) ;;
+            *) export PATH="$PATH:$composer_bin" ;;
+        esac
+    fi
+done
 
-# Ruby gem binaries (any installed Ruby version under ~/.local/share/gem/ruby)
-if [ -d "$HOME/.local/share/gem/ruby" ]; then
-    for gem_bin in "$HOME"/.local/share/gem/ruby/*/bin; do
-        if [ -d "$gem_bin" ]; then
-            case ":$PATH:" in
-                *":$gem_bin:"*) ;;
-                *) export PATH="$gem_bin:$PATH" ;;
-            esac
-        fi
-    done
-fi
+# Ruby gem binaries (any ABI in XDG and legacy user homes)
+for gem_bin in "${XDG_DATA_HOME:-$HOME/.local/share}"/gem/ruby/*/bin "$HOME"/.gem/ruby/*/bin; do
+    if [ -d "$gem_bin" ]; then
+        case ":$PATH:" in
+            *":$gem_bin:"*) ;;
+            *) export PATH="$gem_bin:$PATH" ;;
+        esac
+    fi
+done
 
 # Default to production read-only SSO profile
 export AWS_PROFILE=production-readonly

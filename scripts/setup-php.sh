@@ -1,10 +1,6 @@
 #!/bin/bash
 
 # --------------------------
-# Setup PHP for Arch Linux
-# --------------------------
-
-# --------------------------
 # Import Common Header
 # --------------------------
 
@@ -25,97 +21,66 @@ fi
 # --------------------------
 
 print_tool_setup_start "PHP"
-
-# --------------------------
-# Install PHP
-# --------------------------
-
-# Check if PHP is already installed
-if command -v php &> /dev/null; then
-    print_info_message "PHP is already installed. Skipping installation."
+[[ -z "${PHPRC:-}" && -z "${PHP_INI_SCAN_DIR:-}" ]] || {
+    print_error_message 'Custom PHP configuration environment; resolve before setup (retained)'
+    exit 1
+}
+ensure_language_runtime php php composer || exit 1
+PHP_VERSION="$(language_installed_version php)" || exit 1
+PHP_PATHS="$(php_configuration_paths "$WORKSTATION_DISTRO" "$PHP_VERSION")" || exit 1
+read -r PHP_INI PHP_SCAN_DIR <<<"$PHP_PATHS"
+LOADED_INI="$(php -r 'echo php_ini_loaded_file();')" || exit 1
+[[ "$LOADED_INI" == "$PHP_INI" && -f "$PHP_INI" && ! -L "$PHP_INI" ]] || {
+    print_error_message "PHP config conflict: expected $PHP_INI; existing config retained"
+    exit 1
+}
+MODULES="$(php -m)" || exit 1
+# Enable missing shared extensions only, matching exact names (not pdo_mysql_extra).
+for extension in curl iconv mysqli pdo_mysql pdo_sqlite sqlite3 gd intl pgsql pdo_pgsql mbstring dom xml; do
+    grep -Fxiq "$extension" <<<"$MODULES" && continue
+    case "$WORKSTATION_DISTRO" in
+        arch)
+            grep -Eq "^[;[:space:]]*extension=${extension}(\.so)?[[:space:]]*$" "$PHP_INI" || {
+                print_error_message "Missing PHP extension directive: $extension"; exit 1;
+            }
+            sudo sed -i -E "/^[[:space:]]*;[[:space:]]*extension=${extension}(\.so)?[[:space:]]*$/s/;[[:space:]]*//" "$PHP_INI" || exit 1 ;;
+        ubuntu)
+            [[ -f "/etc/php/${PHP_VERSION%.*}/mods-available/$extension.ini" ]] || {
+                print_error_message "Missing PHP module config: $extension"; exit 1;
+            }
+            sudo /usr/sbin/phpenmod -v "${PHP_VERSION%.*}" -s cli "$extension" || exit 1 ;;
+    esac
+done
+MODULES="$(php -m)" || exit 1
+php_modules_allowed "$MODULES" || exit 1
+print_info_message "PHP CLI configuration: $PHP_INI; extensions: $PHP_SCAN_DIR"
+COMPOSER_HOME_DIR="$(composer config --global home)" || exit 1
+language_user_path_allowed "$USER_HOME_DIR" "$COMPOSER_HOME_DIR" || exit 1
+if [[ -f "$COMPOSER_HOME_DIR/composer.json" ]]; then
+    COMPOSER_BIN_DIR="$(composer global config bin-dir --absolute)" || exit 1
 else
-    print_info_message "Installing PHP and common extensions"
-    sudo pacman -S --needed --noconfirm php php-gd php-intl php-sqlite php-pgsql
-
-    # Verify installation
-    if command -v php &> /dev/null; then
-        print_info_message "PHP installed successfully."
-    else
-        print_error_message "PHP installation failed."
-        exit 1
-    fi
+    COMPOSER_BIN_DIR="$(composer global config --global bin-dir --absolute)" || exit 1
 fi
-
-# Print PHP version
-print_info_message "PHP version: $(php --version | head -n 1)"
-
-# --------------------------
-# Install Composer
-# --------------------------
-
-if command -v composer &> /dev/null; then
-    print_info_message "Composer is already installed. Skipping installation."
-    print_info_message "Composer version: $(composer --version)"
-else
-    print_info_message "Installing Composer"
-    sudo pacman -S --needed --noconfirm composer
-
-    if command -v composer &> /dev/null; then
-        print_info_message "Composer installed successfully."
-        print_info_message "Composer version: $(composer --version)"
-    else
-        print_warning_message "Composer installation failed."
-    fi
+language_user_path_allowed "$USER_HOME_DIR" "$COMPOSER_BIN_DIR" || exit 1
+language_user_launcher_allowed "$COMPOSER_BIN_DIR/laravel" || {
+    print_error_message 'Laravel launcher is linked or not user-owned; retained'; exit 1;
+}
+LARAVEL_COMMAND="$(type -P laravel || true)"
+[[ -z "$LARAVEL_COMMAND" || "$LARAVEL_COMMAND" == "$COMPOSER_BIN_DIR/laravel" ]] || {
+    print_error_message 'Laravel launcher conflicts with Composer global bin-dir; retained'; exit 1;
+}
+GLOBAL_PACKAGES=''
+if [[ -f "$COMPOSER_HOME_DIR/composer.json" ]]; then
+    GLOBAL_PACKAGES="$(composer global show --name-only)" || exit 1
 fi
-
-# --------------------------
-# Configure /etc/php/php.ini
-# --------------------------
-
-print_info_message "Configuring PHP extensions in /etc/php/php.ini"
-
-PHP_INI="/etc/php/php.ini"
-if [ -f "$PHP_INI" ]; then
-    # Extensions to enable
-    EXTENSIONS=(
-        "curl"
-        "iconv"
-        "mysqli"
-        "pdo_mysql"
-        "pdo_sqlite"
-        "sqlite3"
-    )
-
-    for ext in "${EXTENSIONS[@]}"; do
-        # Uncomment the extension line
-        sudo sed -i "/^;extension=${ext}/s/^;//" "$PHP_INI" || true
-    done
-    print_success_message "PHP extensions configured"
-else
-    print_warning_message "PHP configuration file not found: $PHP_INI"
+if ! grep -Fxq laravel/installer <<<"$GLOBAL_PACKAGES"; then
+    composer global require laravel/installer || exit 1
 fi
-
-# --------------------------
-# Install Laravel Installer
-# --------------------------
-
-if command -v laravel &> /dev/null; then
-    print_info_message "Laravel installer is already installed."
-    print_info_message "Laravel version: $(laravel --version)"
-else
-    if command -v composer &> /dev/null; then
-        print_info_message "Installing Laravel installer globally via Composer"
-        composer global require laravel/installer
-
-        COMPOSER_BIN="$USER_HOME_DIR/.config/composer/vendor/bin"
-        print_info_message "Laravel installer installed."
-        print_info_message "Composer bin is on PATH via ~/.bashrc ($COMPOSER_BIN)."
-        print_info_message "Open a new shell or run: export PATH=\"\$PATH:$COMPOSER_BIN\""
-    else
-        print_warning_message "Cannot install Laravel installer - Composer not available"
-    fi
+if ! language_user_launcher_allowed "$COMPOSER_BIN_DIR/laravel" || [[ ! -x "$COMPOSER_BIN_DIR/laravel" ]]; then
+    print_error_message 'Laravel command missing or has an ownership conflict after Composer install'
+    exit 1
 fi
-
+"$COMPOSER_BIN_DIR/laravel" --version || exit 1
+print_info_message "Laravel commands: $COMPOSER_BIN_DIR; custom bin-dir must be on your PATH"
+print_info_message 'Laravel updates: composer global update laravel/installer'
 print_tool_setup_complete "PHP"
-
-

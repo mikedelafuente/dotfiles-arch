@@ -772,7 +772,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
-    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-python.sh|ubuntu:setup-rust.sh|ubuntu:setup-golang.sh|ubuntu:setup-php.sh|ubuntu:setup-ruby.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
@@ -862,6 +862,8 @@ source "$DF_SCRIPT_DIR/editor-tools-lib.sh"
 source "$DF_SCRIPT_DIR/desktop-ides-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/harness-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/language-tools-lib.sh"
 
 # Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {
