@@ -11,6 +11,8 @@ APT_URLS = {
     "spotify": {"https://repository.spotify.com"},
     "mullvad": {"https://repository.mullvad.net/deb/stable"},
     "firefox": {"https://packages.mozilla.org/apt"},
+    "claude": {"https://downloads.claude.ai/claude-code/apt/stable", "https://downloads.claude.ai/claude-code/apt/latest"},
+    "chatgpt": {"https://persistent.oaistatic.com/codex-app-prod/linux/deb"},
     "voxtype-cuda": {"https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64"},
 }
 APT_VENDORS = {
@@ -20,6 +22,8 @@ APT_VENDORS = {
     "spotify": r"(?:repository|download)\.spotify\.com",
     "mullvad": r"repository\.mullvad\.net",
     "firefox": r"packages\.mozilla\.org|mozillateam",
+    "claude": r"downloads\.claude\.ai/claude-code/apt",
+    "chatgpt": r"persistent\.oaistatic\.com/codex-app-prod/linux/deb",
     "voxtype-cuda": r"developer\.download\.nvidia\.com/compute/cuda/repos",
 }
 
@@ -58,6 +62,8 @@ def apt_key(app, text):
             raise ValueError("unsupported source layout")
         url, suite, key = fields.get("URIs", ""), fields.get("Suites", ""), fields.get("Signed-By", "")
     suites = {"slack": "jessie", "tableplus": "tableplus", "firefox": "mozilla", "voxtype-cuda": "/"}
+    if app == "claude":
+        suites[app] = url.rstrip("/").rsplit("/", 1)[-1]
     if url.rstrip("/") not in urls or suite != suites.get(app, "stable"):
         raise ValueError("unexpected vendor source")
     if not re.fullmatch(r"/(?:etc/apt/keyrings|usr/share/keyrings)/[A-Za-z0-9_.-]+\.(?:gpg|asc)", key):
@@ -67,7 +73,7 @@ def apt_key(app, text):
 
 def package_version(app, version):
     pattern = r"[0-9]+(?:\.[0-9]+)+(?:\.g[a-f0-9]+)?(?:[-+][A-Za-z0-9.]+)?" if app == "spotify" else r"[0-9]+(?:\.[0-9]+)+(?:[-+][A-Za-z0-9.]+)?"
-    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox"} or not re.fullmatch(pattern, version):
+    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox", "claude", "chatgpt"} or not re.fullmatch(pattern, version):
         raise ValueError("missing stable package version")
     minimum = {"slack": (4, 35, 121), "zoom": (6, 7, 5)}.get(app, (0,))
     numbers = tuple(map(int, re.split(r"[-+]|\.g", version)[0].split(".")))

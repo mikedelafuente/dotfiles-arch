@@ -51,7 +51,7 @@ directly-installed packages are listed; transitive dependencies are not.
 Implemented for [#143](https://github.com/mikedelafuente/dotfiles-arch/issues/143).
 Standalone `setup-essentials.sh`, `setup-bash.sh`, `setup-git.sh`,
 `setup-github-cli.sh`, and `setup-node.sh` support rolling Arch and Ubuntu 26.04
-on x86_64/amd64. Full Ubuntu bootstrap/sync stays guarded pending other slices.
+on x86_64/amd64. The shared bootstrap/sync entrypoints support both distros; runtime validation remains unverified.
 
 | App / command | Arch package | Ubuntu package/source | Required version/capability |
 |----------------|--------------|-----------------------|-----------------------------|
@@ -145,18 +145,18 @@ source feasibility, not successful workstation installation.
 
 Implemented for [#144](https://github.com/mikedelafuente/dotfiles-arch/issues/144).
 Standalone `setup-neovim.sh` and `setup-dev.sh` support rolling Arch and Ubuntu
-26.04 on amd64/x86_64. Full Ubuntu bootstrap/sync remains guarded.
+26.04 on amd64/x86_64. Shared bootstrap/sync supports both distros.
 
 | App / commands | Arch source | Ubuntu 26.04 source | Minimum / update owner |
 |----------------|-------------|---------------------|------------------------|
-| Neovim / `nvim`, `v`, `vim`, `dev --tmux` | Compatible native `neovim` preferred | Native 0.11.6 is insufficient; missing installs use [official stable archives](https://github.com/neovim/neovim-releases/releases) | **0.12.0+**; native updater or managed upstream refresh via `dfa-update-system` |
-| Treesitter / `tree-sitter`, `:TSUpdate` | Compatible native `tree-sitter-cli` preferred | Native 0.25.9 is insufficient; missing installs use [official stable releases](https://github.com/tree-sitter/tree-sitter/releases) | **0.26.1+**; native updater or managed upstream refresh via `dfa-update-system`; never npm |
-| tmux / `tmux`, `dev --tmux` | Native `tmux` | Native `tmux` | **3.2+**; native updater |
-| Git TUI / `lazygit`, `lzg` | Native `lazygit` | Native Universe `lazygit` | **0.40+**; native updater and existing core CLI ownership checks |
-| Container TUI / `lazydocker`, `lzd` | [Arch Extra `lazydocker`](https://archlinux.org/packages/extra/x86_64/lazydocker/) | Compatible native candidate if available, otherwise [verified official releases](https://github.com/jesseduffield/lazydocker/releases) | **0.20+**; native updater or managed upstream refresh via `dfa-update-system` |
-| Build/archive/TLS helpers | `gcc`, `make`, `tar`, `gzip`, `unzip`, `ca-certificates` | Same native names | Native updater; parser/native-plugin builds and verified downloads |
-| Python provider / Mason tools | `python`, `python-pynvim`, `python-pip` | `python3`, `python3-pynvim`, `python3-pip`, `python3-venv` | Native updater; Ubuntu virtual environments respect externally managed system Python |
-| Search/Git/hooks/clipboard | `fd`, `ripgrep`, `git`, `curl`, `jq`, `wl-clipboard`, `xsel` | `fd-find` plus executable `fd` link; remaining names match | Existing core CLI/native updater; `jq` supports reveal-hook payloads |
+| Neovim / `nvim`, `v`, `vim`, `dev --tmux` | Compatible native `neovim` preferred | Native 0.11.6 is insufficient; missing installs use [official stable archives](https://github.com/neovim/neovim-releases/releases) | **0.12.0+**; native package owner or managed upstream refresh via `dfa-update-system` |
+| Treesitter / `tree-sitter`, `:TSUpdate` | Compatible native `tree-sitter-cli` preferred | Native 0.25.9 is insufficient; missing installs use [official stable releases](https://github.com/tree-sitter/tree-sitter/releases) | **0.26.1+**; native package owner or managed upstream refresh via `dfa-update-system`; never npm |
+| tmux / `tmux`, `dev --tmux` | Native `tmux` | Native `tmux` | **3.2+**; native package owner |
+| Git TUI / `lazygit`, `lzg` | Native `lazygit` | Native Universe `lazygit` | **0.40+**; native package owner and existing core CLI ownership checks |
+| Container TUI / `lazydocker`, `lzd` | [Arch Extra `lazydocker`](https://archlinux.org/packages/extra/x86_64/lazydocker/) | Compatible native candidate if available, otherwise [verified official releases](https://github.com/jesseduffield/lazydocker/releases) | **0.20+**; native package owner or managed upstream refresh via `dfa-update-system` |
+| Build/archive/TLS helpers | `gcc`, `make`, `tar`, `gzip`, `unzip`, `ca-certificates` | Same native names | Native package updates; parser/native-plugin builds and verified downloads |
+| Python provider / Mason tools | `python`, `python-pynvim`, `python-pip` | `python3`, `python3-pynvim`, `python3-pip`, `python3-venv` | Native package updates; Ubuntu virtual environments respect externally managed system Python |
+| Search/Git/hooks/clipboard | `fd`, `ripgrep`, `git`, `curl`, `jq`, `wl-clipboard`, `xsel` | `fd-find` plus executable `fd` link; remaining names match | Existing core CLI/native package owner; `jq` supports reveal-hook payloads |
 | Node / LSP runtimes | User NVM | User NVM | Run `setup-node.sh` first; Node LTS and agent updates retain existing owners |
 
 Evidence checked 2026-10-08: [Ubuntu Neovim 0.11.6](https://packages.ubuntu.com/resolute/amd64/neovim),
@@ -250,7 +250,7 @@ syntax, ShellCheck, and static review. At the maintainer's request, no app tests
 or setup/update/cleanup/service/desktop/driver workflows are executed. Native
 package installation/failure behavior, Kitty config loading/rendering, fonts,
 and KDE/GNOME terminal preference changes on either distro remain **unverified**.
-Full Ubuntu orchestration and the remaining app matrix are subsequent slices.
+See the final Ubuntu source/update audit below for all selected owners.
 
 ### Maintenance distro slice
 
@@ -262,16 +262,15 @@ Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 | AUR apps / Arch | Existing AUR recipes, including their AUR dependencies | `yay -Sua` after an IoC scan; query/scanner/metadata failures fail closed |
 | Native packages, including Kitty / Ubuntu 26.04 | Existing configured Ubuntu and vendor APT repositories | `dfa-update-system`: APT refresh and upgrade with new dependencies permitted, removals refused |
 | Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
-| Existing native Claude / either host | Official user-native launcher into `USER_HOME_DIR/.local/share/claude/versions/<version>` | `dfa-update-npm-clis` runs `claude update` as the user, independently of NVM/npm; native background updates also remain enabled according to user settings |
+| Recognized user-native Claude / either host | Official user-native launcher into `USER_HOME_DIR/.local/share/claude/versions/<version>` | `dfa-update-npm-clis` runs `claude update` as the user, independently of NVM/npm; native background updates retain user/IT policy; visible DISABLE_UPDATES is deferred |
 | NinjaOne / Arch | Existing opt-in repackaged vendor DEB | Agent self-updater plus existing weekly health check |
 | NinjaOne / Ubuntu | Opt-in vendor native DEB; existing IT-selected installations retained | Agent/patcher self-updater; weekly owned-agent repair or read-only IT-managed health check |
 
 No package or software source is installed by this slice. It adds no vendor
 repository, signing key, source fallback, app migration, or duplicate installation.
 APT keeps existing holds/pins and source priorities; source conflicts remain for
-the source owner to resolve. Standalone DEBs/archives without a configured update
-repository are **not** made updateable by this change; their recipes/owners remain
-subsequent app slices. Recognized native Claude uses its own updater; other
+the source owner to resolve. Standalone DEBs/archives use their explicit verified refresh owners listed below;
+APT alone does not update them. Recognized native Claude uses its own updater; other
 shadowing or non-npm agent launchers are preserved and reported as source
 conflicts, returning nonzero without adding an npm duplicate. Native Claude
 recognition requires an executable regular version file in the official user
@@ -286,8 +285,8 @@ configuration are untouched (see [Ubuntu automatic updates](https://ubuntu.com/s
 `dfa-daily` keeps its step order and aggregates failures. `dfa-weekly` still runs
 daily first, forces the native update, previews orphan/removal candidates, then
 handles NinjaOne (IT-managed installations receive read-only health checks). User-only sync steps are allowed on
-Ubuntu; full bootstrap/sync and historical Arch setup migrations remain guarded.
-If daily auto-resync requests full Ubuntu setup, that failure stays in its summary.
+Ubuntu; shared bootstrap/sync and historical dotfile migrations use the same
+failure-preserving entrypoints. Daily auto-resync failures stay in its summary.
 Arch bootstrap/sync now preserve shared update/setup failures in their exit status.
 
 Commands/config: `dfa-remove-orphans`/`orphans` now preview; `--remove` requires
@@ -485,35 +484,36 @@ validation restriction. Only direct Bash syntax/ShellCheck checks were executed.
 |---------|--------|---------|------------------|
 | Arch `python`, `python-pip`, `python-pynvim`; Ubuntu `python3`, `python3-pip`, `python3-venv`, `python3-pynvim`, `python3-dev` | `setup-python.sh` | Interpreter, pip, venv/ensurepip, Neovim provider, native extension headers | `py`, `pip`, `serve`, `jsonpp` |
 | Arch `go`, `gopls`; Ubuntu `golang-go`, `gopls` | `setup-golang.sh` | Go compiler, standard library, language server | `go`, `gopls` |
-| `rustup` (both distros) | `setup-rust.sh` | User Rust toolchain manager; compatible existing distro Rust is retained | `cargo`, `rustc`, `rustup` |
+| Arch/native retained `rustup`; new Ubuntu verified user `rustup-init` | `setup-rust.sh` | User Rust toolchain manager; compatible existing distro Rust is retained | `cargo`, `rustc`, `rustup` |
 | Arch `ruby`, `sqlite`, `base-devel`; Ubuntu `ruby`, `ruby-dev`, `sqlite3`, `libsqlite3-dev`, `build-essential`, `libyaml-dev` | `setup-ruby.sh` | Ruby/RubyGems, Ruby headers, Rails database, native gem compilation and YAML headers | `ruby`, `gem`, `bundle`, `rails` |
-| Arch `php`, `php-gd`, `php-intl`, `php-sqlite`, `php-pgsql`, `composer`; Ubuntu `php-cli`, `php-curl`, `php-gd`, `php-intl`, `php-mbstring`, `php-xml`, `php-mysql`, `php-sqlite3`, `php-pgsql`, `composer` | `setup-php.sh` | PHP CLI, HTTP/image/Unicode/XML extensions, MySQL/SQLite/PostgreSQL drivers, Composer and user Laravel installer | `php`, `composer`, `laravel` |
+| Arch `php`, `php-gd`, `php-intl`, `php-sqlite`, `php-pgsql`, `composer`; Ubuntu `php-cli`, `php-curl`, `php-gd`, `php-intl`, `php-mbstring`, `php-xml`, `php-mysql`, `php-sqlite3`, `php-pgsql`; verified user Composer PHAR or retained native `composer` | `setup-php.sh` | PHP CLI, HTTP/image/Unicode/XML extensions, MySQL/SQLite/PostgreSQL drivers, Composer and user Laravel installer | `php`, `composer`, `laravel` |
 | Arch `base-devel`, `openssl`, `zlib`, `libffi`, `libyaml`, `pkgconf`, `sqlite`; Ubuntu `build-essential`, `libssl-dev`, `zlib1g-dev`, `libffi-dev`, `libyaml-dev`, `pkg-config`, `sqlite3`, `libsqlite3-dev` | All five language setups | C/C++ compiler/linker/make, TLS/compression/FFI/YAML headers, library discovery, SQLite CLI/headers for native builds | `cc`, `make`, `pkg-config`, `sqlite3` |
 | NVM + Node LTS (not pacman) | `setup-node.sh` | Node via NVM at `~/.config/nvm` | `nvm`, `node`, `npm` |
-| Claude Code (user-level npm) | `setup-claude.sh` | Claude Code CLI | `claude` |
+| Claude Code (Arch user npm; Ubuntu verified native; existing owners retained) | `setup-claude.sh` | Claude Code CLI | `claude` |
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
-| `chatgpt-desktop` (AUR) | `setup-codex.sh` | ChatGPT desktop app (repackaged official binary) | `chatgpt` |
+| Arch `chatgpt-desktop` (AUR) / Ubuntu official `chatgpt` APT | `setup-codex.sh` | ChatGPT desktop app (repackaged official binary) | `chatgpt` |
 | `opencode` | `setup-opencode.sh` | AI coding agent CLI | `opencode` |
 | Arch `ollama-cuda` / `ollama-vulkan`; Ubuntu compatible native `ollama` or verified upstream archive (GPU-gated) | `setup-ollama.sh` | Local model server; working CUDA preferred, otherwise a physical Vulkan 1.2+ GPU. No CPU-only installation; existing flavors preserved. Sources/services/update owners below | `ollama` |
 
 ### Shared language sources and update owners
 
 The five standalone language setups support rolling Arch and Ubuntu 26.04 amd64.
-They use the existing native backend, without vendor repositories, AUR additions,
-runtime managers replacing native Python/Go/PHP/Ruby, or root-owned user installs.
-Full Ubuntu bootstrap/sync is still guarded pending the remaining app slices.
-New installs use unversioned native packages (latest available in the configured
-repositories), latest stable Rust via rustup, and unpinned user gems/Composer
-packages. There are no repository-imposed language version floors. Existing
+They retain the native backend for Python/Go/PHP/Ruby and compatible existing
+managers. New Ubuntu rustup and Composer use verified user self-updating sources;
+no root-owned user installs or unverified remote-shell installers are introduced.
+Shared bootstrap/sync supports these recipes on both distros.
+New installs use unversioned native language packages, latest stable Rust via
+rustup, stable user Composer PHAR on Ubuntu, and unpinned user gems/Composer dependencies. There are no repository-imposed language version floors. Existing
 installations and explicit user toolchain selections retain their update owners.
 
 | Component | Source / retained installation | Update owner | Compatibility / configuration |
 | --- | --- | --- | --- |
 | Python | Native distro packages above | `dfa-update-system`; project dependencies use the project's venv/pip | Import pip, venv, ensurepip and pynvim; native-owned `pip3`. No system pip installs or externally-managed override. |
 | Go / gopls | Native packages above | `dfa-update-system` | Compiler tool and standard-library directories must exist. Go's optional automatic toolchain selection is left unchanged. |
-| rustup binary | Native `rustup` preferred for new setups; existing user rustup retained | Native binary: `dfa-update-system`; user binary: manual `rustup self update` | Rustup proxies must share the manager's file identity. Existing user `CARGO_HOME`/`RUSTUP_HOME` remain user-owned; no pipe-to-shell installer. |
+| rustup binary | Arch native `rustup`; Ubuntu verified official user `rustup-init` for new installs; compatible native/user managers retained | Native binary: `dfa-update-system`; user binary: manual `rustup self update` | Rustup proxies must share the manager's file identity. Existing user `CARGO_HOME`/`RUSTUP_HOME` remain user-owned; no pipe-to-shell installer. |
 | Rust / Cargo | User toolchains via rustup, or existing distro Rust/Cargo | Rustup toolchains: manual `rustup update`; distro toolchain: `dfa-update-system` | Latest stable is initialized only with no selected default/toolchain; existing pinned, beta/nightly defaults and `RUSTUP_TOOLCHAIN` are retained. No distro rustup self-update. |
-| PHP / Composer | Native distro packages above | `dfa-update-system` | Laravel-required builtins/extensions and GD/Intl/MySQL/SQLite/PostgreSQL are checked. Arch enables exact missing directives in shared `/etc/php/php.ini`; Ubuntu enables missing modules with `phpenmod -v <major.minor> -s cli`, using `/etc/php/<major.minor>/cli/{php.ini,conf.d}` derived from the installed PHP version and leaving web server SAPIs unchanged. |
+| PHP / existing native Composer | Native distro packages above | `dfa-update-system` | Laravel-required builtins/extensions and GD/Intl/MySQL/SQLite/PostgreSQL are checked. Arch enables exact missing directives in shared `/etc/php/php.ini`; Ubuntu enables missing modules with `phpenmod -v <major.minor> -s cli`, using `/etc/php/<major.minor>/cli/{php.ini,conf.d}` derived from the installed PHP version and leaving web server SAPIs unchanged. |
+| New Ubuntu Composer | Official SHA384-verified PHP installer, stable user PHAR | Manual `composer self-update`; genuine binary replacement | PHP native runtime retained; writable user PHAR under `~/.local/share/dotfiles-arch/composer`, stable by default. Existing native Composer stays native. |
 | Laravel installer | Composer global package in the existing user Composer home/bin-dir | Manual `composer global update laravel/installer` | Preserve `COMPOSER_HOME`/global bin-dir; verify the installer command. Shell PATH includes XDG/explicit Composer homes and legacy `~/.composer/vendor/bin`; custom bin-dir must already be on PATH. |
 | Ruby / native headers | Native distro packages above | `dfa-update-system` | RubyGems, OpenSSL and Psych must work; NVM Node is required for the existing Rails JS workflow. |
 | Bundler / Rails | User gems (`gem install --user-install`) or compatible existing native commands | User gems: manual `gem update --user-install <user-gem> --no-document` (`bundler` or `rails` only when user-owned); native gems: `dfa-update-system` | Use RubyGems' actual `Gem.user_dir`, not a hardcoded Ruby ABI. PATH covers XDG `gem/ruby/*/bin` and legacy `~/.gem/ruby/*/bin`; verify `bundle` and `rails`, even when a gem is listed. Never `sudo gem` or `gem update --system`. |
@@ -567,7 +567,7 @@ Implemented for [#148](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 Standalone `setup-docker.sh`, `setup-minikube.sh` and `setup-devcontainer.sh`
 support rolling Arch and Ubuntu 26.04 x86_64/amd64. The shared profile runner
 keeps Docker/Kubernetes shared and host prerequisites conditional on the additive
-`devcontainer` profile; full Ubuntu bootstrap/sync remains guarded for other slices.
+`devcontainer` profile; shared bootstrap/sync supports both distros.
 
 | App | Arch source / update owner | Ubuntu source / update owner |
 |-----|----------------------------|-------------------------------|
@@ -791,7 +791,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 |---------|---------|------------------|
 | `steam` (Arch multilib) / `steam-installer` + `steam-libs-i386:i386` (Ubuntu multiverse/universe) | Games; native launcher plus Valve client updater | `steam` |
 | `discord` (Arch native; Ubuntu official DEB bootstrap) | Chat; Linux app updater retains user settings | `discord` |
-| `firefox` (Arch native; Ubuntu Mozilla Snap or retained Mozilla APT) | Personal browser (Super+B when personal is selected and work is not) | `firefox` |
+| `firefox` (Arch native; Ubuntu signed user archive, or retained Mozilla Snap/APT) | Personal browser (Super+B when personal is selected and work is not) | `firefox` |
 | `mullvad-vpn-bin` (Arch AUR) / `mullvad-vpn` (Ubuntu vendor APT) | VPN; account, connection and other VPNs unchanged | `mvup`, `mvdown`, `mvst` |
 
 ### devcontainer — `setup-devcontainer.sh`
@@ -850,8 +850,8 @@ These gaps or failed writes return nonzero instead of a completed host setup.
 | Optional NVIDIA | Native `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` for a new Turing+ installation | Native `ubuntu-drivers-common` hardware recommendation; signed `linux-modules-nvidia-<branch>-<running-kernel>` preferred, Ubuntu DKMS otherwise | Native pacman/APT; saved explicit `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`. `--yes`, PCI detection and an unset preference do not opt in. All existing flavors, utility-only stacks, manual and work-managed installations remain untouched; no CUDA repository, purge or module loading |
 | CUDA Ollama | Native `ollama-cuda` and its `cuda` dependency | Official stable amd64 archive bundles CUDA runtime libraries; only the existing host driver is used | Ollama 0.40.0+ for the current runtime layout; native owner or verified archive refresh by `dfa-update-system` |
 | Vulkan Ollama | Native `ollama-vulkan` and `vulkan-icd-loader`; existing hardware ICD retained | Official archive bundles the Vulkan backend; host Vulkan loader/ICD remain native/vendor-owned | Same owner; Vulkan 1.2+ on a successfully enumerated discrete/integrated GPU. CPU software ICDs do not qualify |
-| GPU probes | Native `python`, `vulkan-tools` | Native `python3`, `vulkan-tools` | Native updater. NVIDIA readiness needs a supported compute capability/driver and successful CUDA initialization/device enumeration with the current user's permissions. Vulkan readiness uses `vulkaninfo --summary`, not executable or ICD presence |
-| Archive prerequisites | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python` if a managed archive already exists | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python3` | Native updater; SHA256 verified before archive extraction or switching a working installation |
+| GPU probes | Native `python`, `vulkan-tools` | Native `python3`, `vulkan-tools` | Native package updates. NVIDIA readiness needs a supported compute capability/driver and successful CUDA initialization/device enumeration with the current user's permissions. Vulkan readiness uses `vulkaninfo --summary`, not executable or ICD presence |
+| Archive prerequisites | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python` if a managed archive already exists | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python3` | Native package updates; SHA256 verified before archive extraction or switching a working installation |
 
 [Ollama's Linux instructions](https://docs.ollama.com/linux) offer archives rather
 than an official vendor APT repository. A compatible native Ubuntu candidate is
@@ -949,17 +949,15 @@ See [cloud setup](README.md#shared-agent-config-in-cloud-checkouts).
 
 | Application / commands | Arch | Ubuntu 26.04 | Update owner |
 |------------------------|------|--------------|--------------|
-| Zed / `zed`, `zeditor`, `dev` | Official Extra `zed`; only this transition removes legacy `~/.local/zed.app` | Verified official stable amd64 archive at `~/.local/zed.app`; retain recognized compatible native/user installs | pacman/APT for native; Zed's in-app self-updater for user installs (must stay enabled) |
-| Stably Orca / `stably-orca`, `orca-ide` | IoC-scanned `stably-orca-bin` AUR | Verified official amd64 AppImage in `~/.local/share/dotfiles-arch/orca/Orca.AppImage`; `libfuse2t64` supplies FUSE2 | Guarded AUR on Arch; AppImage's in-app self-updater on Ubuntu (must stay enabled) |
+| Zed / `zed`, `zeditor`, `dev` | Official Extra `zed`; only this transition removes legacy `~/.local/zed.app` | Verified official stable amd64 archive at `~/.local/zed.app`; retain recognized compatible native/user installs | pacman/APT for native; Zed's in-app self-updater for user installs (disabled updates retain user/IT policy) |
+| Stably Orca / `stably-orca`, `orca-ide` | IoC-scanned `stably-orca-bin` AUR | Verified official amd64 AppImage in `~/.local/share/dotfiles-arch/orca/Orca.AppImage`; `libfuse2t64` supplies FUSE2 | Guarded AUR on Arch; AppImage's in-app self-updater on Ubuntu (disabled updates retain user/IT policy) |
 | Existing Ubuntu `orca-ide` DEB | — | Preserve the installed package instead of replacing it with an AppImage | Verified official stable DEB refresh through `dfa-update-system`; in-app notifications alone do **not** install updates |
 
 Favor true self-updating user installations on Ubuntu. Existing compatible sources
 retain their owners. AppImage replacements keep the fixed pathname so command
 links and desktop entries survive. No `orca` alias is created: that name belongs
 to GNOME's screen reader. No installer script, PPA, foreign APT suite, source
-fallback, sandbox bypass, or driver replacement is added. Full Ubuntu orchestration
-is still guarded pending the other application slices; these two standalone setup
-scripts are enabled.
+fallback, sandbox bypass, or driver replacement is added. Shared orchestration and standalone setup use these same source decisions.
 
 Evidence checked 2026-10-08: [Zed Linux installation](https://zed.dev/docs/linux),
 [Zed self-updates](https://zed.dev/docs/update), and
@@ -998,7 +996,7 @@ Implemented for [#146](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 
 | App | Arch source | Ubuntu 26.04 amd64 source | Update owner |
 | --- | --- | --- | --- |
-| Claude Code | User npm `@anthropic-ai/claude-code`; retain recognized user-native installs | Same | `dfa-update-npm-clis`: npm or `claude update`; native background preferences retained |
+| Claude Code | User npm `@anthropic-ai/claude-code`; retain recognized user-native installs | New: signed stable native binary; retain existing npm/native or scoped official APT | Native: background + `claude update`; npm: `dfa-update-npm-clis`; retained APT: `dfa-update-system` |
 | Codex CLI | User npm `@openai/codex` | Same | `dfa-update-npm-clis` |
 | Pi | User npm `@earendil-works/pi-coding-agent`, lifecycle scripts blocked | Same | `dfa-update-npm-clis`, also with `--ignore-scripts` |
 | opencode CLI | Official `opencode` package; retain existing user npm if recognized | Stable user npm `opencode-ai`, documented source exception | Native: `dfa-update-system`; npm: `dfa-update-npm-clis` |
@@ -1007,7 +1005,9 @@ Implemented for [#146](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 [Stable opencode instructions](https://opencode.ai/docs/) document `opencode-ai`
 and Arch's native package. This slice retains the `opencode` CLI identity and
 existing provider configuration; it does not switch to the beta `opencode2` CLI.
-Claude/Codex/Pi retain existing npm sources. Setup/update refuse root invocation
+Claude/Codex/Pi retain existing npm sources. New Ubuntu Claude uses the signed
+native installer; `DISABLE_UPDATES` defers recurring native/npm refresh without
+rewriting policy. `DISABLE_AUTOUPDATER` permits the explicitly invoked native updater. Setup/update refuse root invocation
 and system npm prefixes, verify resolved launcher ownership, and preserve unknown
 installations with a source-conflict failure. Existing npm script allowlists are
 extended only when installing missing Claude/opencode. CLI sources must be
@@ -1068,8 +1068,8 @@ harness detection, launchers, and Ollama dispatch were inspected without executi
 Installation, npm/native/AUR/APT updates, vendor maintainer-script behavior, app
 launch/login, hooks inside live agents, default-harness runtime fallback, and
 Ollama model use on either workstation remain **unverified**. Wayland behavior
-is also unverified; upstream calls native Wayland experimental. Full Ubuntu
-orchestration and optional Ollama acquisition remain separately guarded slices.
+is also unverified; upstream calls native Wayland experimental. Shared Ubuntu
+orchestration and optional GPU-gated Ollama acquisition use the same owners.
 
 
 ## Work app sources and update owners
@@ -1077,7 +1077,7 @@ orchestration and optional Ollama acquisition remain separately guarded slices.
 Standalone `setup-chrome.sh`, `setup-slack.sh`, and `setup-zoom.sh` support rolling
 Arch and Ubuntu 26.04 amd64. The single profile runner still selects all three
 only when `work` is selected (also alongside `personal`/`devcontainer`). Full
-Ubuntu bootstrap/sync/profile/GNOME setup remains guarded pending other slices.
+Shared Ubuntu bootstrap/sync/profile/GNOME setup uses the same recipes.
 
 | App / launcher / desktop | Arch source | Ubuntu source | Update owner |
 |---|---|---|---|
@@ -1225,9 +1225,9 @@ or replaces unrelated VPN/browser installations. No new command or config key is
 |---|---|---|
 | Steam / `steam.desktop` | Native `steam-installer` (multiverse) and `steam-libs-i386:i386` (universe); amd64 host plus i386 foreign architecture | APT owns installer/dependencies via common maintenance; Valve owns client/game updates in user state |
 | Discord / `discord.desktop` | Official stable 1.0.161 DEB bootstrap, pinned SHA-256; compatible existing stable DEBs require package-owned executable and Rust updater bootstrap | Genuine Discord Linux updater installs/updates the app in the user's configuration directory on launch; APT owns bootstrap dependencies, no periodic DEB reinstall |
-| Firefox / `firefox_firefox.desktop` (Snap) or `firefox.desktop` (DEB) | Mozilla's stable Snap (Ubuntu's default) for new/stock installations; retain an existing scoped Mozilla APT installation | Snap automatic refresh or existing Mozilla APT through common maintenance; no Snap-to-DEB migration or new APT pin |
+| Firefox / `firefox_firefox.desktop` (Snap) or `firefox.desktop` (DEB/user) | New absent app: signed Mozilla stable user archive plus exact-path AppArmor sandbox attachment; retain stock Snap, Snap bootstrap or existing scoped Mozilla APT | User: genuine in-app updater; retained Snap automatic refresh or Mozilla APT; no source migration or new APT pin |
 | Mullvad VPN / `mullvad-vpn.desktop` | Vendor stable APT `repository.mullvad.net/deb/stable`, stable/main; `mullvad-vpn` | APT via `dfa-update-system`, daily/weekly; no direct service/VPN commands in setup |
-| Source prerequisites | `software-properties-common` for Steam components, `curl`, `ca-certificates`, `gnupg` for pinned/scoped sources | Native updater |
+| Source prerequisites | `software-properties-common` for Steam components, `curl`, `ca-certificates`, `gnupg` for pinned/scoped sources | Native package updates |
 
 Steam setup adds i386 if missing and enables Ubuntu multiverse idempotently with
 `add-apt-repository`; universe and native amd64/i386 indexes must be available.
@@ -1267,7 +1267,7 @@ Both require `latest/stable`, asserted identity and owned command/desktop export
 other channels/Flatpaks/unknown publishers are preserved and reported as conflicts.
 Ubuntu's Firefox `*snap*` DEB is recognized as the Snap bootstrap, not a duplicate
 browser. An existing Mozilla APT feed without its selected DEB is a conflict,
-not permission to install a second Snap. Retained Mozilla DEBs need a scoped
+not permission to install a second browser source. Retained Mozilla DEBs need a scoped
 `Signed-By`, stable vendor candidate and pinned primary fingerprint
 `35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3`; no preferences/pins are written.
 GNOME consumes the selected desktop ID and retains Chrome's work-over-personal
@@ -1302,3 +1302,141 @@ names), native installation/upgrades and maintainer-script effects, APT signing
 policy, Snap refresh/holds and desktop exports, Discord bootstrap/client updates,
 Steam client/Proton/games/32-bit GPU libraries, Firefox profiles/default-browser
 runtime, and Mullvad daemon/account/VPN/DNS/kill-switch behavior.
+
+## Final Ubuntu source / update audit
+
+Audited 2026-10-09 for [#162](https://github.com/mikedelafuente/dotfiles-arch/issues/162),
+against every selected setup in the single profile runner and opt-in NinjaOne.
+The detailed per-family source tables above remain the package-purpose catalog.
+[Evidence and disabled-update handling](docs/ubuntu-source-update-audit.md) explain
+why an update banner, installer rerun, package transaction, content download or
+Obsidian app-code update does not prove a complete application self-updater.
+
+New Ubuntu installs prefer verified genuine self-updaters when they meet the
+shared configuration/security requirements. Compatible existing sources retain
+their owners. Unknown/duplicate sources fail rather than migrate. Every APT row
+below means `dfa-update-system` using configured authenticated sources, respecting
+holds/pins and automatic security updates; it does **not** mean in-app self-update.
+`Refresh` means the existing verified release owner through `dfa-update-system`.
+`Pin` means maintainer-reviewed versions/hashes applied by setup/full sync, not
+an unattended fetch of unreviewed upstream changes. `Manual` owners are intentionally
+not invoked by daily/weekly; those commands never report them refreshed.
+
+Exceptions: **N** = native host/CLI integration, no verified compatible complete
+self-updating alternative established; **V** = vendor Linux package-manager source,
+no verified complete Linux in-app alternative established; **R** = verified release
+refresh because no safe complete self-updater established; **P** = reviewed data/build
+pin, no application binary updater; **K** = compatible existing owner retained;
+**M** = IT/vendor-managed lifecycle. These are bounded source decisions, not claims
+that an upstream project can never add a safe updater.
+
+| Selected app / CLI | Ubuntu source | Update owner / genuine mechanism | Minimum or required capability / exception |
+|---|---|---|---|
+| Git / `git` | Native `git` | APT; no self-update selected | 2.35+ / N |
+| Git Delta / `delta` | Native `git-delta` | APT; no self-update selected | 0.16+ / N |
+| curl | Native `curl` | APT; no self-update selected | HTTPS/TLS downloads / N |
+| wget | Native `wget` | APT; no self-update selected | Shared CLI / N |
+| X clipboard / `xsel` | Native `xsel` | APT; no self-update selected | X compatibility / N |
+| Wayland clipboard / `wl-copy`, `wl-paste` | Native `wl-clipboard` | APT; no self-update selected | Wayland / N |
+| eza | Native `eza` | APT; no self-update selected | 0.18+ / N |
+| Starship | Native `starship` | APT; no self-update selected | 1.22+ / N |
+| fzf | Native `fzf` | APT; no self-update selected | 0.48+ / N |
+| ripgrep / `rg` | Native `ripgrep` | APT; no self-update selected | 13+ / N |
+| fd / `fdfind` | Native `fd-find`, owned executable `fd` link | APT; no self-update selected | 8+; subprocess alias / N |
+| bat / `batcat` | Native `bat`, owned executable `bat` link | APT; no self-update selected | 0.23+; shared config / N |
+| Glow | Scoped official Charm APT `glow` | APT; no self-update selected | 1+ / V |
+| htop | Native `htop` | APT; no self-update selected | Shared CLI / N |
+| ncdu | Native `ncdu` | APT; no self-update selected | Shared CLI / N |
+| tree | Native `tree` | APT; no self-update selected | Shared CLI / N |
+| jq | Native `jq` | APT; no self-update selected | JSON/reveal hooks / N |
+| netstat | Native `net-tools` | APT; no self-update selected | Network inspection / N |
+| iw | Native `iw` | APT; no self-update selected | Wireless inspection / N |
+| btop | Native `btop` | APT; no self-update selected | Shared CLI / N |
+| duf | Native `duf` | APT; no self-update selected | Shared CLI / N |
+| stow | Native `stow` | APT; no self-update selected | Shared CLI / N |
+| ShellCheck | Native `shellcheck` | APT; no self-update selected | Static Bash checking / N |
+| GitHub CLI / `gh` | Native `gh` | APT; no self-update selected | 2+ / N |
+| tldr | Native `tealdeer` | APT binary; `tldr --update` updates content only | Shared CLI / N |
+| fastfetch | Native `fastfetch` | APT; no self-update selected | Shared CLI / N |
+| zoxide | Native `zoxide` | APT; no self-update selected | Shared CLI / N |
+| Bash/completions | Native `bash`, `bash-completion` | APT; no self-update selected | Bash 4+ / N |
+| less / col / SSH | Native `less`, `bsdextrautils`, `openssh-client` | APT; no self-update selected | Shared pager/SSH / N |
+| TLS/archive/build helpers | Native `ca-certificates`, `gnupg`, `coreutils`, `tar`, `gzip`, `unzip`, `xz-utils`, `zstd`, `build-essential`, native development headers listed above | APT; no self-update selected | Integrity, extraction, native builds / N |
+| Kitty | Native `kitty` | APT; upstream binary install rerun is not a self-updater | Shared Kitty config / N |
+| tmux | Native `tmux` | APT; no self-update selected | 3.2+ / N |
+| lazygit | Native Universe `lazygit` | APT; no self-update selected | 0.40+ / N |
+| lazydocker | Compatible native candidate, otherwise official verified release | APT or Refresh; no self-update selected | 0.20+ / N, R |
+| Neovim | Compatible native candidate, otherwise official verified stable archive | APT or Refresh; plugin updates do not update Neovim | 0.12+ / N, R |
+| tree-sitter CLI | Compatible native candidate, otherwise official verified release | APT or Refresh; `:TSUpdate` updates parsers only | 0.26.1+ / N, R |
+| Zed | Verified stable user archive; native install retained | Genuine in-app binary updater; retained native APT | 1.18+ / K |
+| Stably Orca | Verified official AppImage; existing compatible DEB retained | AppImage genuinely self-updates; DEB Refresh (banner alone does not install) | AppImage/FUSE2 and normalized launchers / K |
+| Claude Code | Signed stable native binary for missing installs | Genuine startup/background and `claude update`; existing npm uses npm maintenance, scoped APT uses APT | New signed source 2.1.207+; native launcher/layout / K |
+| Codex CLI | User npm `@openai/codex` | npm maintenance; installer/update command is not an independent verified in-app owner | User NVM/npm, shared hooks / R |
+| Pi | User npm `@earendil-works/pi-coding-agent` | npm maintenance with `--ignore-scripts`; no self-updater selected | User NVM/npm / R |
+| OpenCode | User npm `opencode-ai` | npm maintenance; curl-method upgrade pipes downloaded installer to shell and is rejected | Stable CLI/provider config / R |
+| Official ChatGPT desktop | Scoped signed OpenAI `chatgpt` APT | APT; no complete Linux in-app updater established | Official amd64 desktop, source/key validation / V |
+| NVM / Node / npm | Existing checksum-verified NVM bootstrap and official Node binaries | Manual reviewed NVM bootstrap refresh / `nvm install --lts`; npm does not self-update Node | Node 22+, fresh current LTS / R, K |
+| Python / pip / venv / pynvim | Native `python3`, `python3-pip`, `python3-venv`, `python3-pynvim`, `python3-dev` | APT; project venv dependencies remain project-owned | Import/provider checks; no system pip override / N |
+| Go / gopls | Native `golang-go`, `gopls` | APT; optional Go toolchain downloading is separate | Compiler/std library; existing toolchain policy / N |
+| rustup manager | Official checksum-verified user `rustup-init` for missing installs; existing native/user managers retained | Genuine `rustup self update` for user binary; native APT | Owned identical Rust proxies; no rc-file edits / K |
+| Rust / Cargo | Rustup user toolchains or existing native toolchain | Manual `rustup update` updates toolchains; native APT | Stable only when no selected default; pins/nightly retained / K |
+| PHP / extensions | Native CLI/extensions/development packages listed above | APT; no self-update selected | Laravel builtins/extensions; CLI SAPI only / N |
+| Composer | Verified official installer + user stable PHAR for missing installs; native Composer retained | Genuine manual `composer self-update`; native APT | Native PHP; user PHAR/update keys/settings / K |
+| Laravel installer | User Composer global `laravel/installer` | Manual `composer global update laravel/installer`; dependency update, not self-update | Existing Composer home/bin dir retained / R |
+| Ruby | Native `ruby`, `ruby-dev` and native build dependencies | APT; no self-update selected | RubyGems/OpenSSL/Psych / N |
+| Bundler / Rails | User gems, or existing compatible native commands | Manual `gem update --user-install bundler/rails --no-document`; native APT | Actual user gem dir; no root/system gem update / R, K |
+| Docker Engine / Compose / Buildx | Native `docker.io`, `docker-compose-v2`, `docker-buildx` | APT; no self-update selected | Coherent family; CE/Moby/conflicting owners preserved / N |
+| minikube | Compatible native or verified official binary | APT or Refresh; update notice is not replacement | 1+ / N, R |
+| kubectl | Compatible native or versioned official binary/SHA256 | APT or Refresh; no self-update selected | 1+ / N, R |
+| k9s | Compatible native or verified official release | APT or Refresh; no self-update selected | 0.1+ / N, R |
+| TablePlus | Scoped official Ubuntu 26 APT | APT; no verified complete Linux self-updating source established | Vendor native database GUI / V |
+| Postman | Official verified stable Snap; known writable user archive retained | Snap refresh is store-owned; retained archive genuinely updates in-app | User archive 9.13+; new archive lacks published initial integrity metadata / R, K |
+| Spotify | Scoped official vendor APT; existing official Snap retained | APT or Snap store; generic desktop update instructions do not establish a safe Linux user source | Native/vendor desktop / V, K |
+| Obsidian | Official verified stable amd64 DEB | Genuine in-app ASAR updates **plus** Refresh for installer/Electron | Installer updates remain necessary; no full runtime self-updater established / R |
+| Keymapp | Reviewed verified official user archive | Pin + common maintenance verification/refresh; no complete verified self-updater established | 1.2+; GTK3, WebKitGTK4.1, libusb / P |
+| Voxtype | Verified stable official DEB; compatible existing APT retained | Refresh or retained APT; no self-updater selected | 1.1+; Wayland/backend/uinput checks / R, K |
+| dotool | Pinned verified source built into local DEB; existing APT retained | Pin + common rebuild/refresh or retained APT | 1.6+; Go modules checked, no driver change / P, K |
+| Dictation models | Selected official Voxtype model acquisition; existing model IDs/files retained | Manual explicit model acquisition; not an app update | New base.en or GPU-gated Parakeet; model compatibility / P, K |
+| Parakeet CUDA13/cuDNN9 | Scoped NVIDIA ubuntu2604 runtime-only APT allowlist | APT; no self-update selected; driver packages excluded | AVX-512, driver 580+, CUDA13/cuDNN9 ABI, sm70–sm120 / M |
+| Ollama (optional GPU app) | Compatible native or verified official stable archive | APT or Refresh; no Linux in-app updater selected | 0.40+; working CUDA or physical Vulkan1.2+ GPU / N, R |
+| Ollama model/provider lists | Existing Ollama model store; generated harness profiles | Manual `ollama pull/rm`; daily regenerates profiles only | Existing model/provider ownership / K |
+| NVIDIA drivers (opt-in) | Ubuntu recommendation, or retained native/manual/IT driver family | Native APT or existing vendor/IT; no replacement | Explicit install preference, signed running-kernel modules preferred / M |
+| Zoom (work) | Official GPG-signed vendor DEB/checksums | Verified vendor Refresh; availability/download link is not installation | 6.7.5+; native Wayland experimental / R |
+| Slack (work) | Scoped signed vendor APT | APT; Linux package update instructions | 4.35.121+ / V |
+| Chrome (work) | Scoped signed Google APT | APT; Linux package owner, not browser About-page replacement | Normalized command/desktop / V |
+| Steam (personal) | Native installer and i386 runtime dependencies | APT bootstrap/dependencies **plus genuine Valve client updater** | Official Ubuntu multiverse/i386 indexes; no alternate bootstrap / N |
+| Discord (personal) | Verified official DEB Rust bootstrap; existing compatible Snap retained | Genuine Rust client updater on launch; retained Snap refresh | Bootstrap1.0+; old manual-update-only DEB fails / K |
+| Firefox (personal) | Signed stable user archive if absent; stock Snap/bootstrap/scoped Mozilla APT retained | Genuine in-app user updater; retained Snap/APT package owner | Writable runtime + exact-path Mozilla AppArmor sandbox attachment / K |
+| Mullvad VPN (personal) | Scoped signed official APT | APT; no complete safe Linux self-updating source established | Existing VPN/account/connection policies retained / V |
+| just / mkcert (devcontainer) | Native `just`, `mkcert` | APT; no self-update selected | Host recipes/certificate generator / N |
+| DNS / certificate utilities (devcontainer) | Native `bind9-dnsutils`, `libnss3-tools` | APT; no self-update selected | dig/certutil; systemd-resolved policy retained / N |
+| OpenVPN3 (devcontainer) | Native `openvpn3-client` | APT; no self-update selected | Native resolute source; existing VPN owner / N |
+| GNOME / Tweaks / Characters / dconf inspector / base extensions | Installed GNOME50; native `gnome-tweaks`, `gnome-characters`, `dconf-editor`, `gnome-shell-extensions` | APT; no self-update selected | GNOME50 accepted target; Ubuntu installed-desktop prerequisite / N |
+| GPaste / tray | Native `gpaste-2`, `gnome-shell-extension-gpaste`, `gir1.2-gpaste-2`, `gnome-shell-ubuntu-extensions` | APT; extension/content refresh is not GNOME binary self-update | GNOME-compatible metadata/schema; Ubuntu tray UUID / N |
+| Pop Shell / No Overview / Dash to Panel | Reviewed System76/fthx pins / Dash v74 digest | Pin + setup/sync; extensions do not self-update app binaries | Declared shell compatibility; only Pop skip above50 accepted / P |
+| Power / audio / lid / USB-wake dependencies | Native power-profiles-daemon, existing PipeWire/WirePlumber/systemd/udev | APT or existing IT owner; no self-update selected | Existing providers/masks/policies retained / N, M |
+| Adwaita Sans / Noto / Emoji / Liberation / fontconfig | Native font packages listed above | APT; no self-update selected | Exact shared font families / N |
+| Adwaita Mono | Verified GNOME49 font archive | Pin + font setup/sync | Exact unpatched Adwaita Mono / P |
+| JetBrainsMono / MesloLGS / Ubuntu / FiraCode / Hack Nerd Fonts | Verified Nerd Fonts3.5.1 archives | Pin + font setup/sync | Exact Nerd Font families, not plain variants / P |
+| Catppuccin GTK / Papirus overlay / bat theme | Verified GTK1.0.3/overlay/theme pins; native Papirus/base bat preferred | Pin + relevant setup/sync; native base APT | GTK frozen archive; existing user themes retained / P, K |
+| NinjaOne / SentinelOne (opt-in/existing IT only) | Vendor native DEB or retained managed enrollment | Genuine vendor agent/patcher updater; weekly health, no bootstrap enrollment | Existing enrollment/security owner; separately authorized removal / M |
+
+All required apps fail on missing incompatible owners. GNOME50 is the accepted
+platform target; only incompatible Pop Shell above50 has the accepted feature gap.
+Drivers/security agents, APT holds, Snap holds and disabled app settings retain
+policy ownership. Recurring checks do not launch desktop apps or enable their
+updaters. Full sync applies reviewed pins; daily/weekly do not claim pinned data,
+manual toolchains, gems, Composer, in-app updates or downloaded models were refreshed.
+
+`sync.sh --cleanup` previews orphans plus Arch-only obsolete candidates.
+`--remove-obsolete` is Arch-only and additionally needs a terminal, typed `remove`
+and the native prompt; `--yes` is insufficient. Native orphans require the separate
+`dfa-remove-orphans --remove` request. npm packages/stale user configurations remain
+intact. No source migration/removal is an updater fallback.
+
+Validation for this final audit: direct Bash syntax, ShellCheck and Python static
+parsing only. Updated supplied-fact decision checks are written **unrun**. Native
+transactions, vendor installers, profile loading, genuine future updater integrity,
+GUI launches, Ubuntu dependency resolution, sandbox enforcement and hardware/model
+behavior remain **unverified**. Read-only primary research establishes documented
+mechanisms and initial-verification feasibility, not workstation runtime success.
