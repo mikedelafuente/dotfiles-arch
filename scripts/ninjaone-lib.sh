@@ -164,7 +164,7 @@ ninjaone_archive_path_valid() {
 ninjaone_fetch_and_check() {
   local url="$1" deb="$2" version entry listing types
   ninjaone_url_valid "$url" || return 1
-  printf 'url = "%s"\n' "$url" | curl --config - -fsS --proto '=https' --max-time 600 -o "$deb" 2>/dev/null || {
+  printf 'url = "%s"\n' "$url" | curl -q --config - -fsS --proto '=https' --max-time 600 -o "$deb" 2>/dev/null || {
     print_error_message "Download failed from $(ninjaone_url_host "$url") (get a fresh URL from the console)" >&2
     return 1
   }
