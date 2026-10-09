@@ -91,6 +91,17 @@ def main():
         linked = Path(temp) / "linked"
         linked.symlink_to(guard, target_is_directory=True)
         decide("language_user_path_allowed", temp, str(linked / "gems"), ok=False)
+        gem_home = Path(temp) / ".gem/ruby/3.3.0"
+        gem_home.mkdir(parents=True)
+        (gem_home / "bin").symlink_to(guard, target_is_directory=True)
+        decide("language_user_path_allowed", temp, str(gem_home / "bin"), ok=False)
+        launcher = Path(temp) / "bundle"
+        decide("language_user_launcher_allowed", str(launcher))
+        launcher.write_text("user-owned executable fact")
+        decide("language_user_launcher_allowed", str(launcher))
+        launcher.unlink()
+        launcher.symlink_to(guard / "bundle")
+        decide("language_user_launcher_allowed", str(launcher), ok=False)
         decide("language_user_tool_selection", temp + "/.gem/bin/bundle", "", "false", expected="user")
         decide("language_user_tool_selection", temp + "/.gem/bin/bundle", temp + "/.gem/bin/bundle",
                "false", expected="user")

@@ -66,7 +66,11 @@ LARAVEL_COMMAND="$(type -P laravel || true)"
 [[ -z "$LARAVEL_COMMAND" || "$LARAVEL_COMMAND" == "$COMPOSER_BIN_DIR/laravel" ]] || {
     print_error_message 'Laravel launcher conflicts with Composer global bin-dir; retained'; exit 1;
 }
-if ! composer global show laravel/installer --format=json >/dev/null 2>&1; then
+GLOBAL_PACKAGES=''
+if [[ -f "$COMPOSER_HOME_DIR/composer.json" ]]; then
+    GLOBAL_PACKAGES="$(composer global show --name-only)" || exit 1
+fi
+if ! grep -Fxq laravel/installer <<<"$GLOBAL_PACKAGES"; then
     composer global require laravel/installer || exit 1
 fi
 [[ -x "$COMPOSER_BIN_DIR/laravel" ]] || { print_error_message 'Laravel command missing after Composer install'; exit 1; }

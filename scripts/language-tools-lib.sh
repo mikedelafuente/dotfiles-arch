@@ -228,10 +228,19 @@ language_native_file_owned() {
   native_package_installed "$package"
 }
 
+# Supplied temporary filesystem state: missing is installable, links are conflicts.
+language_user_launcher_allowed() {
+  [[ ! -e "$1" && ! -L "$1" ]] || [[ -f "$1" && ! -L "$1" && -O "$1" ]]
+}
+
 ensure_user_gem() {
   local gem_name="$1" user_dir="$2" command launcher owner native=false
+  language_user_path_allowed "$USER_HOME_DIR" "$user_dir/bin" || return 1
   command="$gem_name"
   [[ "$gem_name" != bundler ]] || command=bundle
+  language_user_launcher_allowed "$user_dir/bin/$command" || {
+    print_error_message "Gem launcher ownership conflict: $command; retained" >&2; return 1;
+  }
   launcher="$(type -P "$command" || true)"
   language_native_file_owned "$launcher" && native=true
   owner="$(language_user_tool_selection "$user_dir/bin/$command" "$launcher" "$native")" || return 1

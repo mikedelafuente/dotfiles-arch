@@ -24,7 +24,10 @@ print_tool_setup_start "Ruby on Rails"
 ensure_language_runtime ruby ruby || exit 1
 # RubyGems selects the user path (XDG or legacy ~/.gem); never pin the ABI here.
 GEM_USER_DIR="$(ruby -rrubygems -e 'print Gem.user_dir')" || exit 1
-language_user_path_allowed "$USER_HOME_DIR" "$GEM_USER_DIR" || exit 1
+language_user_path_allowed "$USER_HOME_DIR" "$GEM_USER_DIR/bin" || exit 1
+language_native_file_owned "$(readlink -f "$(type -P gem || true)")" || {
+    print_error_message 'RubyGems launcher is missing or has a conflicting source'; exit 1;
+}
 # Custom GEM_HOME/GEM_PATH can silently select system or unrelated installations.
 [[ -z "${GEM_HOME:-}" || "$GEM_HOME" == "$GEM_USER_DIR" ]] || {
     print_error_message 'GEM_HOME conflicts with user gems; retained'; exit 1;
