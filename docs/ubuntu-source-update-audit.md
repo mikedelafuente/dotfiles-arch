@@ -135,10 +135,10 @@ Linux user-updating replacement source was established. Spotify's
 is not evidence that a writable, verifiable Ubuntu user archive exists. Kitty's
 [binary installation instructions](https://sw.kovidgoyal.net/kitty/binary/)
 rerun an installer; the selected native source retains APT. Release-managed
-Neovim/Treesitter/container/GPU/dictation tools keep their verified owners;
+Neovim/Treesitter/container/GPU tools keep their verified owners;
 update notifications, parser/plugin downloads and model pulls are not binary
 self-updates. Native host/language/build/runtime packages use APT. Pinned fonts,
-themes/extensions/dotool builds need maintainer review; full sync applies new
+themes/extensions builds need maintainer review; full sync applies new
 reviewed pins without pretending those assets self-update. The matrix lists all
 these exceptions, their alternative owners and compatibility requirements.
 

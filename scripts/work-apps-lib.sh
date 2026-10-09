@@ -60,7 +60,6 @@ work_app_apt_source() {
     firefox) pattern='packages\.mozilla\.org|mozillateam' ;;
     claude) pattern='downloads\.claude\.ai/claude-code/apt' ;;
     chatgpt) pattern='persistent\.oaistatic\.com/codex-app-prod/linux/deb' ;;
-    voxtype-cuda) pattern='developer\.download\.nvidia\.com/compute/cuda/repos' ;;
     *) return 1 ;;
   esac
   local files=("$root/sources.list")
@@ -93,7 +92,6 @@ work_app_fingerprint() {
     firefox-release) echo 14F26682D0916CDD81E37B6D61B7B526D98F0353 ;;
     claude) echo 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE ;;
     chatgpt) echo 3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4 ;;
-    voxtype-cuda) echo 14BAFBC7562AD710CA04E69905FBB6DA60DF8A40 ;;
     *) return 1 ;;
   esac
 }
@@ -114,7 +112,6 @@ stage_work_app_key() {
       firefox) url=https://packages.mozilla.org/apt/repo-signing-key.gpg ;;
       firefox-release) url=https://archive.mozilla.org/pub/firefox/releases/KEY ;;
       claude) url=https://downloads.claude.ai/keys/claude-code.asc ;;
-      voxtype-cuda) url=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/60DF8A40.pub ;;
       *) print_error_message "$app needs a supplied trusted key"; return 1 ;;
     esac
     input="$stage/key.download"
@@ -159,10 +156,6 @@ EOF
         source=/etc/apt/sources.list.d/mullvad.list
         key=/usr/share/keyrings/mullvad-keyring.gpg
         printf 'deb [arch=amd64 signed-by=%s] https://repository.mullvad.net/deb/stable stable main\n' "$key" >"$stage/source" ;;
-      voxtype-cuda)
-        source=/etc/apt/sources.list.d/dfa-voxtype-cuda.list
-        key=/usr/share/keyrings/dfa-voxtype-cuda.gpg
-        printf 'deb [arch=amd64 signed-by=%s] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/ /\n' "$key" >"$stage/source" ;;
       tableplus|spotify)
         source="/etc/apt/sources.list.d/$app.list"
         key="/usr/share/keyrings/$app.gpg"

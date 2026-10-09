@@ -546,29 +546,16 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI command 'gnome-characters'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI binding '<Super>period'
 
-# Super+T toggles Voxtype dictation (native Arch/Ubuntu launcher).
-# GNOME/Wayland has no key-release shortcut event, so this drives voxtype's
-# toggle mode rather than true push-to-talk; voxtype's own hotkey is
-# disabled in its config so the two don't fight over the same key.
-CUSTOM_KB_VOXTYPE="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
-if command -v voxtype &> /dev/null; then
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE name 'Voxtype Toggle Dictation'
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE command '/usr/bin/voxtype record toggle'
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE binding '<Super>t'
-    VOXTYPE_CUSTOM_KEYBINDINGS=", '$CUSTOM_KB_VOXTYPE'"
-else
-    VOXTYPE_CUSTOM_KEYBINDINGS=""
-fi
-
 # Update the custom keybindings list (no empty custom0; Super+E uses built-in Home)
 CUSTOM_KEYBINDINGS="$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)"
-if [[ -n "$VOXTYPE_CUSTOM_KEYBINDINGS" ]]; then
-    CUSTOM_KEYBINDINGS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" shortcuts "$CUSTOM_KEYBINDINGS" \
-        "$CUSTOM_KB_TERMINAL" "$CUSTOM_KB_EMOJI" "$CUSTOM_KB_BROWSER" "$CUSTOM_KB_CLIPBOARD" "$CUSTOM_KB_VOXTYPE")"
-else
-    CUSTOM_KEYBINDINGS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" shortcuts "$CUSTOM_KEYBINDINGS" \
-        "$CUSTOM_KB_TERMINAL" "$CUSTOM_KB_EMOJI" "$CUSTOM_KB_BROWSER" "$CUSTOM_KB_CLIPBOARD")"
+# Retire our old dictation shortcut; preserve a user repurposing this slot.
+RETIRED_CUSTOM_KB="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
+if [[ "$(gsettings get org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$RETIRED_CUSTOM_KB command)" == "'/usr/bin/voxtype record toggle'" ]]; then
+    CUSTOM_KEYBINDINGS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" remove-shortcut "$CUSTOM_KEYBINDINGS" "$RETIRED_CUSTOM_KB")"
+    gsettings reset-recursively org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$RETIRED_CUSTOM_KB
 fi
+CUSTOM_KEYBINDINGS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" shortcuts "$CUSTOM_KEYBINDINGS" \
+    "$CUSTOM_KB_TERMINAL" "$CUSTOM_KB_EMOJI" "$CUSTOM_KB_BROWSER" "$CUSTOM_KB_CLIPBOARD")"
 gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$CUSTOM_KEYBINDINGS"
 
 # Screenshot UI (region/window/screen picker, includes copy to clipboard)
@@ -623,7 +610,6 @@ print_info_message "  - File Explorer: Super+E"
 print_info_message "  - Browser: Super+B"
 print_info_message "  - Clipboard history (GPaste): Super+V"
 print_info_message "  - Emoji picker: Super+."
-print_info_message "  - Voxtype dictation toggle: Super+T"
 print_info_message "  - Screenshot UI: Super+Shift+S (or Print)"
 print_info_message ""
 print_warning_message "Log out and back in so GNOME reloads validated extensions (Dash to Panel, GPaste, AppIndicator)."
