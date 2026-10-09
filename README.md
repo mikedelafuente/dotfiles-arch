@@ -4,6 +4,24 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
+Ubuntu support is incremental: **only standalone Kitty setup** is available on
+Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
+It uses the native `kitty` package, links only Kitty's shared config/theme, and
+retains compatible native installations. Conflicting launchers or user config
+entries cause a failure before installation; resolve them explicitly and rerun.
+The script also applies the existing KDE/GNOME terminal preferences when their
+tools are available. It does not install fonts: JetBrainsMono Nerd Font is the
+shared preference; Kitty falls back to an installed monospace font when absent.
+
+All entrypoints using the common header detect `/etc/os-release` and architecture
+before mutation. Unconverted entrypoints, including bootstrap, sync (even
+`--skip-bootstrap`), the profile runner, and maintenance scripts, reject Ubuntu.
+Other distros/releases/architectures are unsupported; Arch remains rolling-only.
+Ubuntu Kitty updates belong to APT (`sudo apt-get update` followed by
+`sudo apt-get install --only-upgrade kitty`), using existing configured sources;
+the repo's `dfa-daily`/`dfa-weekly` package workflows remain Arch-only.
+See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
+
 ---
 
 ## Choose your path

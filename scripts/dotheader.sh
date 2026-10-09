@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # --------------------------
-# Common Header for Arch Setup Scripts
+# Common Header for Workstation Setup Scripts
 # --------------------------
 # This file sets up common variables and sources the function library
 # It should be sourced at the beginning of each setup script
@@ -28,3 +28,8 @@ else
   echo "Real user: ${_user}"
   exit 1
 fi
+
+# Reject unsupported hosts and unconverted Ubuntu entrypoints before any writes.
+# Re-detect on every invocation; an inherited/saved value cannot select the distro.
+WORKSTATION_DISTRO="$(detect_workstation_distro)" || exit 1
+require_workstation_entrypoint "$WORKSTATION_DISTRO" "${BASH_SOURCE[1]:-unknown}" || exit 1

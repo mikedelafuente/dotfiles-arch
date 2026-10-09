@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Kitty Terminal for Arch Linux
+# Setup Kitty Terminal for rolling Arch / Ubuntu 26.04
 # --------------------------
 
 # --------------------------
@@ -26,45 +26,77 @@ fi
 
 print_tool_setup_start "Kitty"
 
-# --------------------------
-# Install Kitty
-# --------------------------
-
-if ! command -v kitty &> /dev/null; then
-    print_info_message "Installing Kitty via pacman"
-    sudo pacman -S --needed --noconfirm kitty
-else
-    print_info_message "Kitty is already installed. Skipping installation."
-fi
-
-# --------------------------
-# Ensure Catppuccin Mocha Theme
-# --------------------------
-# kitty.conf includes themes/mocha.conf (linked by link-dotfiles.sh).
-# Prefer the repo copy; never wget from the network.
-
+# Preflight config/source conflicts before installing or writing anything.
+REPO_KITTY_DIR="$(cd "$CURRENT_FILE_DIR/.." && pwd)/config/kitty"
 KITTY_CONFIG_DIR="$USER_HOME_DIR/.config/kitty"
-KITTY_THEME_DIR="$KITTY_CONFIG_DIR/themes"
-KITTY_THEME_FILE="$KITTY_THEME_DIR/mocha.conf"
-REPO_KITTY_THEME="$(cd "$CURRENT_FILE_DIR/.." && pwd)/config/kitty/themes/mocha.conf"
 
-mkdir -p "$KITTY_THEME_DIR"
+for dir in "$USER_HOME_DIR/.config" "$KITTY_CONFIG_DIR" "$KITTY_CONFIG_DIR/themes"; do
+    if { [[ -e "$dir" || -L "$dir" ]] && [[ ! -d "$dir" ]]; } \
+        || { [[ "$dir" != "$USER_HOME_DIR/.config" && -L "$dir" ]] \
+            && [[ "$(readlink -f "$dir")" != "$(readlink -f "$REPO_KITTY_DIR${dir#"$KITTY_CONFIG_DIR"}")" ]]; }; then
+        print_error_message "Kitty config directory conflict: $dir; preserved"
+        exit 1
+    fi
+done
 
-if [ -e "$KITTY_THEME_FILE" ] || [ -L "$KITTY_THEME_FILE" ]; then
-    print_info_message "Catppuccin Mocha theme already present"
-elif [ -f "$REPO_KITTY_THEME" ]; then
-    print_info_message "Copying Catppuccin Mocha theme from repo"
-    cp "$REPO_KITTY_THEME" "$KITTY_THEME_FILE"
-    print_success_message "Catppuccin Mocha theme installed"
+for relative in kitty.conf themes/mocha.conf; do
+    source_file="$REPO_KITTY_DIR/$relative"
+    target="$KITTY_CONFIG_DIR/$relative"
+    if [[ ! -f "$source_file" ]]; then
+        print_error_message "Missing Kitty config: $source_file"
+        exit 1
+    fi
+    if [[ -e "$target" || -L "$target" ]]; then
+        if [[ -L "$target" && "$(readlink -f "$target")" == "$(readlink -f "$source_file")" ]] \
+            || { [[ -f "$target" && ! -L "$target" ]] && cmp -s "$source_file" "$target"; }; then
+            continue
+        fi
+        print_error_message "Kitty config conflict: $target; preserved (resolve before rerunning)"
+        exit 1
+    fi
+done
+
+kitty_path="$(type -P kitty || true)"
+if native_package_installed kitty; then
+    if [[ -z "$kitty_path" || "$(readlink -f "$kitty_path")" != "$(readlink -f /usr/bin/kitty)" ]]; then
+        print_error_message "Native Kitty is installed but PATH does not select /usr/bin/kitty; resolve the launcher conflict"
+        exit 1
+    fi
+    print_info_message "Keeping native Kitty; update owner: $WORKSTATION_DISTRO system packages"
+elif [[ -n "$kitty_path" || -e /usr/bin/kitty || -L /usr/bin/kitty ]]; then
+    print_error_message "Kitty source conflict: an unmanaged launcher exists; preserved. No duplicate installation or source fallback."
+    exit 1
 else
-    print_warning_message "Repo theme missing ($REPO_KITTY_THEME); run link-dotfiles.sh for kitty.conf themes/"
+    ensure_native_pkgs kitty || exit 1
+    hash -r
+    kitty_path="$(type -P kitty || true)"
 fi
+
+if ! native_package_installed kitty || [[ -z "$kitty_path" || "$(readlink -f "$kitty_path")" != "$(readlink -f /usr/bin/kitty)" ]] \
+    || [[ ! -x /usr/bin/kitty ]]; then
+    print_error_message "Native Kitty installation did not provide its required launcher"
+    exit 1
+fi
+kitty_version="$(/usr/bin/kitty --version)" || exit 1
+if [[ ! "$kitty_version" =~ ^kitty\ ([0-9]+)\.([0-9]+)\.[0-9]+ ]] \
+    || ! (( 10#${BASH_REMATCH[1]} > 0 || 10#${BASH_REMATCH[2]} >= 26 )); then
+    print_error_message "Kitty 0.26+ is required for this recipe; update through the native package owner (installation preserved)"
+    exit 1
+fi
+print_info_message "$kitty_version"
+
+# Standalone setup links only Kitty; identical legacy theme copies are retained.
+mkdir -p "$KITTY_CONFIG_DIR/themes"
+for relative in kitty.conf themes/mocha.conf; do
+    target="$KITTY_CONFIG_DIR/$relative"
+    if [[ ! -e "$target" && ! -L "$target" ]]; then
+        ln -s "$REPO_KITTY_DIR/$relative" "$target"
+    fi
+done
 
 # --------------------------
 # Set Default Terminal for All Available Desktop Environments
 # --------------------------
-
-kitty_path=$(which kitty)
 
 print_info_message "Kitty path: $kitty_path"
 
