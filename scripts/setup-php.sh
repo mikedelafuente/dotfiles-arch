@@ -76,9 +76,10 @@ fi
 if ! grep -Fxq laravel/installer <<<"$GLOBAL_PACKAGES"; then
     composer global require laravel/installer || exit 1
 fi
-language_user_launcher_allowed "$COMPOSER_BIN_DIR/laravel" && [[ -x "$COMPOSER_BIN_DIR/laravel" ]] || {
-    print_error_message 'Laravel command missing or has an ownership conflict after Composer install'; exit 1;
-}
+if ! language_user_launcher_allowed "$COMPOSER_BIN_DIR/laravel" || [[ ! -x "$COMPOSER_BIN_DIR/laravel" ]]; then
+    print_error_message 'Laravel command missing or has an ownership conflict after Composer install'
+    exit 1
+fi
 "$COMPOSER_BIN_DIR/laravel" --version || exit 1
 print_info_message "Laravel commands: $COMPOSER_BIN_DIR; custom bin-dir must be on your PATH"
 print_info_message 'Laravel updates: composer global update laravel/installer'
