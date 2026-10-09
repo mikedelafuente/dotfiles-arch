@@ -6,7 +6,10 @@ Managed configuration, helpers, rules, skills and Pi extensions now use stable i
 `~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
 obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
 live files and return failure. `dfa-deploy deploy` snapshots local edits without committing or fetching.
-Direct sync and setup commands use those snapshots for testing. `dfa-deploy source` identifies the shared edit destination.
+Direct sync and setup commands use those snapshots for testing.
+Use `dfa daily` for routine updates, `dfa weekly` for weekly maintenance,
+`dfa deploy` for local config edits and `dfa sync-dotfiles` for setup-script edits.
+Daily/weekly require a clean dotfiles checkout; local testing requires no commit. `dfa-deploy source` identifies the shared edit destination.
 Use `dfa-deploy capture <artifact>` for one selected source improvement,
 `dfa-deploy override <artifact> <file>` for a persistent local override,
 `dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`

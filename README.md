@@ -12,6 +12,21 @@ Use `dfa-deploy capture <artifact>` for one selected source improvement,
 `dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
 for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
 
+Choose by what you want to do:
+
+| Goal | Command | Pulls latest? | Runs setup/packages? |
+| --- | --- | --- | --- |
+| Usual daily updates | `dfa daily` | Yes; requires a clean dotfiles checkout | Routine updates |
+| Weekly maintenance | `dfa weekly` | Yes; includes daily | Forced updates, orphan preview, NinjaOne health |
+| Test config, rule or skill edits | `dfa deploy` | No; uses uncommitted local files | No |
+| Test setup scripts or repair setup | `dfa sync-dotfiles` | No; uses uncommitted local files | Yes; saved profile setup and guarded updates |
+
+Dirty dotfiles stop daily/weekly before dependent maintenance. Test with deploy or
+sync-dotfiles, then commit or stash before fetching shared changes. `dfa deploy`
+defaults to `dfa-deploy deploy`; advanced subcommands still work, such as
+`dfa deploy source` or `dfa deploy rollback`.
+
+
 
 Rolling Arch Linux and Ubuntu 26.04 LTS workstation setup for **GNOME (Wayland)**: shared additive profiles, dotfiles, bootstrap/sync, and daily/weekly maintenance on x86_64/amd64.
 
@@ -457,7 +472,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | `lzg` / `lzd` | lazygit / lazydocker |
 | `z` / `zi` | Smart cd (zoxide) |
 | `r` / `dfa-repos` | fzf-pick a repo under `~/repos` and cd into it |
-| `dfa` | Command picker grouped into Routine, AI, Projects, Dotfiles, and System; search `AI` or `sources` to find AI configuration tools (`dfa list` prints the groups) |
+| `dfa` | Action guide and command picker: everyday updates, weekly maintenance, local config testing or setup repair. `dfa list` shows the same guide. |
 | `dfa sync-sources` | Interactive manager for local rules, skills, and extensions sources: add, remove, reorder, and apply changes. Removing a source keeps its files; `dfa sync-sources list` lists without prompts |
 | `pbcopy` / `pbpaste` | Wayland clipboard in/out |
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
