@@ -192,7 +192,7 @@ voxtype_release_owner_allowed() {
 
 record_voxtype_release_owner() {
   local marker=/var/lib/dotfiles-arch/dictation/voxtype-source
-  voxtype_release_owner_allowed || return 1
+  voxtype_release_owner_allowed "$marker" || return 1
   [[ ! -e "$marker" ]] || return 0
   sudo install -d -m 755 /var/lib/dotfiles-arch/dictation || return 1
   printf '%s\n' 'https://github.com/peteonrails/voxtype' | sudo tee "$marker" >/dev/null || return 1
@@ -200,7 +200,7 @@ record_voxtype_release_owner() {
 
 install_voxtype_release() (
   local stage metadata fields version url digest installed='' held
-  voxtype_release_owner_allowed || { print_error_message 'Voxtype release-owner record conflict; retained'; return 1; }
+  voxtype_release_owner_allowed /var/lib/dotfiles-arch/dictation/voxtype-source || { print_error_message 'Voxtype release-owner record conflict; retained'; return 1; }
   held="$(apt-mark showhold)" || return 1
   if grep -Fxq voxtype <<<"$held"; then print_info_message 'Voxtype installer policy-deferred: APT hold retained'; return 0; fi
   ensure_native_pkgs curl ca-certificates jq || return 1
