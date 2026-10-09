@@ -26,17 +26,14 @@ ensure_language_packages() {
   ensure_native_pkgs "${packages[@]}"
 }
 
-# Package identity and workflow floors, rather than pinning distro versions.
-language_command_recipe() {
+# Unversioned package names select the latest available from the native source.
+language_command_package() {
   case "$1" in arch|ubuntu) ;; *) return 1 ;; esac
   case "$2" in
-    python3) [[ "$1" == arch ]] && echo 'python 3.10.0' || echo 'python3 3.10.0' ;;
-    go) [[ "$1" == arch ]] && echo 'go 1.24.0' || echo 'golang-go 1.24.0' ;;
-    gopls) echo 'gopls 0.16.0' ;;
-    php) [[ "$1" == arch ]] && echo 'php 8.2.0' || echo 'php-cli 8.2.0' ;;
-    composer) echo 'composer 2.0.0' ;;
-    ruby) echo 'ruby 3.2.0' ;;
-    rustc|cargo) echo 'rustup 1.70.0' ;;
+    python3) [[ "$1" == arch ]] && echo python || echo python3 ;;
+    go) [[ "$1" == arch ]] && echo go || echo golang-go ;;
+    gopls|composer|ruby) echo "$2" ;;
+    php) [[ "$1" == arch ]] && echo php || echo php-cli ;;
     *) return 1 ;;
   esac
 }
@@ -60,16 +57,6 @@ language_command_version() {
   printf '%s\n' "${BASH_REMATCH[1]}"
 }
 
-language_version_allowed() {
-  local recipe _package minimum
-  recipe="$(language_command_recipe arch "$1")" || return 1
-  read -r _package minimum <<<"$recipe"
-  core_cli_version_at_least "$2" "$minimum" || {
-    print_error_message "$1 requires $minimum+; update through its selected owner (retained)" >&2
-    return 1
-  }
-}
-
 # Supplied ownership/default/version facts. Only a missing default is initialized.
 rust_toolchain_selection() {
   case "$1" in arch|ubuntu) ;; *) return 1 ;; esac
@@ -80,7 +67,7 @@ rust_toolchain_selection() {
     native) ;;
     *) print_error_message 'Rust source conflict; existing toolchain retained' >&2; return 1 ;;
   esac
-  language_version_allowed rustc "$4" && language_version_allowed cargo "$5" || return 1
+  [[ "$4" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$5" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
   echo retain
 }
 
@@ -106,9 +93,8 @@ language_installed_version() {
 # Preflight all commands before installing any prerequisite or changing config.
 # Real paths account for Ubuntu's versioned executables and alternatives.
 language_native_preflight() {
-  local command="$1" package _minimum recipe expected launcher installed=false version
-  recipe="$(language_command_recipe "$WORKSTATION_DISTRO" "$command")" || return 1
-  read -r package _minimum <<<"$recipe"
+  local command="$1" package expected launcher installed=false
+  package="$(language_command_package "$WORKSTATION_DISTRO" "$command")" || return 1
   native_package_installed "$package" && installed=true
   expected="$(readlink -m "/usr/bin/$command")" || return 1
   launcher="$(type -P "$command" || true)"
@@ -123,10 +109,9 @@ language_native_preflight() {
     return 1
   fi
   if [[ -n "$launcher" ]]; then
-    version="$(language_installed_version "$command")" || {
-      print_error_message "Cannot read compatible $command version; retained" >&2; return 1;
+    language_installed_version "$command" >/dev/null || {
+      print_error_message "Cannot read $command version; retained" >&2; return 1;
     }
-    language_version_allowed "$command" "$version" || return 1
   fi
 }
 
@@ -141,7 +126,6 @@ ensure_language_runtime() {
   for command in "$@"; do
     language_native_preflight "$command" || return 1
     version="$(language_installed_version "$command")" || return 1
-    language_version_allowed "$command" "$version" || return 1
     print_info_message "$command $version; native updates: dfa-update-system"
   done
 }

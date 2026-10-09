@@ -43,7 +43,7 @@ def main():
         decide("language_packages", "ubuntu", "go", expected="golang-go gopls")
         decide("language_packages", "fedora", "python", ok=False)
         decide("language_packages", "ubuntu", "unknown", ok=False)
-        decide("language_command_recipe", "ubuntu", "php", expected="php-cli 8.2.0")
+        decide("language_command_package", "ubuntu", "php", expected="php-cli")
         for command, output, version in (
             ("python3", "Python 3.14.0", "3.14.0"),
             ("go", "go version go1.26 linux/amd64", "1.26.0"),
@@ -61,8 +61,6 @@ def main():
                                 ("rustc", "rustc 1.90.0-unknown"),
                                 ("php", "PHP 8.6.0RC1"), ("python3", "Python 3.14.0rc1")):
             decide("language_command_version", command, output, ok=False)
-        decide("language_version_allowed", "php", "8.1.9", ok=False, diagnostic="8.2.0+")
-        decide("language_version_allowed", "ruby", "3.3.8")
         for distro in ("arch", "ubuntu"):
             decide("rust_toolchain_selection", distro, "none", "", "", "", expected="initialize")
             decide("rust_toolchain_selection", distro, "native-rustup", "", "", "", expected="initialize")
@@ -70,7 +68,9 @@ def main():
                    expected="retain")
             decide("rust_toolchain_selection", distro, "native", "", "1.90.0", "1.90.0",
                    expected="retain")
-            decide("rust_toolchain_selection", distro, "native", "", "1.60.0", "1.90.0", ok=False)
+            decide("rust_toolchain_selection", distro, "native", "", "1.60.0", "1.90.0",
+                   expected="retain")
+            decide("rust_toolchain_selection", distro, "native", "", "unknown", "1.90.0", ok=False)
             decide("rust_toolchain_selection", distro, "conflict", "", "1.90.0", "1.90.0", ok=False)
         decide("php_configuration_paths", "arch", "8.5.4",
                expected="/etc/php/php.ini /etc/php/conf.d")

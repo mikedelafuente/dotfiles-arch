@@ -63,7 +63,7 @@ if [[ "$ACTION" == initialize ]]; then
 fi
 for command in rustc cargo; do
     VERSION="$(language_installed_version "$command")" || exit 1
-    language_version_allowed "$command" "$VERSION" || exit 1
+    print_info_message "$command $VERSION"
 done
 if [[ "$OWNER" == native ]]; then
     print_info_message 'Existing distro Rust retained; update with dfa-update-system'

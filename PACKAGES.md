@@ -367,16 +367,20 @@ The five standalone language setups support rolling Arch and Ubuntu 26.04 amd64.
 They use the existing native backend, without vendor repositories, AUR additions,
 runtime managers replacing native Python/Go/PHP/Ruby, or root-owned user installs.
 Full Ubuntu bootstrap/sync is still guarded pending the remaining app slices.
+New installs use unversioned native packages (latest available in the configured
+repositories), latest stable Rust via rustup, and unpinned user gems/Composer
+packages. There are no repository-imposed language version floors. Existing
+installations and explicit user toolchain selections retain their update owners.
 
 | Component | Source / retained installation | Update owner | Compatibility / configuration |
 | --- | --- | --- | --- |
-| Python | Native distro packages above | `dfa-update-system`; project dependencies use the project's venv/pip | Python 3.10+; import pip, venv, ensurepip and pynvim; native-owned `pip3`. No system pip installs or externally-managed override. |
-| Go / gopls | Native packages above | `dfa-update-system` | Go 1.24+, gopls 0.16+; compiler tool and standard-library directories must exist. Go's optional automatic toolchain selection is left unchanged. |
+| Python | Native distro packages above | `dfa-update-system`; project dependencies use the project's venv/pip | Import pip, venv, ensurepip and pynvim; native-owned `pip3`. No system pip installs or externally-managed override. |
+| Go / gopls | Native packages above | `dfa-update-system` | Compiler tool and standard-library directories must exist. Go's optional automatic toolchain selection is left unchanged. |
 | rustup binary | Native `rustup` preferred for new setups; existing user rustup retained | Native binary: `dfa-update-system`; user binary: manual `rustup self update` | Rustup proxies must share the manager's file identity. Existing user `CARGO_HOME`/`RUSTUP_HOME` remain user-owned; no pipe-to-shell installer. |
-| Rust / Cargo | User toolchains via rustup, or compatible existing distro Rust/Cargo | Rustup toolchains: manual `rustup update`; distro toolchain: `dfa-update-system` | Rust/Cargo 1.70+ baseline. Stable is initialized only with no selected default/toolchain; existing pinned, beta/nightly defaults and `RUSTUP_TOOLCHAIN` are retained. No distro rustup self-update. |
-| PHP / Composer | Native distro packages above | `dfa-update-system` | PHP 8.2+, Composer 2+; Laravel-required builtins/extensions and GD/Intl/MySQL/SQLite/PostgreSQL are checked. Arch enables exact missing directives in shared `/etc/php/php.ini`; Ubuntu enables missing modules with `phpenmod -v <major.minor> -s cli`, using `/etc/php/<major.minor>/cli/{php.ini,conf.d}` and leaving web server SAPIs unchanged. |
+| Rust / Cargo | User toolchains via rustup, or existing distro Rust/Cargo | Rustup toolchains: manual `rustup update`; distro toolchain: `dfa-update-system` | Latest stable is initialized only with no selected default/toolchain; existing pinned, beta/nightly defaults and `RUSTUP_TOOLCHAIN` are retained. No distro rustup self-update. |
+| PHP / Composer | Native distro packages above | `dfa-update-system` | Laravel-required builtins/extensions and GD/Intl/MySQL/SQLite/PostgreSQL are checked. Arch enables exact missing directives in shared `/etc/php/php.ini`; Ubuntu enables missing modules with `phpenmod -v <major.minor> -s cli`, using `/etc/php/<major.minor>/cli/{php.ini,conf.d}` derived from the installed PHP version and leaving web server SAPIs unchanged. |
 | Laravel installer | Composer global package in the existing user Composer home/bin-dir | Manual `composer global update laravel/installer` | Preserve `COMPOSER_HOME`/global bin-dir; verify the installer command. Shell PATH includes XDG/explicit Composer homes and legacy `~/.composer/vendor/bin`; custom bin-dir must already be on PATH. |
-| Ruby / native headers | Native distro packages above | `dfa-update-system` | Ruby 3.2+; RubyGems, OpenSSL and Psych must work; NVM Node is required for the existing Rails JS workflow. |
+| Ruby / native headers | Native distro packages above | `dfa-update-system` | RubyGems, OpenSSL and Psych must work; NVM Node is required for the existing Rails JS workflow. |
 | Bundler / Rails | User gems (`gem install --user-install`) or compatible existing native commands | User gems: manual `gem update --user-install <user-gem> --no-document` (`bundler` or `rails` only when user-owned); native gems: `dfa-update-system` | Use RubyGems' actual `Gem.user_dir`, not a hardcoded Ruby ABI. PATH covers XDG `gem/ruby/*/bin` and legacy `~/.gem/ruby/*/bin`; verify `bundle` and `rails`, even when a gem is listed. Never `sudo gem` or `gem update --system`. |
 
 Manual toolchain/gem/Composer updates retain the existing opt-in workflow; daily
@@ -384,7 +388,7 @@ native updates do not claim to refresh them. All package, rustup, gem and Compos
 mutation failures exit nonzero before setup completion; these setups write no
 successful-update stamps. Native update stamps retain the shared backend's failure
 contract. User tooling is rejected when run as root. Unknown/shadowing launchers,
-unowned alternatives, unsupported versions, custom PHP config overrides, and
+unowned alternatives, unreadable command versions, custom PHP config overrides, and
 linked/root-owned/outside-home user state are reported and retained. A native runtime
 without the selected package identity (for example a version-only PHP package without
 `php-cli`) needs source resolution before setup rather than acquiring another runtime.
@@ -402,8 +406,8 @@ Primary-source evidence: Ubuntu packages
 [RubyGems user paths](https://guides.rubygems.org/faqs/),
 [Composer globals](https://getcomposer.org/doc/03-cli.md#global), and
 [Arch's PHP file layout](https://archlinux.org/packages/extra/x86_64/php/files/)
-support the configuration choices. Runtime floors are workflow baselines, not version
-pins or permission to upgrade an incompatible existing runtime silently.
+support the configuration choices. Actual dependency compatibility is checked by
+the runtimes/package tools without imposing a separate language version policy.
 
 **Validation:** `python3 tests/test_language_decisions.py` uses supplied package,
 version, ownership, PHP module/config-path and Rust default facts, with temporary
