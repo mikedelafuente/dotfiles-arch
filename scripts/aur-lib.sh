@@ -198,19 +198,25 @@ aur_scan_package_tree() {
 
 # Scan every package that yay would upgrade from the AUR (yay -Qua), including AUR deps.
 aur_scan_pending_upgrades() {
-  local pkg output rc
+  local pkg output rc=0 errors
   local pending=()
   if ! command -v yay &>/dev/null; then
     print_error_message "AUR scan requires yay"
     return 1
   fi
-  if output="$(yay -Qua)"; then
-    mapfile -t pending < <(printf '%s\n' "$output" | awk 'NF {print $1}')
-  else
-    rc=$?
+  errors="$(mktemp)" || return 1
+  if output="$(yay -Qua 2>"$errors")"; then :; else rc=$?; fi
+  # yay uses exit 1 with no output when there are no upgrades. Diagnostics or
+  # partial results still indicate a failed query and must block installation.
+  if [[ "$rc" -ne 0 ]] && ! [[ "$rc" -eq 1 && -z "$output" && ! -s "$errors" ]]; then
+    cat "$errors" >&2
+    rm -f "$errors"
     print_error_message "Cannot query pending AUR upgrades (yay exit $rc)"
     return "$rc"
   fi
+  cat "$errors" >&2
+  rm -f "$errors"
+  mapfile -t pending < <(printf '%s\n' "$output" | awk 'NF {print $1}')
   if [[ ${#pending[@]} -eq 0 ]]; then
     print_info_message "No pending AUR upgrades to scan"
     return 0
