@@ -729,7 +729,7 @@ require_workstation_entrypoint() {
     ubuntu:setup-steam.sh|ubuntu:setup-discord.sh|ubuntu:setup-firefox.sh|ubuntu:setup-mullvad.sh) return 0 ;;
     ubuntu:setup-nvidia.sh|ubuntu:setup-ollama.sh) return 0 ;;
     ubuntu:setup-tableplus.sh|ubuntu:setup-postman.sh|ubuntu:setup-spotify.sh|ubuntu:setup-obsidian.sh|ubuntu:setup-moonlander.sh) return 0 ;;
-    arch:*|ubuntu:setup-fonts.sh|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-python.sh|ubuntu:setup-rust.sh|ubuntu:setup-golang.sh|ubuntu:setup-php.sh|ubuntu:setup-ruby.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:setup-docker.sh|ubuntu:setup-minikube.sh|ubuntu:setup-devcontainer.sh|ubuntu:setup-chrome.sh|ubuntu:setup-slack.sh|ubuntu:setup-zoom.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    arch:*|ubuntu:setup-gnome.sh|ubuntu:post-link-hooks.sh|ubuntu:setup-fonts.sh|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-python.sh|ubuntu:setup-rust.sh|ubuntu:setup-golang.sh|ubuntu:setup-php.sh|ubuntu:setup-ruby.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:setup-docker.sh|ubuntu:setup-minikube.sh|ubuntu:setup-devcontainer.sh|ubuntu:setup-chrome.sh|ubuntu:setup-slack.sh|ubuntu:setup-zoom.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
@@ -833,6 +833,8 @@ source "$DF_SCRIPT_DIR/desktop-utilities-lib.sh"
 source "$DF_SCRIPT_DIR/personal-apps-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/appearance-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/gnome-lib.sh"
 
 # Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {

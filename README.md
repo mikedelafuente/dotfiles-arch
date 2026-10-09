@@ -314,6 +314,17 @@ and update behavior has only read-only/static validation.
 - Tap-to-click **off**
 - Emoji picker (`gnome-characters`) and the screenshot UI on Super shortcuts
 
+The setup path covers Arch and Ubuntu 26.04. Current Arch GNOME 51 has a required
+Pop Shell compatibility gap and fails setup until upstream support or an explicit
+feature exception is available. Required extension metadata must support the
+installed GNOME shell; missing required settings fail setup. Ubuntu uses native
+GPaste/AppIndicator and verified pinned Pop Shell, No Overview and Dash to Panel
+sources. See [GNOME sources/update owners](PACKAGES.md#shared-gnome-sources-and-update-owners).
+Ubuntu Dock, Tiling Assistant and Desktop Icons NG are disabled to avoid panel
+and Pop Shell conflicts; unrelated extensions and custom shortcut-list entries
+are retained. Log out/in after extension installation. Desktop runtime behavior
+has not been verified; validation is limited to read-only metadata/static checks.
+
 ### Power policy (`MACHINE_TYPE`)
 
 `setup-gnome.sh` applies the saved machine type:
@@ -330,6 +341,11 @@ and update behavior has only read-only/static validation.
 
 Lid drop-in: `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` (re-login or reboot to apply).
 On AC with the lid closed, the laptop stays awake; keyboard/mouse on a KVM can also wake from suspend.
+Foreign policy files/overrides, alternate power providers and masked/inactive
+power services are preserved with a deferred-policy warning. Owned lid/USB changes
+apply after reboot/device add/change. `dfa-refresh-audio` restarts audio only when
+all three PipeWire/WirePlumber user services are loaded and active; `--status`
+prints `wpctl status`. Audio/suspend/wake behavior remains unverified.
 
 ### NVIDIA
 
