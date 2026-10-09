@@ -19,8 +19,11 @@ else
 fi
 ```
 
-- Install with `ensure_pacman_pkgs` / `ensure_yay_pkgs`; call `ensure_yay_installed`
-  before the first AUR use. Check installs with `pacman -Q`, not `command -v` alone.
+- Install native packages with `ensure_native_pkgs`; check with `native_package_installed`,
+  then verify required executable/capabilities. Use explicit app recipes for non-native sources.
+- Arch AUR installs use `ensure_yay_pkgs`; call `ensure_yay_installed` before first use.
+- Keep mutation helpers' failures explicit with `|| return` / `|| exit`; callers aggregate child
+  Bash statuses. User CLI paths must work in this invocation before shell startup files are linked.
 - Scripts must be idempotent — they are re-run on every `sync.sh`.
 - Output goes through `print_info_message` / `print_warning_message` /
   `print_error_message`; prompt defaults are highlighted with `fmt_choice`.
@@ -36,4 +39,6 @@ anything from `scripts/` — `dotheader.sh` is not next to the installed symlink
 
 ## Before finishing
 
-Run `bash scripts/check.sh` (`bash -n` + `shellcheck -x`); CI runs the same check.
+Use direct `bash -n <paths>` and `shellcheck -x <paths>` for static checks; CI uses `scripts/check.sh`.
+Decision checks use supplied facts/temp state. Execute setup/update/cleanup/service/GNOME/driver
+workflows only for separately authorized workstation work, never to validate code changes.

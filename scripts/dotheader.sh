@@ -29,7 +29,18 @@ else
   exit 1
 fi
 
-# Reject unsupported hosts and unconverted Ubuntu entrypoints before any writes.
+# Reject unsupported hosts and Arch-only entrypoints before any writes.
 # Re-detect on every invocation; an inherited/saved value cannot select the distro.
 WORKSTATION_DISTRO="$(detect_workstation_distro)" || exit 1
 require_workstation_entrypoint "$WORKSTATION_DISTRO" "${BASH_SOURCE[1]:-unknown}" || exit 1
+WORKSTATION_ENTRYPOINT="${BASH_SOURCE[1]:-unknown}"
+case "${WORKSTATION_ENTRYPOINT##*/}" in
+  bootstrap.sh|sync.sh|run-profile-setup.sh|setup-gnome.sh|post-link-hooks.sh)
+    GNOME_INSTALLED=false
+    native_package_installed gnome-shell && GNOME_INSTALLED=true
+    require_workstation_desktop "$WORKSTATION_DISTRO" "$GNOME_INSTALLED" || exit 1 ;;
+esac
+
+# Child setup processes must see newly installed user CLIs in this same run.
+# Shell startup files are linked later; never append PATH changes to them.
+export PATH="$USER_HOME_DIR/.local/bin:${CARGO_HOME:-$USER_HOME_DIR/.cargo}/bin:$PATH"

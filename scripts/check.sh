@@ -37,7 +37,7 @@ if command -v shellcheck >/dev/null 2>&1; then
   echo "==> shellcheck -x"
   shellcheck -x "${files[@]}"
 else
-  echo "shellcheck not installed — skipped (install via setup-essentials or pacman -S shellcheck)"
+  echo "shellcheck not installed — skipped (install via scripts/setup-essentials.sh)"
 fi
 
 echo "OK"

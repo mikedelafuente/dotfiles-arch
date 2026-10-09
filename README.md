@@ -1,11 +1,12 @@
 # dotfiles-arch
 
-Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitty, tmux, Neovim, Claude Code, Codex, and a modular bootstrap/sync system.
+Rolling Arch Linux and Ubuntu 26.04 LTS workstation setup for **GNOME (Wayland)**: shared additive profiles, dotfiles, bootstrap/sync, and daily/weekly maintenance on x86_64/amd64.
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, work apps, and package maintenance**
-and shared desktop utilities are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
+Ubuntu starts from an installed GNOME desktop with sudo and permission to add software sources. Run `bash scripts/bootstrap.sh` for initial setup, `bash scripts/sync.sh` to refresh, or an individual setup script to repair one app. Selected app sources, requirements, and update owners are in [PACKAGES.md](PACKAGES.md) and the [source/update audit](docs/ubuntu-source-update-audit.md). Install/update/desktop/hardware runtime remains unverified; see the [integration validation inventory](docs/ubuntu-integration-validation.md).
+
+Standalone Kitty: from the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
 entries cause a failure before installation; resolve them explicitly and rerun.
@@ -31,7 +32,7 @@ for Chrome/Slack and a signature-verified official Zoom DEB. `dfa-update-system`
 maintains all three, including Zoom's standalone refresh. Existing launchers,
 sources, holds, and user settings are retained; unknown/duplicate ownership fails.
 The shared additive `work` selection and Chrome browser identity stay unchanged;
-full Ubuntu profile/GNOME orchestration remains guarded. See
+Ubuntu uses the same profile/GNOME orchestration. See
 [work app sources and runtime limits](PACKAGES.md#work-app-sources-and-update-owners).
 
 Shared desktop utilities: run the existing `scripts/setup-tableplus.sh`,
@@ -45,16 +46,15 @@ ZSA permissions require logout/login and keyboard replug after first setup;
 conflicting user udev files are preserved. See
 [desktop utility sources, update owners and unverified runtime](PACKAGES.md#desktop-utility-sources-and-update-owners).
 
-All entrypoints using the common header detect `/etc/os-release` and architecture
-before mutation. Unconverted entrypoints, including bootstrap, sync (even
-`--skip-bootstrap`), and the profile runner reject Ubuntu. User-only daily sync
-steps are enabled; historical Arch setup migrations still fail safely on Ubuntu.
-Other distros/releases/architectures are unsupported; Arch remains rolling-only.
-Ubuntu Kitty updates belong to APT through `dfa-update-system`, using existing
-configured sources. Daily/weekly sequencing is shared. If a repo pull triggers
-full resync on Ubuntu, that guarded step reports failure and remaining daily
-steps continue; full orchestration is a subsequent slice. Weekly NinjaOne health
-checks run on both hosts; IT-managed installations are
+The common header detects `/etc/os-release` and architecture before mutation.
+Bootstrap, sync, the additive profile runner, linking and historical migrations
+support both hosts. Disk provisioning (`prepare-archinstall.sh`, `post_install.sh`)
+and AUR-only utilities remain Arch-only. Other hosts/releases/architectures fail
+before changes. Native packages use their distro updater; managed release
+exceptions refresh through their recorded owners. Daily/weekly sequencing is
+shared. Missing required steps, setup failures, link conflicts, hook failures,
+and update failures reach the final nonzero status while independent work continues.
+Weekly NinjaOne health checks run on both hosts; IT-managed installations are
 checked read-only. Standalone opt-in native Ubuntu installation/removal is described
 in [NinjaOne lifecycle and validation limits](PACKAGES.md#ninjaone-standalone-lifecycle--arch--ubuntu-2604).
 See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
@@ -120,6 +120,7 @@ Capture, typing and inference remain unverified. See
 | Situation | What to run |
 |-----------|-------------|
 | **Brand-new Arch install** | archinstall → `./post_install.sh` (chains straight into bootstrap) |
+| **Installed Ubuntu 26.04 GNOME** | `bash scripts/bootstrap.sh` (requires sudo and source-registration permission) |
 | **Existing machine / other PC** | `bash scripts/sync.sh` |
 | **Day-to-day package updates** | `bash scripts/update-system.sh` (Arch: guarded `pacman` + AUR; Ubuntu: APT) |
 | **Just re-link configs** | `bash scripts/link-dotfiles.sh` |
@@ -161,7 +162,7 @@ atomically write `~/.config/dotfiles-arch/.last_system_upgrade_<arch|ubuntu>`.
 Until the first successful Arch update, all three existing `.last_pacman_update`,
 `.last_pacman_upgrade`, and `.last_yay_update` stamps are read without rewriting
 or deleting them. Missing, invalid, or future stamps require a retry. Failed
-steps do not stamp success and survive daily/weekly and Arch bootstrap/sync summaries.
+steps do not stamp success and survive daily/weekly and bootstrap/sync summaries.
 Sync always upgrades; bootstrap retains its cooldown.
 The npm CLI step updates only launchers owned by the selected global npm package;
 vendor/native or shadowing launchers are preserved and reported as source conflicts.
@@ -220,7 +221,7 @@ You will be prompted for:
 Config is saved at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`
 (`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES`, `SETUP_PROFILE` primary, `INSTALL_NVIDIA`, `MACHINE_TYPE`).
 
-Bootstrap then: updates pacman/yay → runs all setup scripts → configures GNOME (if present) → symlinks dotfiles.
+Bootstrap then: prepares Arch multilib/yay when applicable → runs a cooldown-guarded native/app update → runs the single additive setup list → links shared dotfiles → runs post-link hooks. Ubuntu requires the installed GNOME desktop; Arch keeps its existing desktop-absent skip. User CLI paths are available to child setup processes immediately. Conflicting files/foreign links are preserved and reported as failures; resolve them before rerunning.
 
 ---
 
@@ -237,10 +238,10 @@ That will:
 
 1. Resolve/save profiles + NVIDIA + machine type (`load_bootstrap_config` / `write_bootstrap_config`)
 2. `git pull --ff-only`
-3. Run a guarded system upgrade (`pacman` + AUR IoC scan + `yay`) every time
+3. Run guarded native/app updates every time (Arch pacman/scanned AUR; Ubuntu APT)
 4. Re-run setup scripts via the shared `run-profile-setup.sh` list (continues on error; prints failures)
 5. Relink dotfiles + `post-link-hooks.sh` (font cache, GNOME checklist)
-6. Optionally remove obsolete packages (Herdr, Hyprland stack, etc.)
+6. Optionally preview native cleanup plus Arch obsolete packages
 
 ### Useful flags
 
@@ -249,12 +250,13 @@ bash scripts/sync.sh --profile work
 bash scripts/sync.sh --profile work,devcontainer
 bash scripts/sync.sh --profile personal
 bash scripts/sync.sh --prompt               # re-ask profiles / NVIDIA / machine type
-bash scripts/sync.sh --cleanup              # remove obsolete packages/configs
+bash scripts/sync.sh --cleanup              # preview native orphans + Arch obsolete packages
+bash scripts/sync.sh --remove-obsolete      # Arch only: terminal + type remove, then native prompt
 bash scripts/sync.sh --skip-bootstrap       # skip setup-*.sh (still upgrades + links)
 bash scripts/sync.sh --yes --profile work,devcontainer --cleanup
 ```
 
-With `--yes`, pass `--profile` if none is saved yet. Cleanup with `--yes` only runs when `--cleanup` is also set. Saved profiles/NVIDIA/machine type are kept silently unless unset or `--prompt`.
+With `--yes`, pass `--profile` if none is saved yet. `--cleanup` only previews; `--yes` cannot authorize removal. Native orphan removal uses `dfa-remove-orphans --remove` separately. Arch obsolete removal uses `--remove-obsolete`, a terminal and typing `remove`, followed by the native transaction prompt. npm packages and stale user config directories are preserved. Saved profiles/NVIDIA/machine type are kept silently unless unset or `--prompt`.
 
 **Rule of thumb:** after you pull big changes on another PC, run `sync.sh` once (needs sudo for packages). Use `update-system.sh` for day-to-day package-only updates without re-running setup scripts.
 
@@ -279,7 +281,7 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
 | **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
-| **personal** | Steam, Discord, Firefox, Mullvad VPN (Arch / Ubuntu 26.04 sources in `PACKAGES.md`) | Firefox (when personal is selected and work is not; selected Snap/DEB desktop identity) |
+| **personal** | Steam, Discord, Firefox, Mullvad VPN (Arch / Ubuntu 26.04 sources in `PACKAGES.md`) | Firefox (when personal is selected and work is not; selected known-owner desktop identity) |
 | **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches | — (no browser change) |
 
 Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup, and all three agent CLIs — Claude Code, Codex, and opencode).
@@ -310,7 +312,7 @@ conflicts. Rust defaults and user Composer/gem paths are preserved. See the
 for prerequisites and manual toolchain/gem updates. New installs use the latest
 available from their selected sources, without language version floors.
 Use `python3 -m venv .venv`
-for project Python packages. Ubuntu full bootstrap remains guarded; installation
+for project Python packages. Selected setup uses the shared profile runner; installation
 and update behavior has only read-only/static validation.
 
 ### GNOME extras (via `setup-gnome.sh`)
@@ -447,7 +449,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | `pbcopy` / `pbpaste` | Wayland clipboard in/out |
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
-| `orphans` | Remove orphaned pacman packages |
+| `orphans` | Preview native removal candidates; `dfa-remove-orphans --remove` separately confirms removal |
 | `rebind-window-push` | Keep Super+Ctrl+Arrows on compatible Pop Shell (tiled) or Mutter (floating / accepted gap above GNOME 50) |
 | `gs` `ga` `gc` `gp` `gpush` … | Git aliases (diffs paged through delta) |
 | `welcome` | Shell cheat sheet |
@@ -498,7 +500,7 @@ dotfiles-arch/
 │   ├── run-profile-setup.sh
 │   ├── post-link-hooks.sh
 │   ├── link-dotfiles.sh
-│   ├── update-system.sh   # day-to-day pacman + yay
+│   ├── update-system.sh   # native/app update owners, Arch AUR scan
 │   ├── fn-lib.sh          # shared helpers / AUR IoC scan
 │   ├── check.sh           # bash -n + shellcheck
 │   └── setup-*.sh
@@ -569,7 +571,7 @@ Shared `rules/` files with `alwaysApply: true` are flattened through the existin
 rule field/body readers into a managed block in `$CODEX_HOME/AGENTS.md` (default
 `<home>/.codex/AGENTS.md`). Conditional rules and `rules/README.md` are excluded.
 This is the shared global baseline used by workstation rule sync; the repository's
-root `AGENTS.md`/`CLAUDE.md` describes Arch setup and is not a project-agnostic
+root `AGENTS.md`/`CLAUDE.md` describes workstation setup and is not a project-agnostic
 baseline. Neither that file nor `.cursor/rules/` is copied into the working project.
 Existing text outside the managed block and project `AGENTS.md` files stay intact.
 Reruns update the block and prune only removed skills owned by this checkout.
@@ -597,7 +599,7 @@ AUR update ownership; existing Ubuntu Orca DEBs refresh through `dfa-update-syst
 because their in-app update messages only notify. See [PACKAGES.md](PACKAGES.md#desktop-ide-sources-and-update-owners-arch--ubuntu-2604)
 for sources, conflicts and unverified runtime paths. Zed needs Vulkan and 1.18+;
 setup preserves unrelated desktop/MIME defaults and reports source/config conflicts.
-Full Ubuntu bootstrap/sync remains guarded while remaining slices are converted.
+Full bootstrap/sync uses this same selected IDE setup on both hosts.
 
 Shared appearance: `bash scripts/setup-fonts.sh` installs required font families
 on Arch and Ubuntu 26.04. Native fonts/themes use normal distro updates; pinned

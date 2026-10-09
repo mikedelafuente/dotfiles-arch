@@ -24,6 +24,7 @@ in the same change. A feature that is not in `welcome` does not exist to the use
 - `PACKAGES.md` is read in the shell through `~/.packages.md` (a link to
   `home/.packages.md` → `../PACKAGES.md`). New top-level home files must be added to the
   file list in [scripts/link-dotfiles.sh](../../scripts/link-dotfiles.sh).
-- Do not bind `Super+H` (Pop Shell uses it for focus-left). Minimize is `Super+Shift+N`.
+- Pop Shell targets GNOME 50. Above 50, report the accepted Pop-only gap and native window moves;
+  other required extension failures still fail. Keep `Super+H` free; minimize is `Super+Shift+N`.
 - Keep custom GNOME keybinding paths and the `custom-keybindings` array in sync in
   `setup-gnome.sh`; an entry missing from the array silently does nothing.

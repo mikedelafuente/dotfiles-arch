@@ -288,6 +288,9 @@ aliases() {
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
         echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node,neovim,dev,zed,orca,python,rust,golang,php,ruby,chrome,slack,zoom,nvidia,ollama}.sh'
+        echo '  Full setup: bash scripts/bootstrap.sh (Arch / installed Ubuntu 26.04 GNOME); dfa-sync-dotfiles always updates before setup/linking'
+        echo '  Sync cleanup: --cleanup previews; --remove-obsolete is Arch-only, terminal + type remove; user configs/npm preserved'
+        echo '  Support: selected sources/update owners in packages; OS/desktop/hardware runtime remains unverified'
         echo '  Editor: stable nvim 0.12+, tree-sitter CLI 0.26.1+, tmux 3.2+; preserve sources/configs'
         echo '  IDEs: zed/zeditor, stably-orca/orca-ide; Ubuntu favors self-updates; existing Orca DEBs: dfa-update-system'
         echo '  Editor/container CLI updates: dfa-update-system --force (native plus verified managed upstream releases)'
