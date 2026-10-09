@@ -228,9 +228,9 @@ ninjaone_build_and_install() {
   if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
     package="$(dpkg-deb -f "$work/dl/agent.deb" Package 2>/dev/null)" || return 1
     architecture="$(dpkg-deb -f "$work/dl/agent.deb" Architecture 2>/dev/null)" || return 1
-    ninjaone_native_package_valid "$package" && [[ "$architecture" == amd64 ]] || {
+    if ! ninjaone_native_package_valid "$package" || [[ "$architecture" != amd64 ]]; then
       print_error_message "Unexpected native agent package identity or architecture"; return 1;
-    }
+    fi
     if [[ "$owner" == owned && "$package" != "$NINJAONE_PKG" ]]; then
       print_error_message "Installer belongs to another enrollment; existing agent retained"; return 1
     fi
