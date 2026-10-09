@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup GNOME for Arch Linux with Catppuccin Theme
+# Setup GNOME for Arch Linux / Ubuntu 26.04 with Catppuccin Theme
 # --------------------------
 # This script configures GNOME with:
 # - Dark theme preferences
@@ -33,6 +33,18 @@ fi
 
 print_tool_setup_start "GNOME with Catppuccin Theme"
 
+if ! native_package_installed gnome-shell; then
+    print_info_message "GNOME is not installed — skipping desktop setup"
+    exit 0
+fi
+[[ "$EUID" != 0 && -z "${SUDO_USER:-}" ]] || {
+    print_error_message "Run GNOME setup as the workstation user, without sudo"
+    exit 1
+}
+GNOME_SHELL_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]+)*).*$/\1/p')"
+[[ -n "$GNOME_SHELL_VERSION" ]] || { print_error_message "Cannot determine installed GNOME Shell version"; exit 1; }
+GNOME_POLICIES_DEFERRED=false
+
 # --------------------------
 # Machine type (laptop|desktop) drives power policy below
 # --------------------------
@@ -46,6 +58,7 @@ if machine_is_laptop; then
 else
     MACHINE_TYPE="desktop"
 fi
+GNOME_MACHINE_TYPE="$MACHINE_TYPE"
 print_info_message "Machine type: $MACHINE_TYPE"
 
 # --------------------------
@@ -53,10 +66,13 @@ print_info_message "Machine type: $MACHINE_TYPE"
 # --------------------------
 
 print_info_message "Installing GNOME tools and utilities"
-ensure_pacman_pkgs \
+ensure_native_pkgs \
     gnome-tweaks \
     gnome-shell-extensions \
-    dconf-editor
+    dconf-editor \
+    gnome-characters
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then ensure_native_pkgs python; else ensure_native_pkgs python3; fi
+ensure_gnome_extensions "$GNOME_SHELL_VERSION" || exit 1
 
 # --------------------------
 # Change how sound power works in order to stop popping
@@ -64,13 +80,14 @@ ensure_pacman_pkgs \
 
 # Keep audio power saving only on laptops; desktops pop when the codec sleeps.
 if [ "$MACHINE_TYPE" = "laptop" ]; then
-    print_info_message "Laptop - keeping audio power saving enabled for better battery life"
-    print_info_message "If you experience audio popping, you can manually disable with:"
-    print_info_message "  echo 'options snd_hda_intel power_save=0' | sudo tee /etc/modprobe.d/audio_disable_powersave.conf"
+    AUDIO_POWER_SAVE=1
 else
-    print_info_message "Desktop - disabling audio power saving to prevent popping sounds"
-    echo "options snd_hda_intel power_save=0" | sudo tee /etc/modprobe.d/audio_disable_powersave.conf > /dev/null
+    AUDIO_POWER_SAVE=0
 fi
+gnome_write_policy /etc/modprobe.d/audio_disable_powersave.conf audio \
+    '^[[:space:]]*options[[:space:]]+snd_hda_intel[[:space:]].*power_save' \
+    "# Managed by dotfiles-arch (setup-gnome.sh) — MACHINE_TYPE=$MACHINE_TYPE
+options snd_hda_intel power_save=$AUDIO_POWER_SAVE" /etc/modprobe.d/*.conf /run/modprobe.d/*.conf
 
 # --------------------------
 # Install Catppuccin GTK Theme
@@ -140,6 +157,7 @@ if ! load_bootstrap_config; then
   SETUP_PROFILES="${SETUP_PROFILES:-}"
   SETUP_PROFILE="${SETUP_PROFILE:-}"
 fi
+MACHINE_TYPE="$GNOME_MACHINE_TYPE"
 
 DEFAULT_BROWSER_DESKTOP="firefox.desktop"
 BROWSER_COMMAND="firefox"
@@ -186,27 +204,50 @@ gsettings set org.gnome.desktop.session idle-delay 1200  # Blank screen after 20
 # --------------------------
 
 print_info_message "Applying $MACHINE_TYPE power policy"
-ensure_pacman_pkgs power-profiles-daemon
-
-if systemctl list-unit-files power-profiles-daemon.service 2>/dev/null | grep -q power-profiles-daemon; then
-    sudo systemctl enable --now power-profiles-daemon.service \
-      || print_warning_message "Could not enable power-profiles-daemon.service"
-fi
-
-if command -v powerprofilesctl &>/dev/null; then
-    if [ "$MACHINE_TYPE" = "laptop" ]; then
-        DESIRED_POWER_PROFILE="balanced"
-    else
-        DESIRED_POWER_PROFILE="performance"
-    fi
-    if powerprofilesctl list 2>/dev/null | grep -q "$DESIRED_POWER_PROFILE"; then
-        powerprofilesctl set "$DESIRED_POWER_PROFILE" \
-          || print_warning_message "Could not set power profile to $DESIRED_POWER_PROFILE"
-        print_info_message "Power profile: $DESIRED_POWER_PROFILE"
-    else
-        print_warning_message "Power profile '$DESIRED_POWER_PROFILE' unavailable on this hardware"
-    fi
-fi
+ALTERNATE_POWER_MANAGER=false
+if native_package_installed tuned-ppd || native_package_installed tuned || native_package_installed tlp \
+    || native_package_installed system76-power; then ALTERNATE_POWER_MANAGER=true; fi
+POWER_DAEMON_EXISTED=false
+native_package_installed power-profiles-daemon && POWER_DAEMON_EXISTED=true
+POWER_LOAD_STATE="$(systemctl show power-profiles-daemon.service -p LoadState --value 2>/dev/null || true)"
+POWER_ACTIVE_STATE="$(systemctl show power-profiles-daemon.service -p ActiveState --value 2>/dev/null || true)"
+POWER_ACTION="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" power "$ALTERNATE_POWER_MANAGER" \
+    "$POWER_DAEMON_EXISTED" "$POWER_LOAD_STATE" "$POWER_ACTIVE_STATE")"
+case "$POWER_ACTION" in
+    defer)
+        GNOME_POLICIES_DEFERRED=true
+        print_warning_message "Preserved alternate/masked/inactive power manager; power profile policy deferred"
+        ;;
+    unavailable)
+        print_error_message "Installed power-profiles-daemon has no usable service; power policy cannot be applied"
+        exit 1
+        ;;
+    install|apply)
+        if [[ "$POWER_ACTION" == install ]]; then
+            ensure_native_pkgs power-profiles-daemon
+            gnome_service_loaded system power-profiles-daemon.service || {
+                print_error_message "Required power-profiles-daemon.service unavailable"; exit 1;
+            }
+            sudo systemctl enable --now power-profiles-daemon.service
+        fi
+        if [ "$MACHINE_TYPE" = "laptop" ]; then
+            DESIRED_POWER_PROFILE="balanced"
+        else
+            DESIRED_POWER_PROFILE="performance"
+        fi
+        AVAILABLE_POWER_PROFILES="$(powerprofilesctl list)"
+        if grep -Eq "^[[:space:]*]*$DESIRED_POWER_PROFILE:" <<<"$AVAILABLE_POWER_PROFILES"; then
+            if powerprofilesctl set "$DESIRED_POWER_PROFILE"; then
+                print_info_message "Power profile: $DESIRED_POWER_PROFILE"
+            else
+                print_error_message "Could not apply $DESIRED_POWER_PROFILE; existing power profile retained"
+                exit 1
+            fi
+        else
+            print_warning_message "Power profile '$DESIRED_POWER_PROFILE' unavailable on this hardware"
+        fi
+        ;;
+esac
 
 # Lid handling lives in systemd-logind, not gsettings.
 # Laptop: suspend on battery lid-close; ignore on AC / when docked so a closed-lid
@@ -219,31 +260,25 @@ else
     LID_ON_BATTERY="ignore"
     LID_ON_AC="ignore"
 fi
-sudo mkdir -p /etc/systemd/logind.conf.d
-sudo tee "$LOGIND_LID_DROPIN" >/dev/null <<EOF
-# Managed by dotfiles-arch (setup-gnome.sh) — MACHINE_TYPE=$MACHINE_TYPE
+gnome_write_policy "$LOGIND_LID_DROPIN" lid '^[[:space:]]*HandleLidSwitch(ExternalPower|Docked)?[[:space:]]*=' \
+"# Managed by dotfiles-arch (setup-gnome.sh) — MACHINE_TYPE=$MACHINE_TYPE
 [Login]
 HandleLidSwitch=$LID_ON_BATTERY
 HandleLidSwitchExternalPower=$LID_ON_AC
-HandleLidSwitchDocked=ignore
-EOF
-print_info_message "Lid switch: battery=$LID_ON_BATTERY AC=$LID_ON_AC docked=ignore (re-login or reboot to apply)"
+HandleLidSwitchDocked=ignore" /etc/systemd/logind.conf /etc/systemd/logind.conf.d/*.conf /run/systemd/logind.conf.d/*.conf
+print_info_message "Requested lid switch: battery=$LID_ON_BATTERY AC=$LID_ON_AC docked=ignore (reboot to apply owned policy)"
 
 # USB HID / hub wake — closed-lid KVM keyboards and mice can resume from suspend.
 # Always written (harmless on desktop); laptop is the primary use case.
 USB_WAKE_UDEV="/etc/udev/rules.d/90-dotfiles-arch-usb-wakeup.rules"
-sudo tee "$USB_WAKE_UDEV" >/dev/null <<'EOF'
-# Managed by dotfiles-arch (setup-gnome.sh)
+gnome_write_policy "$USB_WAKE_UDEV" USB '^[^#].*power/wakeup' \
+'# Managed by dotfiles-arch (setup-gnome.sh)
 # Allow USB keyboards/mice (and hubs) to wake from suspend — closed-lid KVM use.
 ACTION=="add|change", SUBSYSTEM=="usb", ATTR{bInterfaceClass}=="03", ATTR{power/wakeup}="enabled"
 ACTION=="add|change", SUBSYSTEM=="usb", ATTR{bDeviceClass}=="09", ATTR{power/wakeup}="enabled"
-ACTION=="add|change", SUBSYSTEM=="usb", KERNEL=="usb[0-9]*", ATTR{power/wakeup}="enabled"
-EOF
-if sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=usb; then
-    print_info_message "USB wakeup udev rules installed ($USB_WAKE_UDEV)"
-else
-    print_warning_message "Wrote $USB_WAKE_UDEV but could not reload udev rules"
-fi
+ACTION=="add|change", SUBSYSTEM=="usb", KERNEL=="usb[0-9]*", ATTR{power/wakeup}="enabled"' \
+    /etc/udev/rules.d/*.rules /run/udev/rules.d/*.rules
+print_info_message "Owned USB wake policy takes effect on the next device add/change or reboot"
 
 print_info_message ""
 print_info_message "Sleep and screen blanking prevention configured!"
@@ -257,144 +292,94 @@ print_info_message ""
 # Install and Configure Pop Shell for Tiling Window Management
 # --------------------------
 
-print_info_message "Installing Pop Shell for tiling window management"
-ensure_yay_pkgs gnome-shell-extension-pop-shell-git
-
-# Skip GNOME Activities overview at login (land on workspace 1 / desktop)
-print_info_message "Installing No Overview extension (skip workspace picker at login)"
-ensure_yay_pkgs gnome-shell-extension-no-overview
-
-# AppIndicators for tray icons (Slack, Discord, Spotify, etc.)
-print_info_message "Installing AppIndicator extension"
-ensure_pacman_pkgs gnome-shell-extension-appindicator
-
-# Always-visible top taskbar on every monitor (replaces the stock top bar + dash)
-print_info_message "Installing Dash to Panel (always-on top app bar)"
-ensure_pacman_pkgs gnome-shell-extension-dash-to-panel
-
-# GPaste clipboard history (GNOME-native)
-print_info_message "Installing GPaste clipboard manager"
-ensure_pacman_pkgs gpaste
-
-# Ensure extension UUIDs are present in org.gnome.shell enabled-extensions.
-# gnome-extensions enable alone often no-ops outside an interactive session.
-ensure_gnome_extension_enabled() {
-  local uuid="$1"
-  gnome-extensions enable "$uuid" 2>/dev/null || true
-  python3 - "$uuid" <<'PY'
-import ast, subprocess, sys
-uuid = sys.argv[1]
-raw = subprocess.check_output(
-    ["gsettings", "get", "org.gnome.shell", "enabled-extensions"], text=True
-).strip()
-if raw.startswith("@as"):
-    raw = raw.split(None, 1)[1]
-exts = list(ast.literal_eval(raw))
-if uuid not in exts:
-    exts.append(uuid)
-    out = "[" + ", ".join(f"'{e}'" for e in exts) + "]"
-    subprocess.check_call(["gsettings", "set", "org.gnome.shell", "enabled-extensions", out])
-    print(f"added {uuid}")
-else:
-    print(f"already enabled: {uuid}")
-PY
-}
-
-print_info_message "Enabling GNOME Shell extensions (Pop Shell, No Overview, AppIndicator, Dash to Panel, GPaste)"
-# Pop Shell AUR builds often lag GNOME major versions; allow loading anyway.
-gsettings set org.gnome.shell disable-extension-version-validation true 2>/dev/null || true
-ensure_gnome_extension_enabled "pop-shell@system76.com"
-ensure_gnome_extension_enabled "no-overview@fthx"
-ensure_gnome_extension_enabled "appindicatorsupport@rgcjonas.gmail.com"
-ensure_gnome_extension_enabled "dash-to-panel@jderose9.github.com"
-ensure_gnome_extension_enabled "GPaste@gnome-shell-extensions.gnome.org"
-print_info_message "enabled-extensions=$(gsettings get org.gnome.shell enabled-extensions)"
-print_warning_message "New system extensions need a log out/in before GNOME Shell discovers them."
+# Sources were preflighted, acquired, and validated against GNOME_SHELL_VERSION
+# before shared desktop settings changed. No global compatibility bypass.
+print_warning_message "New extensions need a log out/in before GNOME Shell discovers them."
 
 # --------------------------
 # Dash to Panel — full-width top bar, small centered icons, every monitor
 # --------------------------
 
 DTP_SCHEMA="org.gnome.shell.extensions.dash-to-panel"
-if gsettings list-schemas 2>/dev/null | grep -qx "$DTP_SCHEMA"; then
-    print_info_message "Configuring Dash to Panel (always-visible top bar)"
+print_info_message "Configuring Dash to Panel (always-visible top bar)"
 
-    # Always show the panel; put it on every monitor.
-    gsettings set "$DTP_SCHEMA" intellihide false
-    gsettings set "$DTP_SCHEMA" multi-monitors true
-    gsettings set "$DTP_SCHEMA" show-favorites true
-    gsettings set "$DTP_SCHEMA" show-favorites-all-monitors true
-    gsettings set "$DTP_SCHEMA" show-running-apps true
-    gsettings set "$DTP_SCHEMA" stockgs-keep-dash false
-    gsettings set "$DTP_SCHEMA" stockgs-keep-top-panel false
-    gsettings set "$DTP_SCHEMA" panel-element-positions-monitors-sync true
+# Always show the panel; put it on every monitor.
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide false
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" multi-monitors true
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-favorites true
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-favorites-all-monitors true
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-running-apps true
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" stockgs-keep-dash false
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" stockgs-keep-top-panel false
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-element-positions-monitors-sync true
 
-    # Full-width top panels; small height; centered along the edge.
-    # Per-monitor JSON uses index "0" (+ sync) so secondary displays inherit.
-    gsettings set "$DTP_SCHEMA" panel-position TOP
-    gsettings set "$DTP_SCHEMA" panel-size 32
-    gsettings set "$DTP_SCHEMA" panel-positions '{"0":"TOP"}'
-    gsettings set "$DTP_SCHEMA" panel-lengths '{"0":100}'
-    gsettings set "$DTP_SCHEMA" panel-anchors '{"0":"MIDDLE"}'
-    gsettings set "$DTP_SCHEMA" panel-sizes '{"0":32}'
+# Full-width top panels; small height; centered along the edge.
+# Per-monitor JSON uses index "0" (+ sync) so secondary displays inherit.
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-position TOP
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-size 32
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-positions '{"0":"TOP"}'
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-lengths '{"0":100}'
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-anchors '{"0":"MIDDLE"}'
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-sizes '{"0":32}'
 
-    # Taskbar icons centered; Activities hidden; clock/system tray on the right.
-    gsettings set "$DTP_SCHEMA" panel-element-positions \
-      '{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"centerMonitor"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
+# Taskbar icons centered; Activities hidden; clock/system tray on the right.
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-element-positions \
+  '{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"centerMonitor"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
 
-    # Compact icons
-    gsettings set "$DTP_SCHEMA" appicon-margin 4
-    gsettings set "$DTP_SCHEMA" appicon-padding 2
-    gsettings set "$DTP_SCHEMA" tray-padding 2
-    gsettings set "$DTP_SCHEMA" status-icon-padding 2
+# Compact icons
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" appicon-margin 4
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" appicon-padding 2
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" tray-padding 2
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" status-icon-padding 2
 
-    # Do not steal Super+Q (close) or Super+1–9 (workspaces).
-    gsettings set "$DTP_SCHEMA" hot-keys false
-    gsettings set "$DTP_SCHEMA" shortcut "[]"
-    gsettings set "$DTP_SCHEMA" shortcut-text ''
-    gsettings set "$DTP_SCHEMA" intellihide-key-toggle "[]"
-    gsettings set "$DTP_SCHEMA" intellihide-key-toggle-text ''
-else
-    print_warning_message "Dash to Panel schema not found yet — log out/in after install, then re-run setup-gnome.sh"
+# Do not steal Super+Q (close) or Super+1–9 (workspaces).
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" hot-keys false
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" shortcut "[]"
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" shortcut-text ''
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide-key-toggle "[]"
+gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide-key-toggle-text ''
+
+# GPaste uses the same D-Bus/user-service name on both distros. Never substitute
+# another clipboard app or report success when its required service is absent.
+if ! command -v gpaste-client >/dev/null || ! gnome_service_loaded user org.gnome.GPaste.service; then
+    print_error_message "Required GPaste client/service unavailable; clipboard history cannot be configured"
+    exit 1
 fi
-
-# Start GPaste daemon and tune history
-systemctl --user enable --now org.gnome.GPaste.service 2>/dev/null \
-  || gpaste-client daemon-reexec 2>/dev/null \
-  || print_warning_message "Start GPaste later with: systemctl --user enable --now org.gnome.GPaste.service"
-gsettings set org.gnome.GPaste images-support true 2>/dev/null || true
-gsettings set org.gnome.GPaste max-history-size 100 2>/dev/null || true
-gsettings set org.gnome.GPaste max-displayed-history-size 20 2>/dev/null || true
-# Extension-owned accelerator left empty — Super+V is a custom media-keys
-# binding to `gpaste-client show-history` so it works even when the extension
-# shortcut handler has not loaded yet.
-gsettings set org.gnome.GPaste show-history '' 2>/dev/null || true
+systemctl --user start org.gnome.GPaste.service
+gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste images-support true
+gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste max-history-size 100
+gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste max-displayed-history-size 20
+# Super+V uses gpaste-client, independent of the shell extension accelerator.
+gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste show-history ''
 
 # Configure Pop Shell settings
 print_info_message "Configuring Pop Shell tiling behavior"
 
 # Floating by default; Super+Y toggles auto-tiling for the workspace
-gsettings set org.gnome.shell.extensions.pop-shell tile-by-default false
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell tile-by-default false
 
 # Explicitly bind Super+Y (toggle auto-tiling for the workspace)
-gsettings set org.gnome.shell.extensions.pop-shell toggle-tiling "['<Super>y']"
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell toggle-tiling "['<Super>y']"
 # Float / unfloat focused window
-gsettings set org.gnome.shell.extensions.pop-shell toggle-floating "['<Super>g']"
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell toggle-floating "['<Super>g']"
 
 # No gaps / no rounded active-hint when tiling is enabled
-gsettings set org.gnome.shell.extensions.pop-shell gap-inner 0
-gsettings set org.gnome.shell.extensions.pop-shell gap-outer 0
-gsettings set org.gnome.shell.extensions.pop-shell smart-gaps false
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell gap-inner 0
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell gap-outer 0
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell smart-gaps false
 
 # Active hint outline (no border radius)
-gsettings set org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
-gsettings set org.gnome.shell.extensions.pop-shell active-hint true
-gsettings set org.gnome.shell.extensions.pop-shell active-hint-border-radius 0
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell active-hint true
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell active-hint-border-radius 0
 
 # Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher).
 # Rebind tile adjustment mode to Super+Escape instead.
 print_info_message "Clearing Pop Shell keybindings that conflict with our shortcuts"
-gsettings set org.gnome.shell.extensions.pop-shell tile-enter "['<Super>Escape']"
+# The shared app launcher is GNOME's grid; do not expose Pop's optional external
+# pop-launcher dependency alongside GNOME's Super+Space app grid.
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell activate-launcher "[]"
+gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell tile-enter "['<Super>Escape']"
 
 # Super+Ctrl+Up/Down must NOT switch workspaces (GNOME default steals these chords)
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-up "[]"
@@ -411,11 +396,16 @@ if [[ ! -f "$REBIND_WINDOW_PUSH" ]]; then
     REBIND_WINDOW_PUSH="$USER_HOME_DIR/.local/bin/rebind-window-push"
 fi
 if [[ -f "$REBIND_WINDOW_PUSH" ]]; then
-    chmod +x "$REBIND_WINDOW_PUSH" 2>/dev/null || true
-    # Compat name from earlier revisions
+    core_cli_link_allowed "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-window-push" || {
+        print_error_message "rebind-window-push source conflict; user file preserved"
+        exit 1
+    }
     mkdir -p "$USER_HOME_DIR/.local/bin"
-    ln -sfn "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-window-push" 2>/dev/null || true
-    ln -sfn "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves" 2>/dev/null || true
+    ln -sfnT "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-window-push"
+    # Compat name from earlier revisions, only when absent or already ours.
+    if core_cli_link_allowed "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves"; then
+        ln -sfnT "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves"
+    fi
     bash "$REBIND_WINDOW_PUSH"
     # Restart watcher so sync always picks up script changes (avoid stale --watch).
     while IFS= read -r pid; do
@@ -550,7 +540,6 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_CLIPBOARD binding '<Super>v'
 
 # Super+. for the emoji picker
-ensure_pacman_pkgs gnome-characters
 CUSTOM_KB_EMOJI="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom2/"
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI name 'Emoji Picker'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI command 'gnome-characters'
@@ -571,8 +560,15 @@ else
 fi
 
 # Update the custom keybindings list (no empty custom0; Super+E uses built-in Home)
-gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \
-  "['$CUSTOM_KB_TERMINAL', '$CUSTOM_KB_EMOJI', '$CUSTOM_KB_BROWSER', '$CUSTOM_KB_CLIPBOARD'$VOXTYPE_CUSTOM_KEYBINDINGS]"
+CUSTOM_KEYBINDINGS="$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)"
+if [[ -n "$VOXTYPE_CUSTOM_KEYBINDINGS" ]]; then
+    CUSTOM_KEYBINDINGS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" shortcuts "$CUSTOM_KEYBINDINGS" \
+        "$CUSTOM_KB_TERMINAL" "$CUSTOM_KB_EMOJI" "$CUSTOM_KB_BROWSER" "$CUSTOM_KB_CLIPBOARD" "$CUSTOM_KB_VOXTYPE")"
+else
+    CUSTOM_KEYBINDINGS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" shortcuts "$CUSTOM_KEYBINDINGS" \
+        "$CUSTOM_KB_TERMINAL" "$CUSTOM_KB_EMOJI" "$CUSTOM_KB_BROWSER" "$CUSTOM_KB_CLIPBOARD")"
+fi
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$CUSTOM_KEYBINDINGS"
 
 # Screenshot UI (region/window/screen picker, includes copy to clipboard)
 gsettings set org.gnome.shell.keybindings show-screenshot-ui "['<Super><Shift>s', 'Print']"
@@ -633,7 +629,10 @@ print_warning_message "Until then the top app bar / Super+V / Super+Y / tray ico
 # --------------------------
 
 echo ""
-print_info_message "GNOME configuration completed successfully!"
+print_info_message "GNOME desktop settings configured; log out/in to load validated extensions"
+if [[ "$GNOME_POLICIES_DEFERRED" == true ]]; then
+    print_warning_message "External machine policies were preserved; deferred policies were not applied"
+fi
 echo ""
 print_info_message "Theme settings applied:"
 print_info_message "  - GTK Theme: $CATPPUCCIN_THEME_NAME"
@@ -643,7 +642,7 @@ echo ""
 print_info_message "You may need to:"
 print_info_message "  1. Log out and log back in for all changes to take effect"
 print_info_message "  2. Open GNOME Tweaks to fine-tune appearance settings"
-print_info_message "  3. Restart GNOME Shell (Alt+F2, type 'r', press Enter)"
+
 echo ""
 print_info_message "To customize further, run: gnome-tweaks"
 

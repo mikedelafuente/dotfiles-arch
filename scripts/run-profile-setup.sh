@@ -120,7 +120,7 @@ fi
 
 run_setup setup-dev.sh
 
-if pacman -Q gnome-shell &>/dev/null; then
+if native_package_installed gnome-shell; then
   print_info_message "GNOME is installed — running GNOME setup"
   run_setup setup-gnome.sh
 else
