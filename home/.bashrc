@@ -302,6 +302,8 @@ aliases() {
         echo '  Python projects: python3 -m venv .venv; .venv/bin/python -m pip install <package>'
         echo '  User language updates (manual): rustup update; gem update --user-install <user-gem> --no-document (bundler/rails only when user-owned); composer global update laravel/installer'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
+        echo '  NinjaOne: opt-in dfa-install-ninjaone; native weekly health; IT-managed agents checked read-only'
+        echo '  dfa-uninstall-ninjaone: terminal + type remove; Ubuntu SentinelOne removal needs --remove-sentinelone + console passphrase'
         echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'
         echo '  Agent updates: dfa-update-npm-clis (user npm; native Claude updater); Arch opencode/ChatGPT and Ubuntu ChatGPT use dfa-update-system'
         echo "  Tools catalog: run 'packages' (what every installed package is for)"

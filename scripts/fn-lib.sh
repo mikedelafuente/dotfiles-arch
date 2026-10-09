@@ -725,6 +725,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
+    ubuntu:setup-ninjaone.sh|ubuntu:update-ninjaone.sh|ubuntu:uninstall-ninjaone.sh) return 0 ;;
     ubuntu:setup-steam.sh|ubuntu:setup-discord.sh|ubuntu:setup-firefox.sh|ubuntu:setup-mullvad.sh) return 0 ;;
     ubuntu:setup-nvidia.sh|ubuntu:setup-ollama.sh) return 0 ;;
     ubuntu:setup-tableplus.sh|ubuntu:setup-postman.sh|ubuntu:setup-spotify.sh|ubuntu:setup-obsidian.sh|ubuntu:setup-moonlander.sh) return 0 ;;

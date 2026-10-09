@@ -53,8 +53,10 @@ Other distros/releases/architectures are unsupported; Arch remains rolling-only.
 Ubuntu Kitty updates belong to APT through `dfa-update-system`, using existing
 configured sources. Daily/weekly sequencing is shared. If a repo pull triggers
 full resync on Ubuntu, that guarded step reports failure and remaining daily
-steps continue; full orchestration is a subsequent slice. Weekly NinjaOne repair
-is explicitly policy-deferred on Ubuntu, preserving the managed installation.
+steps continue; full orchestration is a subsequent slice. Weekly NinjaOne health
+checks run on both hosts; IT-managed installations are
+checked read-only. Standalone opt-in native Ubuntu installation/removal is described
+in [NinjaOne lifecycle and validation limits](PACKAGES.md#ninjaone-standalone-lifecycle--arch--ubuntu-2604).
 See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
 
 The shared shell/core CLI slice also supports these standalone commands:
@@ -120,8 +122,10 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ```bash
 dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-extensions + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
-dfa-weekly                        # dfa-daily + forced updates + orphan preview + Arch NinjaOne health check
-dfa-install-ninjaone --url <URL>  # once, work machines: NinjaOne agent from the console's installer .deb URL (saved to ~/.config/dotfiles-arch/ninjaone.env)
+dfa-weekly                        # dfa-daily + forced updates + orphan preview + native NinjaOne health check
+dfa-install-ninjaone             # standalone, work machines: hidden vendor URL prompt (native Ubuntu DEB / Arch repackaging)
+dfa-update-ninjaone              # weekly health/repair for owned installs; IT-managed agents checked read-only
+dfa-uninstall-ninjaone           # terminal + type remove; Ubuntu retains SentinelOne unless --remove-sentinelone is separately confirmed
 dfa-sync-sources add /path/to/repo # optional: extra rules/skills/extensions repo; then dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
