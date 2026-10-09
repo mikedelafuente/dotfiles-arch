@@ -3,7 +3,7 @@
 #
 # Pop Shell tiling and Mutter cannot share the same chords (double-fire snap-back).
 # - tile-by-default true  → Pop Shell tile-move-*-global (move in layout; edge hops monitor)
-# - tile-by-default false → Mutter half-snap (Left/Right) + move-to-monitor (Up/Down)
+# - tile-by-default false / accepted Pop gap → Mutter half-snap + monitor moves
 #
 # Usage:
 #   rebind-window-push           # apply once
@@ -20,32 +20,49 @@ CHORD_RIGHT="['<Primary><Super>Right']"
 CHORD_UP="['<Primary><Super>Up']"
 CHORD_DOWN="['<Primary><Super>Down']"
 
-# Pop's Ubuntu recipe installs a per-user schema. Missing required schema/keys
-# must be reported before either owner is rebound (also guards autostart).
+# GNOME 50 is the Pop Shell target. Above it, use the explicitly accepted native
+# fallback even if an old Pop schema remains installed (also guards autostart).
+GNOME_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]+)*).*$/\1/p')"
+[[ "$GNOME_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || {
+  echo 'rebind-window-push: cannot determine installed GNOME Shell version' >&2
+  exit 1
+}
+POP_AVAILABLE=true
+if [[ "${GNOME_VERSION%%.*}" -gt 50 ]]; then
+  POP_AVAILABLE=false
+  echo "rebind-window-push: accepted Pop Shell gap on GNOME $GNOME_VERSION; using native window moves" >&2
+fi
+
+# Pop's Ubuntu recipe installs a per-user schema. On the supported target,
+# missing required schema/keys still fail before either owner is rebound.
 POP_SETTINGS=(gsettings)
 POP_SCHEMA_DIR="$HOME/.local/share/gnome-shell/extensions/pop-shell@system76.com/schemas"
 [[ ! -f "$POP_SCHEMA_DIR/gschemas.compiled" ]] || POP_SETTINGS+=(--schemadir "$POP_SCHEMA_DIR")
-POP_KEYS="$("${POP_SETTINGS[@]}" list-keys "$POP_SCHEMA" 2>/dev/null)" || {
-  echo 'rebind-window-push: Pop Shell schema unavailable; run GNOME setup after installing compatible extensions' >&2
-  exit 1
-}
-for key in tile-by-default pop-monitor-left pop-monitor-right pop-monitor-up pop-monitor-down \
-    tile-move-left-global tile-move-right-global tile-move-up-global tile-move-down-global; do
-  if ! grep -Fxq "$key" <<<"$POP_KEYS"; then
-    printf 'rebind-window-push: required Pop Shell key unavailable: %s\n' "$key" >&2
+if [[ "$POP_AVAILABLE" == true ]]; then
+  POP_KEYS="$("${POP_SETTINGS[@]}" list-keys "$POP_SCHEMA" 2>/dev/null)" || {
+    echo 'rebind-window-push: Pop Shell schema unavailable; run GNOME setup after installing compatible extensions' >&2
     exit 1
-  fi
-done
+  }
+  for key in tile-by-default pop-monitor-left pop-monitor-right pop-monitor-up pop-monitor-down \
+      tile-move-left-global tile-move-right-global tile-move-up-global tile-move-down-global; do
+    if ! grep -Fxq "$key" <<<"$POP_KEYS"; then
+      printf 'rebind-window-push: required Pop Shell key unavailable: %s\n' "$key" >&2
+      exit 1
+    fi
+  done
+fi
 
 rebind() {
-  local tiling
-  tiling="$("${POP_SETTINGS[@]}" get "$POP_SCHEMA" tile-by-default)"
+  local tiling=false
+  if [[ "$POP_AVAILABLE" == true ]]; then
+    tiling="$("${POP_SETTINGS[@]}" get "$POP_SCHEMA" tile-by-default)"
 
-  # Never leave pop-monitor-* on these chords (conflicts with push bindings).
-  "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-left "[]"
-  "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-right "[]"
-  "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-up "[]"
-  "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-down "[]"
+    # Never leave pop-monitor-* on these chords (conflicts with push bindings).
+    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-left "[]"
+    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-right "[]"
+    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-up "[]"
+    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" pop-monitor-down "[]"
+  fi
 
   # Side-by-side monitors: geometric up/down monitor moves unused.
   gsettings set "$WM_SCHEMA" move-to-monitor-up "[]"
@@ -62,10 +79,12 @@ rebind() {
     gsettings set "$WM_SCHEMA" move-to-monitor-left "[]"
     gsettings set "$WM_SCHEMA" move-to-monitor-right "[]"
   else
-    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-left-global "[]"
-    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-right-global "[]"
-    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-up-global "[]"
-    "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-down-global "[]"
+    if [[ "$POP_AVAILABLE" == true ]]; then
+      "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-left-global "[]"
+      "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-right-global "[]"
+      "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-up-global "[]"
+      "${POP_SETTINGS[@]}" set "$POP_SCHEMA" tile-move-down-global "[]"
+    fi
 
     gsettings set "$MUTTER_SCHEMA" toggle-tiled-left "$CHORD_LEFT"
     gsettings set "$MUTTER_SCHEMA" toggle-tiled-right "$CHORD_RIGHT"
@@ -76,7 +95,7 @@ rebind() {
 
 rebind
 
-if [[ "${1:-}" != "--watch" ]]; then
+if [[ "${1:-}" != "--watch" || "$POP_AVAILABLE" == false ]]; then
   exit 0
 fi
 

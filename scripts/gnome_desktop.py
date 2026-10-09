@@ -21,6 +21,13 @@ def extension_compatible(metadata, uuid, shell):
             and shell.split(".")[0] in versions)
 
 
+def accepted_extension_skips(shell):
+    # Accepted Pop Shell gap above our GNOME 50 target; no other feature is exempt.
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", shell) and int(shell.split(".")[0]) > 50:
+        return ["pop-shell@system76.com"]
+    return []
+
+
 def string_list(raw):
     values = ast.literal_eval(raw.removeprefix("@as "))
     if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
@@ -28,8 +35,10 @@ def string_list(raw):
     return values
 
 
-def extension_lists(enabled, disabled, required, distro):
-    conflicts = CONFLICTS if distro == "ubuntu" else []
+def extension_lists(enabled, disabled, required, distro, shell=""):
+    skipped = accepted_extension_skips(shell)
+    conflicts = (CONFLICTS if distro == "ubuntu" else []) + skipped
+    required = [v for v in required if v not in skipped]
     enabled = [v for v in string_list(enabled) if v not in conflicts]
     disabled = [v for v in string_list(disabled) if v not in required]
     return (list(dict.fromkeys(enabled + required)),
@@ -101,9 +110,11 @@ if __name__ == "__main__":
             sys.exit(f"Required GNOME extension {uuid} does not support shell {shell}; preserved. "
                      "Update its selected source or obtain an explicit feature exception.")
     elif operation == "lists":
-        enabled, disabled = extension_lists(args[1], args[2], args[3:], args[0])
+        enabled, disabled = extension_lists(args[2], args[3], args[4:], args[0], args[1])
         print(repr(enabled))
         print(repr(disabled))
+    elif operation == "skips":
+        print("\n".join(accepted_extension_skips(args[0])))
     elif operation == "shortcuts":
         print(repr(merge_shortcuts(args[0], args[1:])))
     elif operation == "policy":

@@ -405,7 +405,7 @@ font setup also refreshes before checking exact installed family names.
 | `gpaste` | Clipboard history | Super+V, `gpaste-client` |
 | `gnome-shell-extension-appindicator` | Tray icons (Slack, Spotify, …) | — |
 | `gnome-shell-extension-dash-to-panel` | Always-visible full-width top app bar (small centered icons, every monitor) | — |
-| `gnome-shell-extension-pop-shell-git` (AUR) | Tiling window management | Super+Y, Super+G, Super+Escape |
+| `gnome-shell-extension-pop-shell-git` (AUR) | Compatible tiling window management; GNOME 50 target, accepted skip above 50 | Super+Y, Super+G, Super+Escape when compatible |
 | `gnome-shell-extension-no-overview` (AUR) | Skip the overview at login | — |
 | `papirus-icon-theme` | Icon theme | — |
 | `papirus-folders-catppuccin-git` (AUR) | Catppuccin folder colors | `papirus-folders` |
@@ -415,23 +415,29 @@ font setup also refreshes before checking exact installed family names.
 
 `setup-gnome.sh` detects GNOME with the native package backend and validates every
 required extension's installed `metadata.json` against the actual shell major.
-Unsupported metadata or missing required schemas/keys fails setup; no feature
-exception is assumed. The old global version-validation bypass is reset on both
+Unsupported metadata or missing required schemas/keys fails setup, except the
+explicitly accepted Pop Shell gap above GNOME 50. The old global version-validation bypass is reset on both
 distros. User extensions shadowing native recipes, unowned upstream targets, and
 duplicate sources are preserved and reported as conflicts requiring explicit migration.
 
-**Current Arch feature gap:** the [official Arch shell is GNOME 51](https://archlinux.org/packages/extra/x86_64/gnome-shell/),
+**Accepted Pop Shell gap:** the [official Arch shell is GNOME 51](https://archlinux.org/packages/extra/x86_64/gnome-shell/),
 while [Pop Shell's selected upstream branch](https://github.com/pop-os/shell/blob/7898b65c20735057faf0797f8ed056704ca55f0d/metadata.json)
 declares only 45–50. The [AUR recipe](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=gnome-shell-extension-pop-shell-git)
 uses that branch and supplies no GNOME 51 compatibility patch; inspected upstream
-testing branches also stop at 50 or earlier. GNOME 51 tiling parity remains
-unavailable pending a supported upstream release or an explicit feature exception.
-Setup reports this required feature and returns nonzero; it does not force-load it.
+testing branches also stop at 50 or earlier. The maintainer accepted this gap in
+[#151](https://github.com/mikedelafuente/dotfiles-arch/issues/151): GNOME 50 remains
+the selected target, matching [Ubuntu 26.04's desktop](https://documentation.ubuntu.com/release-notes/26.04/summary-for-lts-users/).
+Above 50, setup skips Pop acquisition and settings, disables its extension while
+preserving installed files and source ownership, and keeps native half-snap/monitor
+moves. Super+Y, Super+G and Super+Escape remain unavailable. It does not downgrade
+or pin GNOME, force-load Pop or substitute another tiler. Other required extensions
+still fail on acquisition, ownership or compatibility errors; Pop on GNOME 50
+retains these same required checks.
 
 | Feature | Arch source | Ubuntu 26.04 source | Update owner |
 |---|---|---|---|
 | Tweaks, base extensions, dconf inspector, emoji picker | `gnome-tweaks`, `gnome-shell-extensions`, `dconf-editor`, `gnome-characters` | Same native package names | pacman / APT |
-| Pop Shell tiling | Scanned `gnome-shell-extension-pop-shell-git` AUR | [System76 source commit `7898b65`](https://github.com/pop-os/shell/tree/7898b65c20735057faf0797f8ed056704ca55f0d), declares GNOME 45–50; verified SHA-256 archive, compiled with native `node-typescript` and `libglib2.0-bin` | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
+| Pop Shell tiling (GNOME 50 target; accepted skip above 50) | Scanned `gnome-shell-extension-pop-shell-git` AUR on compatible shells; existing files preserved when skipped | [System76 source commit `7898b65`](https://github.com/pop-os/shell/tree/7898b65c20735057faf0797f8ed056704ca55f0d), declares GNOME 45–50; verified SHA-256 archive, compiled with native `node-typescript` and `libglib2.0-bin` | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
 | No Overview at login | Scanned `gnome-shell-extension-no-overview` AUR | [Upstream commit `9246cc6`](https://github.com/fthx/no-overview/tree/9246cc6efba01729a3e19ca898018ab5e98a26b9), declares GNOME 48–51; verified SHA-256 archive | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
 | AppIndicator tray | `gnome-shell-extension-appindicator`, UUID `appindicatorsupport@rgcjonas.gmail.com` | [`gnome-shell-ubuntu-extensions`](https://packages.ubuntu.com/resolute/gnome-shell-ubuntu-extensions), UUID `ubuntu-appindicators@ubuntu.com` | pacman / APT |
 | Dash to Panel | `gnome-shell-extension-dash-to-panel` | [Upstream v74](https://github.com/home-sweet-gnome/dash-to-panel/releases/tag/v74), declares GNOME 46–51; ZIP checked against GitHub's SHA-256 release digest; absent from the resolute native catalog | pacman / maintainer-reviewed pin, applied by setup/sync |
@@ -451,7 +457,9 @@ On Ubuntu, setup disables the conflicting Ubuntu Dock, Tiling Assistant and
 Desktop Icons NG, plus the alternate upstream AppIndicator UUID. It retains
 unrelated extensions including Canonical security/prompting extensions.
 Extension schemas are read from their installed local or system directories;
-`rebind-window-push` also supports the local Pop schema.
+`rebind-window-push` also supports the local Pop schema. Above GNOME 50 it applies
+native shortcuts without reading/writing Pop settings and exits rather than
+watching tiling. On GNOME 50, a missing required Pop schema/key still fails.
 GPaste 51 removes the cosmetic `max-displayed-history-size` key; setup reports
 and skips that optional setting, retaining the required 100-item history and Super+V.
 

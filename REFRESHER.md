@@ -106,6 +106,10 @@ Shell fuzzy keys: **Ctrl+R** history · **Ctrl+T** files · **Alt+C** cd into a 
 
 ### …tile windows / move to another monitor
 
+Pop Shell shortcuts below require a compatible shell (GNOME 50 target). Above
+GNOME 50, its accepted gap retains native half-snap/monitor moves; Super+Y,
+Super+G and Super+Escape are unavailable.
+
 | Shortcut | Action |
 |----------|--------|
 | **Super+Ctrl+←/→** | Floating: half-snap · Tiled: push in layout (edge → monitor) |
