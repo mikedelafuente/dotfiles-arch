@@ -100,7 +100,6 @@ run_setup setup-postman.sh
 run_setup setup-moonlander.sh
 run_setup setup-spotify.sh
 run_setup setup-obsidian.sh
-run_setup setup-voxtype.sh
 run_setup setup-zed.sh
 run_setup setup-orca.sh
 

@@ -25,7 +25,6 @@ Regression decision checks were updated and left unrun under the user's executio
 | GNOME/appearance | Ubuntu GNOME 50 target; reviewed Pop pin supports 51; accepted Pop-only gap above 51 preserves native moves; other required extension/config failures still fail | Acquisition/schema compatibility, extensions, tray/panel/clipboard/fonts/themes, login reload, Wayland shortcuts |
 | Development stack | Explicit CLI/editor/language/container/harness recipes, minimums/capabilities and owners retained | Neovim/plugins/Treesitter, IDE GPU runtime, toolchains/gems/Composer, Docker/Compose/Buildx, mkcert trust, VPN/split DNS/watch limits |
 | Hardware/managed software | Preserve driver flavor, holds/pins, automatic security updates and IT-managed agents; GPU apps remain capability-gated; NinjaOne stays opt-in | Driver activation/MOK/CUDA/Vulkan, power/lid/audio/KVM, ZSA keyboard permissions, vendor agent/timer health |
-| Dictation/models | Voxtype/dotool explicit sources/owners; model/config ownership retained; CUDA backend capability checked | Input permissions, model acquisition/inference, microphone/PTT/typing and GNOME shortcut behavior |
 | Routine maintenance | Required repository commands absent from PATH fail; custom missing steps may skip; daily resync/restart and weekly force/native-preview ordering retained | Repo pulls, first-run links, interrupted maintenance, user self-updaters and security-policy deferrals |
 
 Read-only regression seam: `tests/test_maintenance_decisions.py` accepts supplied

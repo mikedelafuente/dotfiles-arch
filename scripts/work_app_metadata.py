@@ -13,7 +13,6 @@ APT_URLS = {
     "firefox": {"https://packages.mozilla.org/apt"},
     "claude": {"https://downloads.claude.ai/claude-code/apt/stable", "https://downloads.claude.ai/claude-code/apt/latest"},
     "chatgpt": {"https://persistent.oaistatic.com/codex-app-prod/linux/deb"},
-    "voxtype-cuda": {"https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64"},
 }
 APT_VENDORS = {
     "chrome": r"dl(-ssl)?\.google\.com/linux/chrome",
@@ -24,13 +23,12 @@ APT_VENDORS = {
     "firefox": r"packages\.mozilla\.org|mozillateam",
     "claude": r"downloads\.claude\.ai/claude-code/apt",
     "chatgpt": r"persistent\.oaistatic\.com/codex-app-prod/linux/deb",
-    "voxtype-cuda": r"developer\.download\.nvidia\.com/compute/cuda/repos",
 }
 
 
 def apt_key(app, text):
     urls, vendor = APT_URLS[app], APT_VENDORS[app]
-    component = "" if app == "voxtype-cuda" else ("non-free" if app == "spotify" else "main")
+    component = "non-free" if app == "spotify" else "main"
     if re.search(r"^\s*(?:#\s*)?deb(?:-src)?\s", text, re.M):
         records = [line for line in text.splitlines() if re.search(vendor, line)
                    and re.match(r"\s*(?:#\s*)?deb(?:-src)?\s", line)]
@@ -41,7 +39,7 @@ def apt_key(app, text):
     text = records[0]
     lines = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if len(lines) == 1 and lines[0].startswith("deb "):
-        suffix = r"\s+" + component if component else ""
+        suffix = r"\s+" + component
         match = re.fullmatch(r"deb\s+\[([^]]+)\]\s+(\S+)\s+(\S+)" + suffix, lines[0])
         if not match:
             raise ValueError("unscoped or malformed source")
@@ -61,7 +59,7 @@ def apt_key(app, text):
         if fields.get("Types") != "deb" or fields.get("Components", "") != component or fields.get("Architectures", "amd64") != "amd64":
             raise ValueError("unsupported source layout")
         url, suite, key = fields.get("URIs", ""), fields.get("Suites", ""), fields.get("Signed-By", "")
-    suites = {"slack": "jessie", "tableplus": "tableplus", "firefox": "mozilla", "voxtype-cuda": "/"}
+    suites = {"slack": "jessie", "tableplus": "tableplus", "firefox": "mozilla"}
     if app == "claude":
         suites[app] = url.rstrip("/").rsplit("/", 1)[-1]
     if url.rstrip("/") not in urls or suite != suites.get(app, "stable"):

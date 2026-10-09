@@ -374,6 +374,8 @@ def full_repository():
         paths |= {"scripts/deployment.py", "home/.local/bin/dfa-deploy", "migrations/v4-to-v5-migration.sh", "docs/deployment.md"}
         for name in paths:
             src = ROOT / name; dst = source / name
+            if not src.exists() and not src.is_symlink():
+                continue  # Include pending working-tree deletions in the fixture.
             dst.parent.mkdir(parents=True, exist_ok=True)
             if src.is_symlink():
                 dst.symlink_to(os.readlink(src))

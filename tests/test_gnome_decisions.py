@@ -55,6 +55,35 @@ def main():
                                   ["dash-to-panel@jderose9.github.com"], "arch", "52.0") == gap_lists
     assert api["merge_shortcuts"]("['/user/shortcut/']", ["/dfa/shortcut/"]) == [
         "/user/shortcut/", "/dfa/shortcut/"]
+    # Run the actual shortcut reconciliation with supplied settings only.
+    setup = (ROOT / "scripts/setup-gnome.sh").read_text()
+    shortcut_block = setup.split("# Update the custom keybindings list", 1)[1].split("\n", 1)[1].split("# Screenshot UI", 1)[0]
+    retired = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
+    for command in ("/usr/bin/voxtype record toggle", "/user/custom-command", ""):
+        supplied = r'''
+gsettings() {
+    case "$1:${3:-}" in
+        get:custom-keybindings) echo "$SUPPLIED_SHORTCUTS" ;;
+        get:command) echo "$SUPPLIED_COMMAND" ;;
+        reset-recursively:*) echo reset ;;
+        set:custom-keybindings) echo "$4" ;;
+        *) return 97 ;;
+    esac
+}
+'''
+        result = subprocess.run(["bash", "-eu", "-c", supplied + shortcut_block],
+            env=dict(os.environ, DF_SCRIPT_DIR=str(ROOT / "scripts"),
+                     SUPPLIED_SHORTCUTS=repr(["/user/shortcut/", retired]), SUPPLIED_COMMAND=repr(command),
+                     CUSTOM_KB_TERMINAL="/terminal/", CUSTOM_KB_EMOJI="/emoji/",
+                     CUSTOM_KB_BROWSER="/browser/", CUSTOM_KB_CLIPBOARD="/clipboard/"),
+            capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        lines = result.stdout.splitlines()
+        owned = command == "/usr/bin/voxtype record toggle"
+        assert ("reset" in lines) == owned
+        paths = api["string_list"](lines[-1])
+        assert (retired not in paths) == owned
+        assert "/user/shortcut/" in paths and "/terminal/" in paths
     action = api["policy_action"]
     assert action("", False) == "apply"
     assert action("# Managed by dotfiles-arch (setup-gnome.sh)\n[Login]\n", False) == "apply"

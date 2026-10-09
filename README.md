@@ -131,15 +131,9 @@ remain shared. Dev setup links the launcher, reveal-hook command, updater, and
 shared command library without replacing user commands. See
 [editor sources and validation limits](PACKAGES.md#neovim-and-tmux-distro-slice).
 
-Dictation on GNOME Wayland: `bash scripts/setup-voxtype.sh`, then **Super+T**.
-Ubuntu uses a verified official Voxtype DEB and pinned dotool source built into a
-local native DEB. CPU/Vulkan/CUDA selection checks actual capabilities; existing
-config/backend and driver ownership stay intact. dotool requires writable
-`/dev/uinput`; pending permissions return failure with explicit login/rule steps.
-Only a new config downloads its selected model. `dfa-update-system` refreshes
-installers/build pins without fetching models or enabling disabled services.
-Capture, typing and inference remain unverified. See
-[dictation sources and prerequisites](PACKAGES.md#dictation-sources-and-update-owners).
+Voxtype dictation is retired from DFA setup and updates. Existing packages,
+services, config and models require manual cleanup. GNOME setup removes the old
+Super+T shortcut when it still runs Voxtype.
 
 ---
 
@@ -423,7 +417,6 @@ is unverified. Archive service status/logs: `systemctl --user status ollama` /
 | **Super+B** | Browser (Chrome or Firefox by profile) |
 | **Super+Space** | Application launcher |
 | **Super+V** | Clipboard history (GPaste) |
-| **Super+T** | Toggle Voxtype dictation (dotool on GNOME Wayland) |
 | **Super+.** | Emoji picker (`gnome-characters`) |
 | **Super+Shift+S** | Screenshot UI (region / window / screen; Print also works) |
 | **Super+Shift+N** | Minimize window |

@@ -128,6 +128,8 @@ if __name__ == "__main__":
         print("\n".join(accepted_extension_skips(args[0])))
     elif operation == "shortcuts":
         print(repr(merge_shortcuts(args[0], args[1:])))
+    elif operation == "remove-shortcut":
+        print(repr([path for path in string_list(args[0]) if path != args[1]]))
     elif operation == "policy":
         print(policy_action(args[0], args[1] == "true", args[2]))
     elif operation == "power":
