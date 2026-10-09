@@ -77,42 +77,6 @@ has_nvidia_hardware() {
   return 1
 }
 
-# True when an Arch NVIDIA driver stack is present (any common flavor).
-has_nvidia_packages() {
-  local pkg
-  for pkg in \
-    nvidia-open \
-    nvidia-open-dkms \
-    nvidia \
-    nvidia-dkms \
-    nvidia-lts \
-    nvidia-open-lts \
-    nvidia-utils
-  do
-    if pacman -Q "$pkg" &>/dev/null; then
-      return 0
-    fi
-  done
-  return 1
-}
-
-# Print installed NVIDIA driver module package name(s), if any (not utils-only).
-nvidia_driver_packages() {
-  local pkg
-  for pkg in \
-    nvidia-open \
-    nvidia-open-dkms \
-    nvidia \
-    nvidia-dkms \
-    nvidia-lts \
-    nvidia-open-lts
-  do
-    if pacman -Q "$pkg" &>/dev/null; then
-      echo "$pkg"
-    fi
-  done
-}
-
 # --------------------------
 # Bootstrap config
 # --------------------------
@@ -395,15 +359,14 @@ machine_is_laptop() {
   esac
 }
 
-# Resolve INSTALL_NVIDIA from saved value / hardware / prompts.
+# Resolve INSTALL_NVIDIA from saved value / explicit prompts.
 # Uses ASSUME_YES=true|false (default false). Sets INSTALL_NVIDIA to true|false.
 resolve_nvidia_preference() {
   local assume_yes="${ASSUME_YES:-false}"
-  local nvidia_default="false"
-  local default_label nvidia_input
+  local nvidia_input
 
   if [[ "${INSTALL_NVIDIA:-}" == "true" || "${INSTALL_NVIDIA:-}" == "false" ]]; then
-    if [[ "$assume_yes" == "true" ]]; then
+    if [[ "$assume_yes" == "true" || ! -t 0 || ! -t 1 ]]; then
       return 0
     fi
     echo ""
@@ -420,31 +383,21 @@ resolve_nvidia_preference() {
     return 0
   fi
 
-  if has_nvidia_packages || has_nvidia_hardware; then
-    nvidia_default="true"
-  fi
-
-  if [[ "$assume_yes" == "true" ]]; then
-    INSTALL_NVIDIA="$nvidia_default"
-    print_info_message "INSTALL_NVIDIA not saved — auto-set to $INSTALL_NVIDIA (packages/hardware detect)"
+  if [[ "$assume_yes" == "true" || ! -t 0 || ! -t 1 ]]; then
+    INSTALL_NVIDIA=false
+    print_info_message "INSTALL_NVIDIA not saved — skipping installation (explicit opt-in required; existing drivers retained)"
     return 0
   fi
 
   echo ""
   print_info_message "NVIDIA drivers are optional (skip on AMD/Intel-only machines)."
   if has_nvidia_packages; then
-    print_info_message "Detected: NVIDIA packages already installed (likely from archinstall)"
+    print_info_message "Detected: NVIDIA packages already installed (existing flavor will be retained)"
   fi
   if has_nvidia_hardware; then
     print_info_message "Detected: NVIDIA GPU on PCI bus"
   fi
-  if [[ "$nvidia_default" == "true" ]]; then
-    default_label="yes"
-  else
-    default_label="no"
-  fi
-  read -rp "Install/keep NVIDIA drivers on this machine? [y/n] (Enter = $(fmt_choice "$default_label")): " nvidia_input
-  nvidia_input="${nvidia_input:-$nvidia_default}"
+  read -rp "Install NVIDIA drivers only if no stack exists? [y/n] (Enter = $(fmt_choice no)): " nvidia_input
   case "${nvidia_input,,}" in
     y|yes|true) INSTALL_NVIDIA="true" ;;
     *) INSTALL_NVIDIA="false" ;;
@@ -772,6 +725,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
+    ubuntu:setup-nvidia.sh|ubuntu:setup-ollama.sh) return 0 ;;
     ubuntu:setup-tableplus.sh|ubuntu:setup-postman.sh|ubuntu:setup-spotify.sh|ubuntu:setup-obsidian.sh|ubuntu:setup-moonlander.sh) return 0 ;;
     arch:*|ubuntu:setup-fonts.sh|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-python.sh|ubuntu:setup-rust.sh|ubuntu:setup-golang.sh|ubuntu:setup-php.sh|ubuntu:setup-ruby.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:setup-docker.sh|ubuntu:setup-minikube.sh|ubuntu:setup-devcontainer.sh|ubuntu:setup-chrome.sh|ubuntu:setup-slack.sh|ubuntu:setup-zoom.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
@@ -870,6 +824,8 @@ source "$DF_SCRIPT_DIR/container-tools-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/work-apps-lib.sh"
 # shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/gpu-tools-lib.sh"
+# shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/desktop-utilities-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/appearance-lib.sh"
@@ -966,6 +922,7 @@ safe_system_upgrade() (
       refresh_editor_tools || return $?
       refresh_desktop_ides || return $?
       refresh_work_apps || return $?
+      refresh_gpu_tools || return $?
       refresh_desktop_utilities || return $?
       print_success_message "Guarded system update complete"
       return 0
@@ -1019,6 +976,7 @@ EOF
     print_info_message "No foreign packages installed — AUR updates not needed"
     refresh_editor_tools || return $?
     refresh_desktop_ides || return $?
+    refresh_gpu_tools || return $?
     return 0
   fi
 
@@ -1034,6 +992,7 @@ EOF
 
   refresh_editor_tools || return $?
   refresh_desktop_ides || return $?
+  refresh_gpu_tools || return $?
   print_success_message "Guarded system update complete"
 )
 

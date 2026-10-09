@@ -329,7 +329,21 @@ On AC with the lid closed, the laptop stays awake; keyboard/mouse on a KVM can a
 
 ### NVIDIA
 
-Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap an already-installed driver flavor. See [NOTES.md](NOTES.md).
+Only an explicit saved `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`
+permits a new installation. `--yes` keeps the saved choice; hardware detection
+does not opt in. Existing native, manual and work-managed stacks are retained.
+New Arch installs use `nvidia-open-dkms` (Turing+); Ubuntu 26.04 uses its native
+hardware recommendation and prefers signed modules for the running kernel.
+Reboot/Secure Boot/MOK activation can remain pending; setup does not replace,
+unload or force-load drivers. See [GPU sources and update owners](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
+`bash scripts/setup-ollama.sh` requires working CUDA or a physical Vulkan 1.2+
+GPU. Arch uses native GPU packages. Ubuntu prefers a compatible native package
+if available, otherwise a verified official archive with a user service;
+`dfa-update-system` owns archive refreshes. Existing source/service conflicts
+remain untouched. No models are downloaded by setup, and GPU inference/runtime
+is unverified. Archive service status/logs: `systemctl --user status ollama` /
+`journalctl --user -u ollama`; native installs use the system service.
 
 ---
 

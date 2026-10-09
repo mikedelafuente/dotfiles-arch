@@ -35,9 +35,8 @@ fi
 
 OLLAMA_LIST_OUTPUT=""
 if ! OLLAMA_LIST_OUTPUT="$(ollama list 2>/dev/null)"; then
-  print_warning_message "ollama is installed but not responding (service not running?) — skipping harness model sync"
-  print_tool_setup_complete "Harness agent models (Ollama)"
-  exit 0
+  print_error_message "ollama is installed but not responding (service/permissions pending); existing harness config retained"
+  exit 1
 fi
 
 failed=0
