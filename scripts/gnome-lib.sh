@@ -169,11 +169,14 @@ ensure_gnome_extensions() {
 
 # User extension schemas are local, not installed into the global GLib registry.
 gnome_extension_setting() {
-  local uuid="$1" schema="$2" key="$3" value="$4" path
+  local uuid="$1" schema="$2" key="$3" value="$4" optional="${5:-false}" path
   local -a settings=(gsettings)
   path="$(gnome_extension_path "$uuid")" || return 1
   [[ ! -f "$path/schemas/gschemas.compiled" ]] || settings+=(--schemadir "$path/schemas")
   if ! "${settings[@]}" list-keys "$schema" 2>/dev/null | grep -Fxq "$key"; then
+    if [[ "$optional" == true ]]; then
+      print_warning_message "Optional GNOME setting unavailable: $schema $key"; return 0
+    fi
     print_error_message "Required GNOME setting unavailable: $schema $key; update its selected source"
     return 1
   fi

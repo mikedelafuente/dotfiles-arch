@@ -310,7 +310,9 @@ and update behavior has only read-only/static validation.
 - Tap-to-click **off**
 - Emoji picker (`gnome-characters`) and the screenshot UI on Super shortcuts
 
-Available on Arch and Ubuntu 26.04. Required extension metadata must support the
+The setup path covers Arch and Ubuntu 26.04. Current Arch GNOME 51 has a required
+Pop Shell compatibility gap and fails setup until upstream support or an explicit
+feature exception is available. Required extension metadata must support the
 installed GNOME shell; missing required settings fail setup. Ubuntu uses native
 GPaste/AppIndicator and verified pinned Pop Shell, No Overview and Dash to Panel
 sources. See [GNOME sources/update owners](PACKAGES.md#shared-gnome-sources-and-update-owners).

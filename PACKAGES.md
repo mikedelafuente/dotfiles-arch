@@ -420,6 +420,14 @@ exception is assumed. The old global version-validation bypass is reset on both
 distros. User extensions shadowing native recipes, unowned upstream targets, and
 duplicate sources are preserved and reported as conflicts requiring explicit migration.
 
+**Current Arch feature gap:** the [official Arch shell is GNOME 51](https://archlinux.org/packages/extra/x86_64/gnome-shell/),
+while [Pop Shell's selected upstream branch](https://github.com/pop-os/shell/blob/7898b65c20735057faf0797f8ed056704ca55f0d/metadata.json)
+declares only 45–50. The [AUR recipe](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=gnome-shell-extension-pop-shell-git)
+uses that branch and supplies no GNOME 51 compatibility patch; inspected upstream
+testing branches also stop at 50 or earlier. GNOME 51 tiling parity remains
+unavailable pending a supported upstream release or an explicit feature exception.
+Setup reports this required feature and returns nonzero; it does not force-load it.
+
 | Feature | Arch source | Ubuntu 26.04 source | Update owner |
 |---|---|---|---|
 | Tweaks, base extensions, dconf inspector, emoji picker | `gnome-tweaks`, `gnome-shell-extensions`, `dconf-editor`, `gnome-characters` | Same native package names | pacman / APT |
@@ -444,6 +452,8 @@ Desktop Icons NG, plus the alternate upstream AppIndicator UUID. It retains
 unrelated extensions including Canonical security/prompting extensions.
 Extension schemas are read from their installed local or system directories;
 `rebind-window-push` also supports the local Pop schema.
+GPaste 51 removes the cosmetic `max-displayed-history-size` key; setup reports
+and skips that optional setting, retaining the required 100-item history and Super+V.
 
 Audio/lid/USB policy files keep the existing paths and mark ownership. Foreign
 local or runtime overrides and symlinks defer the relevant policy with a warning.

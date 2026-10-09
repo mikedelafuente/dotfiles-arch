@@ -344,7 +344,8 @@ fi
 systemctl --user start org.gnome.GPaste.service
 gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste images-support true
 gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste max-history-size 100
-gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste max-displayed-history-size 20
+# GPaste 51 removed this cosmetic UI limit; history size and Super+V stay required.
+gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste max-displayed-history-size 20 true
 # Super+V uses gpaste-client, independent of the shell extension accelerator.
 gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste show-history ''
 
