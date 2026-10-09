@@ -60,7 +60,12 @@ personal_app_installed_selection() {
         [[ "$app" != firefox ]] || source=apt
         if [[ -n "$path" ]] && dpkg-query -L "$package" | grep -Fx "$resolved" >/dev/null; then launcher=owned; fi
       fi
-    elif [[ -n "$path" && "$(pacman -Qqo "$resolved" 2>/dev/null)" == "$package" ]]; then launcher=owned; fi
+    elif [[ -n "$path" ]]; then
+      local file_owner
+      file_owner="$(pacman -Qqo "$resolved" 2>/dev/null)" || return 1
+      if [[ "$file_owner" == "$package" ]] || { [[ "$app" == mullvad && "$file_owner" == mullvad-vpn-daemon-bin ]] \
+        && native_package_installed mullvad-vpn-daemon-bin; }; then launcher=owned; fi
+    fi
   fi
   if command -v snap &>/dev/null; then
     snaps="$(snap list --unicode=never 2>/dev/null)" || return 1

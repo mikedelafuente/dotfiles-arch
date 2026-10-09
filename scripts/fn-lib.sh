@@ -755,7 +755,7 @@ require_workstation_desktop() {
 # Native package status must not be inferred from an executable on PATH.
 native_package_installed() {
   case "$WORKSTATION_DISTRO" in
-    arch) pacman -Q "$1" &>/dev/null ;;
+    arch) [[ "$(pacman -Qq "$1" 2>/dev/null)" == "$1" ]] ;;
     ubuntu) [[ "$(dpkg-query -W -f='${db:Status-Eflag} ${db:Status-Status}' "$1" 2>/dev/null)" == "ok installed" ]] ;;
     *) return 1 ;;
   esac
