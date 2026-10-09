@@ -659,10 +659,10 @@ Profiles are **additive multi-select** — enable any combination on one machine
 
 | Package | Purpose | Related commands |
 |---------|---------|------------------|
-| `steam` (multilib) | Games | — |
-| `discord` (AUR) | Chat | — |
-| `firefox` | Personal browser (Super+B when personal is selected and work is not) | — |
-| `mullvad-vpn-bin` (AUR) | VPN | `mvup`, `mvdown`, `mvst` |
+| `steam` (Arch multilib) / `steam-installer` + `steam-libs-i386:i386` (Ubuntu multiverse/universe) | Games; native launcher plus Valve client updater | `steam` |
+| `discord` (Arch native; Ubuntu official DEB bootstrap) | Chat; Linux app updater retains user settings | `discord` |
+| `firefox` (Arch native; Ubuntu Mozilla Snap or retained Mozilla APT) | Personal browser (Super+B when personal is selected and work is not) | `firefox` |
+| `mullvad-vpn-bin` (Arch AUR) / `mullvad-vpn` (Ubuntu vendor APT) | VPN; account, connection and other VPNs unchanged | `mvup`, `mvdown`, `mvst` |
 
 ### devcontainer — `setup-devcontainer.sh`
 
@@ -964,3 +964,93 @@ GNOME launch/default-browser integration, Slack keyring/login/tray integration,
 Wayland screen sharing/audio/video, and managed-workstation policies. No package
 manager, networked test, live app, service, or desktop workflow was executed as
 verification. Vendor Linux support is feasibility evidence, not runtime parity.
+
+
+### Personal apps on Ubuntu 26.04 (amd64)
+
+The additive `personal` profile selects all four existing setup scripts. Individual
+`scripts/setup-{steam,discord,firefox,mullvad}.sh` entrypoints support both distros.
+No package setup connects a VPN, starts a game, logs in, changes a browser profile,
+or replaces unrelated VPN/browser installations. No new command or config key is added.
+
+| App / normalized desktop | Ubuntu selected source | Update owner |
+|---|---|---|
+| Steam / `steam.desktop` | Native `steam-installer` (multiverse) and `steam-libs-i386:i386` (universe); amd64 host plus i386 foreign architecture | APT owns installer/dependencies via common maintenance; Valve owns client/game updates in user state |
+| Discord / `discord.desktop` | Official stable 1.0.161 DEB bootstrap, pinned SHA-256; compatible existing stable DEBs require package-owned executable and Rust updater bootstrap | Genuine Discord Linux updater installs/updates the app in the user's configuration directory on launch; APT owns bootstrap dependencies, no periodic DEB reinstall |
+| Firefox / `firefox_firefox.desktop` (Snap) or `firefox.desktop` (DEB) | Mozilla's stable Snap (Ubuntu's default) for new/stock installations; retain an existing scoped Mozilla APT installation | Snap automatic refresh or existing Mozilla APT through common maintenance; no Snap-to-DEB migration or new APT pin |
+| Mullvad VPN / `mullvad-vpn.desktop` | Vendor stable APT `repository.mullvad.net/deb/stable`, stable/main; `mullvad-vpn` | APT via `dfa-update-system`, daily/weekly; no direct service/VPN commands in setup |
+| Source prerequisites | `software-properties-common` for Steam components, `curl`, `ca-certificates`, `gnupg` for pinned/scoped sources | Native updater |
+
+Steam setup adds i386 if missing and enables Ubuntu multiverse idempotently with
+`add-apt-repository`; universe and native amd64/i386 indexes must be available.
+Candidate metadata is cross-checked against Ubuntu `resolute` release indexes,
+including official update/security/backport pockets and local Ubuntu mirrors.
+Unexpected pinned candidates or source architecture restrictions fail with a
+source diagnostic; source architecture restrictions, GPU drivers and package
+holds are not rewritten. `steam-launcher`/Valve APT, Steam Snap/Flatpak, manual
+launchers, and old standalone `steam:i386` without the native installer report
+conflicts; they are never removed or migrated. Existing Steam libraries/client
+state are not touched. A missing `/usr/games` PATH entry gains only an owned
+`~/.local/bin/steam` symlink, with user-file conflicts rejected. Arch retains
+multilib and native Steam; enabling multilib refreshes through the full guarded
+upgrade, avoiding a partial Arch upgrade.
+
+Discord published its full Linux Rust updater on 2026-05-04. Read-only inspection
+of the official stable DEB confirms `/usr/bin/discord` launches a writable app
+in `$XDG_CONFIG_HOME/discord` (otherwise `~/.config/discord`), bootstrapping it
+from `updates.discord.com` with `/usr/share/discord/updater_bootstrap` when needed.
+The reviewed bootstrap URL is
+`https://stable.dl2.discordapp.net/apps/linux/1.0.161/discord-1.0.161.deb`, SHA-256
+`1a486a0cd0dc0e79b952b14dd5e361a8614dc28d1d371cd00ebf37a2ad0ce63d`.
+This local pin was calculated from official HTTPS bytes; it is not a vendor
+signature or independently published checksum. Setup verifies it and DEB
+package/version/architecture before installing. Missing or changed pinned bytes
+fail without falling back to an unverified download. An alternate Discord APT candidate fails before native upgrade. Existing stable updater
+DEBs are preserved; pre-updater DEBs and manual archives report a conflict,
+requiring an explicit source repair. Arch uses native `discord`, correcting the
+old AUR description. A sole existing stable Snapcrafters Discord Snap retains
+its asserted Snap owner instead of changing source; it is a community exception,
+not endorsed vendor packaging. Snap confinement/voice/screen sharing remain
+unverified. No updater setting, account, or `SKIP_HOST_UPDATE` policy is changed.
+
+Mozilla Snap ID: `3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk` (Mozilla publisher).
+Retained Discord Snap ID: `qHVefGEBezeuCeSfTND40uoUD6GRw8BO` (Snapcrafters).
+Both require `latest/stable`, asserted identity and owned command/desktop exports;
+other channels/Flatpaks/unknown publishers are preserved and reported as conflicts.
+Ubuntu's Firefox `*snap*` DEB is recognized as the Snap bootstrap, not a duplicate
+browser. An existing Mozilla APT feed without its selected DEB is a conflict,
+not permission to install a second Snap. Retained Mozilla DEBs need a scoped
+`Signed-By`, stable vendor candidate and pinned primary fingerprint
+`35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3`; no preferences/pins are written.
+GNOME consumes the selected desktop ID and retains Chrome's work-over-personal
+preference. User desktop overrides are preserved and cause a launcher conflict.
+
+Mullvad's scoped key primary fingerprint is
+`A1198702FC3E0A09A9AE5B75D5A1D4F266DE8DDF` (official key inspected 2026-10-09).
+New source/key destinations are `/etc/apt/sources.list.d/mullvad.list` and
+`/usr/share/keyrings/mullvad-keyring.gpg`; existing compatible scoped sources/keys
+are retained. Disabled/beta/duplicate/malformed/unscoped feeds, unrelated source
+owners, or changed keys fail without replacement. APT candidate/owner checks run
+before upgrades; failures propagate and cannot advance the system-update stamp.
+APT/Snap holds and automatic security updates remain in force. App-owned updates
+happen when launched; common maintenance verifies ownership without claiming an
+in-app update completed or launching an application.
+
+Evidence checked 2026-10-09: [Ubuntu Steam installer](https://packages.ubuntu.com/resolute/steam-installer),
+[32-bit Steam dependency package](https://packages.ubuntu.com/resolute/steam-libs-i386),
+[Discord Linux updater announcement](https://discord.com/blog/discord-patch-notes-may-4-2026),
+[official Discord download](https://discord.com/download),
+[Mozilla's Linux source guidance](https://support.mozilla.org/en-US/kb/install-firefox-linux),
+[Mozilla Snap](https://snapcraft.io/firefox), [Snapcrafters Discord exception](https://snapcraft.io/discord),
+[Mullvad Linux repository support](https://mullvad.net/en/help/install-mullvad-app-linux).
+
+Validation: direct Bash syntax/ShellCheck plus static inspection only. The pure
+supplied-fact checks in `tests/test_personal_app_decisions.py` are left unrun per
+user instruction. No setup/update script, test, app, package manager, VPN, GNOME
+setting, service, VM, or networked validation workflow was executed. Vendor/source
+metadata and archive contents were read without execution as feasibility research.
+Unverified: Ubuntu dependency resolution (including Discord's legacy dependency
+names), native installation/upgrades and maintainer-script effects, APT signing
+policy, Snap refresh/holds and desktop exports, Discord bootstrap/client updates,
+Steam client/Proton/games/32-bit GPU libraries, Firefox profiles/default-browser
+runtime, and Mullvad daemon/account/VPN/DNS/kill-switch behavior.

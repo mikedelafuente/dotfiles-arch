@@ -265,7 +265,7 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
 | **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
-| **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
+| **personal** | Steam, Discord, Firefox, Mullvad VPN (Arch / Ubuntu 26.04 sources in `PACKAGES.md`) | Firefox (when personal is selected and work is not; selected Snap/DEB desktop identity) |
 | **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches | — (no browser change) |
 
 Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup, and all three agent CLIs — Claude Code, Codex, and opencode).
