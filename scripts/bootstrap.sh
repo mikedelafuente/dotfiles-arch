@@ -188,6 +188,7 @@ fi
 # --------------------------
 
 ensure_yay_installed || print_warning_message "yay install failed — AUR steps may fail"
+BOOTSTRAP_STATUS=0
 
 if [ "$PACMAN_CHANGES_MADE" = true ] || system_upgrade_cooldown_expired; then
   if [ "$PACMAN_CHANGES_MADE" = true ]; then
@@ -197,8 +198,9 @@ if [ "$PACMAN_CHANGES_MADE" = true ] || system_upgrade_cooldown_expired; then
   fi
   export DOTFILES_AUR_ASSUME_YES=true
   if safe_system_upgrade --yes; then
-    record_system_upgrade_stamps
+    record_system_upgrade_stamps || BOOTSTRAP_STATUS=1
   else
+    BOOTSTRAP_STATUS=1
     print_warning_message "Guarded system update failed — continuing with setup scripts"
   fi
 else
@@ -211,7 +213,7 @@ fi
 
 print_info_message "Running bootstrap with profiles: $(format_setup_profiles)"
 
-run_profile_setup_scripts "true" || true
+run_profile_setup_scripts "true" || BOOTSTRAP_STATUS=1
 
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)"
 bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
@@ -219,5 +221,9 @@ bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
 print_line_break "Cleaning up"
 remove_orphaned_packages
 
+if [[ "$BOOTSTRAP_STATUS" -ne 0 ]]; then
+  print_error_message "Bootstrap finished with failures (see above)"
+  exit 1
+fi
 print_line_break "Bootstrap completed. Please restart your terminal or log out and log back in."
 print_info_message "Shell: $SHELL"

@@ -4,8 +4,8 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **only standalone Kitty setup** is available on
-Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
+Ubuntu support is incremental: **standalone Kitty setup and native package maintenance**
+are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
 entries cause a failure before installation; resolve them explicitly and rerun.
@@ -15,11 +15,14 @@ shared preference; Kitty falls back to an installed monospace font when absent.
 
 All entrypoints using the common header detect `/etc/os-release` and architecture
 before mutation. Unconverted entrypoints, including bootstrap, sync (even
-`--skip-bootstrap`), the profile runner, and maintenance scripts, reject Ubuntu.
+`--skip-bootstrap`), and the profile runner reject Ubuntu. User-only daily sync
+steps are enabled; historical Arch setup migrations still fail safely on Ubuntu.
 Other distros/releases/architectures are unsupported; Arch remains rolling-only.
-Ubuntu Kitty updates belong to APT (`sudo apt-get update` followed by
-`sudo apt-get install --only-upgrade kitty`), using existing configured sources;
-the repo's `dfa-daily`/`dfa-weekly` package workflows remain Arch-only.
+Ubuntu Kitty updates belong to APT through `dfa-update-system`, using existing
+configured sources. Daily/weekly sequencing is shared. If a repo pull triggers
+full resync on Ubuntu, that guarded step reports failure and remaining daily
+steps continue; full orchestration is a subsequent slice. Weekly NinjaOne repair
+is explicitly policy-deferred on Ubuntu, preserving the managed installation.
 See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
 
 ---
@@ -30,7 +33,7 @@ See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
 |-----------|-------------|
 | **Brand-new Arch install** | archinstall → `./post_install.sh` (chains straight into bootstrap) |
 | **Existing machine / other PC** | `bash scripts/sync.sh` |
-| **Day-to-day package updates** | `bash scripts/update-system.sh` (guarded `pacman` + `yay`) |
+| **Day-to-day package updates** | `bash scripts/update-system.sh` (Arch: guarded `pacman` + AUR; Ubuntu: APT) |
 | **Just re-link configs** | `bash scripts/link-dotfiles.sh` |
 | **One tool only** | `bash scripts/setup-<tool>.sh` |
 
@@ -41,19 +44,41 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ```bash
 dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-extensions + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
-dfa-weekly                        # dfa-daily + a forced dfa-update-system + dfa-remove-orphans + dfa-update-ninjaone — reach for this ~weekly
+dfa-weekly                        # dfa-daily + forced updates + orphan preview + Arch NinjaOne health check
 dfa-install-ninjaone --url <URL>  # once, work machines: NinjaOne agent from the console's installer .deb URL (saved to ~/.config/dotfiles-arch/ninjaone.env)
 dfa-sync-sources add /path/to/repo # optional: extra rules/skills/extensions repo; then dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
-bash scripts/update-system.sh --yes        # non-interactive after clean AUR scan
-bash scripts/update-system.sh --scan-only  # scan pending AUR upgrades only
+bash scripts/update-system.sh --yes        # native updates; Arch requires a clean AUR scan
+bash scripts/update-system.sh --scan-only  # Arch AUR scan; Ubuntu diagnostic only
 bash scripts/update-system.sh --force      # bypass the 1-day cooldown
 dfa-update-repos                  # parallel git pull --ff-only under ~/repos (MAX_PARALLEL=8)
 dfa-migrate                       # apply pending schema migrations (--dry-run to preview)
+dfa-remove-orphans                # native candidates only (no sudo/removal)
+dfa-remove-orphans --remove       # terminal confirmation: type remove; then native transaction prompt
 ```
 
-This is the guarded replacement for raw `yay -Syu`: official repos via pacman, then AUR PKGBUILD IoC scan, then yay. Sync always runs the same upgrade path; bootstrap uses it behind a 1-day cooldown. Both use the same scan before any `--noconfirm` AUR install.
+Arch updates use pacman, then an AUR PKGBUILD/dependency IoC scan, then `yay -Sua`.
+Unattended Arch updates add a temporary native transaction hook that refuses
+package removals/replacements while retaining configured hooks. Ubuntu uses
+`apt-get update --error-on=any` then `apt-get upgrade --with-new-pkgs --no-remove`;
+holds, pins, configured sources, and automatic security updates remain intact.
+Neither path performs a release upgrade. Held/deferred packages are reported by
+the native manager; they do not imply app parity or completed full upgrades.
+
+The 24h cooldown and `--force` override are shared. Successful native/AUR steps
+atomically write `~/.config/dotfiles-arch/.last_system_upgrade_<arch|ubuntu>`.
+Until the first successful Arch update, all three existing `.last_pacman_update`,
+`.last_pacman_upgrade`, and `.last_yay_update` stamps are read without rewriting
+or deleting them. Missing, invalid, or future stamps require a retry. Failed
+steps do not stamp success and survive daily/weekly and Arch bootstrap/sync summaries.
+Sync always upgrades; bootstrap retains its cooldown.
+
+Cleanup defaults to a read-only native plan (`pacman -Qtdq` plus recursive removal
+preview on Arch; APT autoremove simulation on Ubuntu). Weekly only previews;
+`--yes` and `--force` never authorize removal. Use `dfa-remove-orphans --remove`
+separately in a terminal and review managed software before confirming.
+See [maintenance sources, policies, and validation limits](PACKAGES.md#maintenance-distro-slice).
 
 ---
 

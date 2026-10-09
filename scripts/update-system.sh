@@ -2,8 +2,7 @@
 # --------------------------
 # Guarded day-to-day system updater
 # --------------------------
-# Equivalent of:  sudo pacman -Syu && yay -Syu
-# with AUR PKGBUILD IoC scanning (Atomic Arch / curl|sh footguns) first.
+# Arch: pacman + guarded AUR updates. Ubuntu 26.04: native APT upgrade.
 #
 # Usage:
 #   bash scripts/update-system.sh           # interactive pacman/yay prompts
@@ -41,19 +40,20 @@ FORCE=false
 
 usage() {
   cat <<'EOF'
-Guarded system updater (pacman + yay with AUR security scan)
+Native system updater (Arch: pacman + guarded AUR; Ubuntu 26.04: APT)
 
 Usage:
   bash scripts/update-system.sh [options]
 
 Options:
-  --yes, -y       Non-interactive (--noconfirm) after IoC scan passes
-  --scan-only     Only scan pending AUR upgrades; do not install
+  --yes, -y       Non-interactive native updates (Arch: after clean IoC scan)
+  --scan-only     Arch: scan pending AUR upgrades; Ubuntu: diagnostic only
   --force         Upgrade even if the 1-day cooldown hasn't expired
   -h, --help      Show this help
 
-Scans AUR PKGBUILDs for known supply-chain IoCs (e.g. Atomic Arch) before
-upgrading. Official repos (core/extra/multilib) are updated via pacman.
+Arch scans AUR PKGBUILDs and dependencies before yay upgrades. Ubuntu uses
+configured APT sources, retains holds/pins and automatic security updates,
+and refuses removals. Release upgrades are excluded. --yes is not cleanup approval.
 
 Skips the actual upgrade (no prompts, no sudo) when the last guarded upgrade
 ran within the last 24h; pass --force to upgrade anyway.
@@ -78,6 +78,10 @@ for arg in "$@"; do
 done
 
 if [ "$SCAN_ONLY" = true ]; then
+  if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+    print_info_message "AUR scan-only is Arch-specific; Ubuntu uses APT. No scan or update performed."
+    exit 0
+  fi
   print_line_break "AUR upgrade scan only"
   aur_scan_pending_upgrades
   exit $?
@@ -95,22 +99,24 @@ fi
 
 if [ "$ASSUME_YES" = true ]; then
   if safe_system_upgrade --yes; then
-    record_system_upgrade_stamps
+    record_system_upgrade_stamps || exit 1
   else
     print_error_message "Guarded system update failed"
     exit 1
   fi
 else
   if safe_system_upgrade; then
-    record_system_upgrade_stamps
+    record_system_upgrade_stamps || exit 1
   else
     print_error_message "Guarded system update failed"
     exit 1
   fi
 fi
 
-print_info_message "Tip: use this instead of raw 'yay -Syu' day to day."
-print_info_message "Re-run with --scan-only anytime to check pending AUR upgrades without installing."
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+  print_info_message "Tip: use this instead of raw 'yay -Syu' day to day."
+  print_info_message "Re-run with --scan-only anytime to check pending AUR upgrades without installing."
+fi
 
 # Snapper rollback reminder (Btrfs installs from user_configuration.json)
 if command -v snapper &>/dev/null && sudo snapper list-configs 2>/dev/null | grep -qw root; then

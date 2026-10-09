@@ -125,7 +125,10 @@ actual upgrade (no prompts) if the last one ran within 24h; `--force` overrides.
 On Btrfs installs it also reminds you about Snapper: `sudo snapper -c root list`,
 or `sudo snapper -c root create -d "before <change>"` ahead of a risky upgrade.
 
-Housekeeping: `orphans` removes orphaned packages, `check` runs shellcheck over the repo scripts.
+Housekeeping: `orphans` previews native removal candidates; `dfa-remove-orphans --remove`
+requires terminal confirmation (`--yes` alone is insufficient). `dfa-daily`/`dfa-weekly`
+use guarded pacman/AUR on Arch and APT on Ubuntu 26.04; weekly cleanup only previews.
+Full Ubuntu setup remains guarded. `check` runs shellcheck over the repo scripts.
 
 ### …fix ugly Courier-like title / UI fonts
 

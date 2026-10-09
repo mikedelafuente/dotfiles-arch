@@ -1,6 +1,6 @@
 #!/bin/bash
-# Remove orphaned pacman packages (pacman -Qtdq) using the repo helper.
-# Usage: dfa-remove-orphans
+# Preview native orphan/removal candidates; --remove requires confirmation.
+# Usage: dfa-remove-orphans [--remove] [--yes] [--force]
 
 set -euo pipefail
 
@@ -16,4 +16,4 @@ ROOT="$(resolve_dotfiles_arch)" || {
 # shellcheck source=/dev/null
 source "$ROOT/scripts/dotheader.sh"
 
-remove_orphaned_packages
+remove_orphaned_packages "$@"

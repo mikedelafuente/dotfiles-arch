@@ -507,26 +507,45 @@ resolve_default_harness() {
   fi
 }
 
-# Record pacman/yay cooldown stamps (call only after a successful safe_system_upgrade).
-record_system_upgrade_stamps() {
-  local dir
-  dir="$(bootstrap_config_dir)"
-  mkdir -p "$dir"
-  date +%s >"$dir/.last_pacman_update"
-  date +%s >"$dir/.last_pacman_upgrade"
-  date +%s >"$dir/.last_yay_update"
+# Backend-aware stamp; legacy Arch stamps are retained and read until first success.
+system_upgrade_stamp_file() {
+  case "$WORKSTATION_DISTRO" in
+    arch|ubuntu) printf '%s/.last_system_upgrade_%s\n' "$(bootstrap_config_dir)" "$WORKSTATION_DISTRO" ;;
+    *) return 1 ;;
+  esac
 }
 
-# True when any upgrade stamp is missing or older than 1 day (86400s).
+# Call only after every requested native/AUR update step succeeds.
+record_system_upgrade_stamps() {
+  local file tmp
+  file="$(system_upgrade_stamp_file)" || return 1
+  mkdir -p "$(dirname "$file")" || return $?
+  tmp="$(mktemp "${file}.XXXXXX")" || return $?
+  if date +%s >"$tmp" && mv -f "$tmp" "$file"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+# Read-only decision. Optional current epoch permits supplied-time checks.
+# In-place migration: old Arch stamps remain authoritative until a new success.
 system_upgrade_cooldown_expired() {
-  local dir now age stamp
+  local dir now file stamp value
+  local stamps=()
   dir="$(bootstrap_config_dir)"
-  now="$(date +%s)"
-  for stamp in .last_pacman_update .last_pacman_upgrade .last_yay_update; do
-    age=$((now - $(cat "$dir/$stamp" 2>/dev/null || echo 0)))
-    if [[ "$age" -ge 86400 ]]; then
-      return 0
-    fi
+  now="${1:-$(date +%s)}"
+  file="$(system_upgrade_stamp_file)" || return 0
+  if [[ -e "$file" || "$WORKSTATION_DISTRO" != arch ]]; then
+    stamps=("$file")
+  else
+    stamps=("$dir/.last_pacman_update" "$dir/.last_pacman_upgrade" "$dir/.last_yay_update")
+  fi
+  for stamp in "${stamps[@]}"; do
+    value="$(cat "$stamp" 2>/dev/null)" || return 0
+    [[ "$value" =~ ^[0-9]{1,12}$ && "$now" =~ ^[0-9]{1,12}$ ]] || return 0
+    # Decimal conversion avoids treating a leading zero as octal.
+    ((10#$value > 0 && 10#$now >= 10#$value && 10#$now - 10#$value < 86400)) || return 0
   done
   return 1
 }
@@ -748,12 +767,12 @@ detect_workstation_distro() {
   select_workstation_distro "$ID" "$VERSION_ID" "$(uname -m)"
 }
 
-# Ubuntu conversion is incremental: only the standalone Kitty path is ready.
+# Ubuntu conversion is incremental: native maintenance and user-only syncs are ready.
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
-    arch:*|ubuntu:setup-kitty.sh) return 0 ;;
-    *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu supports standalone scripts/setup-kitty.sh only" >&2; return 1 ;;
+    arch:*|ubuntu:setup-kitty.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
 
@@ -898,11 +917,12 @@ ensure_yay_pkgs() {
   fi
 }
 
-# Guarded full system update: pacman -Syu + AUR scan + yay -Syu.
+# Native system update: Arch with guarded AUR; Ubuntu without removals/release upgrades.
 # Usage: safe_system_upgrade [--yes]
-safe_system_upgrade() {
+safe_system_upgrade() (
   local assume_yes=false
-  local arg
+  local arg foreign query_status hook_dirs hook_dir
+  local flags=()
   for arg in "$@"; do
     case "$arg" in
       --yes|-y) assume_yes=true ;;
@@ -911,15 +931,64 @@ safe_system_upgrade() {
 
   print_line_break "Guarded system update"
 
-  print_action_message "Updating official repositories (pacman -Syu)"
+  case "$WORKSTATION_DISTRO" in
+    ubuntu)
+      [[ "$assume_yes" != true ]] || flags+=(--yes)
+      print_action_message "Updating configured APT sources"
+      sudo apt-get update --error-on=any || return $?
+      print_action_message "Upgrading via APT (holds/pins retained; no removals)"
+      sudo apt-get upgrade --with-new-pkgs --no-remove "${flags[@]}" || return $?
+      print_info_message "APT policy-held/deferred packages remain unchanged; automatic security updates are retained."
+      print_success_message "Guarded system update complete"
+      return 0
+      ;;
+    arch) ;;
+    *) print_error_message "Unsupported system update backend"; return 1 ;;
+  esac
+
   if [[ "$assume_yes" == true ]]; then
-    sudo pacman -Syu --noconfirm
-  else
-    sudo pacman -Syu
+    # Native PreTransaction hook refuses replacements/removals in unattended updates.
+    # Keep every configured hook directory; the guard is temporary and additive.
+    hook_dirs="$(pacman-conf HookDir)" || return $?
+    # Subshell-owned variable remains available to its EXIT trap.
+    removal_guard="$(mktemp -d)" || return $?
+    trap 'rm -rf "$removal_guard"' EXIT
+    cat >"$removal_guard/dfa-no-unattended-removals.hook" <<'EOF' || return $?
+[Trigger]
+Operation = Remove
+Type = Package
+Target = *
+[Action]
+Description = Refusing package removals during unattended updates
+When = PreTransaction
+Exec = /usr/bin/false
+AbortOnFail
+EOF
+    flags+=(--noconfirm)
+    while IFS= read -r hook_dir; do
+      [[ -z "$hook_dir" ]] || flags+=(--hookdir "$hook_dir")
+    done <<<"$hook_dirs"
+    flags+=(--hookdir "$removal_guard")
   fi
 
+  print_action_message "Updating official repositories (pacman -Syu)"
+  sudo pacman -Syu "${flags[@]}" || return $?
+
   if ! command -v yay &>/dev/null; then
-    print_warning_message "yay not installed — skipping AUR upgrades"
+    if foreign="$(pacman -Qmq 2>&1)"; then
+      query_status=0
+    else
+      query_status=$?
+      if [[ "$query_status" -ne 1 || -n "$foreign" ]]; then
+        print_error_message "Cannot query foreign packages: $foreign"
+        return "$query_status"
+      fi
+    fi
+    if [[ -n "$foreign" ]]; then
+      print_error_message "yay is missing with foreign packages installed; cannot complete guarded AUR updates"
+      return 1
+    fi
+    print_info_message "No foreign packages installed — AUR updates not needed"
     return 0
   fi
 
@@ -930,28 +999,76 @@ safe_system_upgrade() {
   fi
 
   print_action_message "Upgrading AUR packages (yay -Sua / -Syu AUR side)"
-  if [[ "$assume_yes" == true ]]; then
-    export DOTFILES_AUR_ASSUME_YES=true
-    # -Syu after pacman already refreshed; -a limits to AUR if supported
-    yay -Syu --noconfirm
-  else
-    yay -Syu
-  fi
+  # Official repos were already updated; keep this transaction AUR-only.
+  yay -Sua "${flags[@]}" || return $?
 
   print_success_message "Guarded system update complete"
+)
+
+# Read-only approval decision. --yes/--force cannot authorize removal.
+orphan_removal_allowed() {
+  [[ "$1" == true && "$2" == true && "$3" == remove ]]
 }
 
-# Remove orphaned packages if any (safe when none — pacman -Qtdq exits 1).
+# Preview native removal plans by default; require --remove and a terminal confirmation.
 remove_orphaned_packages() {
-  local orphans
-  orphans="$(pacman -Qtdq 2>/dev/null || true)"
-  if [[ -z "$orphans" ]]; then
-    print_info_message "No orphaned packages found"
+  local request=false dry_run=false interactive=false reply="" arg query plan rc
+  local orphans=()
+  for arg in "$@"; do
+    case "$arg" in
+      --remove) request=true ;;
+      --yes|-y|--force) ;;
+      --dry-run) dry_run=true ;;
+      -h|--help)
+        printf '%s\n' 'Usage: dfa-remove-orphans [--remove] [--yes] [--force]' \
+          'Default: preview native orphan/removal candidates without sudo.' \
+          '--remove requires a terminal and typing remove after reviewing the plan.' \
+          '--yes and --force do not authorize removal.'
+        return 0 ;;
+      *) print_error_message "Unknown cleanup option: $arg"; return 1 ;;
+    esac
+  done
+  [[ "$dry_run" != true ]] || request=false
+  case "$WORKSTATION_DISTRO" in
+    arch)
+      if query="$(pacman -Qtdq 2>&1)"; then
+        mapfile -t orphans <<<"$query"
+      else
+        rc=$?
+        # pacman returns 1 with empty output when there are no matches.
+        if [[ "$rc" -eq 1 && -z "$query" ]]; then
+          print_info_message "No orphaned packages found"
+          return 0
+        fi
+        print_error_message "Cannot query Arch orphans: $query"
+        return "$rc"
+      fi
+      plan="$(pacman -Rns --print --print-format '%n %v' "${orphans[@]}")" || return $?
+      ;;
+    ubuntu)
+      plan="$(LC_ALL=C apt-get --simulate autoremove)" || return $?
+      ;;
+    *) print_error_message "Unsupported orphan backend"; return 1 ;;
+  esac
+  print_action_message "Native removal plan (review dependencies and managed software):"
+  printf '%s\n' "$plan"
+  if [[ "$request" != true ]]; then
+    print_info_message "Preview only. Run dfa-remove-orphans --remove in a terminal to confirm cleanup."
     return 0
   fi
-  print_action_message "Removing orphaned packages: $orphans"
-  # shellcheck disable=SC2086
-  sudo pacman -Rns --noconfirm $orphans
+  [[ ! -t 0 || ! -t 1 ]] || interactive=true
+  if [[ "$interactive" == true ]]; then
+    read -r -p "Type remove to authorize this cleanup: " reply || return 1
+  fi
+  if ! orphan_removal_allowed "$request" "$interactive" "$reply"; then
+    print_error_message "Cleanup not authorized: --remove requires a terminal and typing remove"
+    return 1
+  fi
+  # Native prompts present the final transaction again if the package state changed.
+  case "$WORKSTATION_DISTRO" in
+    arch) sudo pacman -Rns "${orphans[@]}" || return $? ;;
+    ubuntu) sudo apt-get autoremove || return $? ;;
+  esac
 }
 
 # --------------------------
