@@ -421,10 +421,60 @@ no OS-changing workflows, networked tests or VMs are run.
 
 | Package | Script | Purpose | Related commands |
 |---------|--------|---------|------------------|
-| `docker`, `docker-compose`, `docker-buildx` | `setup-docker.sh` | Containers | `d`, `dc`, `dcu`, `dcd`, `dps`, `dex` |
+| Arch: `docker`, `docker-compose`, `docker-buildx`; Ubuntu: `docker.io`, `docker-compose-v2`, `docker-buildx` | `setup-docker.sh` | Coherent native Engine/Compose/Buildx provider | `d`, `dc`, `dcu`, `dcd`, `dps`, `dex` |
 | `minikube` | `setup-minikube.sh` | Local Kubernetes cluster | `minikube` |
 | `kubectl` | `setup-minikube.sh` | Kubernetes CLI | `kubectl` |
 | `k9s` | `setup-minikube.sh` | Kubernetes TUI | `k9s` |
+
+### Container source and update contract
+
+Implemented for [#148](https://github.com/mikedelafuente/dotfiles-arch/issues/148).
+Standalone `setup-docker.sh`, `setup-minikube.sh` and `setup-devcontainer.sh`
+support rolling Arch and Ubuntu 26.04 x86_64/amd64. The shared profile runner
+keeps Docker/Kubernetes shared and host prerequisites conditional on the additive
+`devcontainer` profile; full Ubuntu bootstrap/sync remains guarded for other slices.
+
+| App | Arch source / update owner | Ubuntu source / update owner |
+|-----|----------------------------|-------------------------------|
+| Engine, Compose, Buildx | Native packages above / guarded pacman | [docker.io](https://packages.ubuntu.com/resolute/docker.io), [docker-compose-v2](https://packages.ubuntu.com/resolute/docker-compose-v2), [docker-buildx](https://packages.ubuntu.com/resolute/docker-buildx) / APT |
+| minikube | Native `minikube` / guarded pacman | [Official amd64 binary](https://minikube.sigs.k8s.io/docs/start/) / verified managed release refresh |
+| kubectl | Native `kubectl` / guarded pacman | [Official versioned binary and SHA-256](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) / verified managed release refresh |
+| k9s | Native `k9s` / guarded pacman | [Official amd64 release](https://github.com/derailed/k9s/releases) / verified managed release refresh |
+| lazydocker | Native Extra / guarded pacman | Existing compatible native package or verified release / existing editor update owner |
+
+Ubuntu's official Resolute amd64 main/universe package index was inspected on
+2026-10-09: Docker components, just, mkcert and OpenVPN3 are available; minikube,
+kubectl and k9s are absent. The Kubernetes tools reuse the existing CLI release
+manager (`~/.local/share/dotfiles-arch/editor-tools/<app>`, owned source marker,
+versioned directories and `~/.local/bin` links). Native candidates are preferred
+if available; compatible existing native installations retain their package update
+owner. An existing Ubuntu Kubernetes DEB must have a candidate published by a
+configured APT repository; status-only local DEBs fail as an update-owner gap and
+remain untouched. CLI baselines are stable minikube/kubectl 1.0+ and k9s 0.1+; **kubectl must
+remain within one minor version of your cluster**. The latest upstream release
+does not guarantee compatibility with an older remote cluster.
+
+`dfa-update-system` refreshes managed releases after native updates, before writing
+success stamps; daily/weekly inherit this. Minikube/k9s use stable official GitHub
+metadata with asset SHA-256; kubectl uses `dl.k8s.io` stable metadata and the checksum
+for that exact version. Downloads are staged and verified before switching commands;
+failures retain the prior release and return nonzero. No installer is piped to a shell.
+
+Fresh Docker setup selects the native family on each distro. Vendor CE/Moby,
+Docker Desktop, Podman's Docker shim, unknown/rootless launchers and plugin overrides
+are preserved and reported as conflicts; no automatic removal, source switch or
+fallback occurs. Podman alone can coexist. Package presence and offline CLI checks
+are required for all three components; a Docker executable alone is insufficient.
+The script enables `docker.service` and grants the user Docker group membership
+(root-equivalent access, effective after logout/login). It does not start test
+containers or clusters. Existing plugin directories/config remain untouched.
+
+Verification: `python3 tests/test_container_decisions.py` checks supplied source,
+version, capability and temporary-file facts with forbidden-command guards.
+`bash scripts/check.sh` checks syntax/ShellCheck; system writes and failure paths
+are statically inspected. Engine installation, plugin execution, daemon/group
+behavior, release upgrades and Kubernetes cluster/networking behavior are unverified.
+No setup/update/service workflows, networked tests or VM provisioning are run.
 
 ## Tools and applications (shared)
 
@@ -471,13 +521,40 @@ the rest of the host checklist (tools, DNS, watches, CA trust).
 
 | Package / config | Purpose | Related commands |
 |------------------|---------|------------------|
-| `just` | Host lifecycle recipes in the devcontainer repo | `just`, `just --list` |
-| `mkcert` | Local TLS CA + certs for project `*.test` domains | `mkcert -install` |
-| `nss` | Firefox/trust-store support used by mkcert | — |
-| `bind` | `dig` for DNS smoke checks to port 5354 | `dig @127.0.0.1 -p 5354 …` |
-| `openvpn3` (AUR) | OpenVPN 3 Linux client (CloudConnexa / work VPN). Official docs only cover apt/dnf; AUR ships the same `openvpn3-linux` project. | `openvpn3 config-import`, `session-start`, `sessions-list`, `session-manage` |
+| `just` (both distros, native) | Host lifecycle recipes / pacman or APT updates | `just`, `just --list` |
+| `mkcert` (both distros, native) | Local TLS CA / pacman or APT updates | `mkcert -install` |
+| Arch `nss` / Ubuntu `libnss3-tools` | `certutil` for Firefox/trust stores / pacman or APT updates | — |
+| Arch `bind` / Ubuntu `bind9-dnsutils` | `dig` for DNS checks / pacman or APT updates | `dig @127.0.0.1 -p 5354 …` |
+| Arch `openvpn3` (scanned AUR) / Ubuntu `openvpn3-client` (native) | OpenVPN3 CloudConnexa/work VPN / guarded AUR or APT updates | `openvpn3 config-import`, `session-start`, `sessions-list`, `session-manage` |
 | `/etc/systemd/resolved.conf.d/dotfiles-arch-test.conf` | Route `Domains=~test` to `127.0.0.1:5354` | restart `systemd-resolved` |
 | `/etc/sysctl.d/99-dotfiles-arch-inotify.conf` | Raise `fs.inotify.max_user_watches` to 524288 | — |
+
+Ubuntu sources: [just](https://packages.ubuntu.com/resolute/just),
+[mkcert](https://packages.ubuntu.com/resolute/mkcert),
+[NSS tools](https://packages.ubuntu.com/resolute/libnss3-tools),
+[DNS tools](https://packages.ubuntu.com/resolute/bind9-dnsutils),
+[OpenVPN3](https://packages.ubuntu.com/resolute/openvpn3-client).
+[OpenVPN upstream lists native Ubuntu 26.04 availability](https://community.openvpn.net/Pages/OpenVPN3Linux).
+No additional APT source/key is registered by this slice. Unknown/unowned commands
+fail without installing duplicates. Native apps update through `dfa-update-system`;
+Arch OpenVPN3 keeps IoC-scanned AUR acquisition and updates.
+
+Run host setup as your workstation user. `mkcert -install` is never invoked with
+sudo; its CA/key stay user-owned (mkcert may request sudo for system trust).
+Project certificates are generated after clone. The native Ubuntu admin command
+is `/usr/sbin/openvpn3-admin`, Arch's is `/usr/bin/openvpn3-admin`. Backend
+D-Bus registration files are required; setup runs `init-config --write-configs`
+and reloads `dbus.service`. No VPN is imported/started and no DCO/driver package
+is installed; missing client/admin/backend or failed configuration is an error.
+
+Split DNS requires an already-active `systemd-resolved.service` and
+`/etc/resolv.conf` using `/run/systemd/resolve/stub-resolv.conf`. Hosts with another
+resolver policy fail clearly for explicit configuration; setup does not replace
+that policy. The managed drop-in routes only `~test` to `127.0.0.1:5354`; setup restarts
+resolved on reruns too, so a previously failed apply is retried. Watcher configuration retains limits above
+524288 and applies only its own sysctl file. Symlink conflicts are preserved.
+VPN, certificate trust, resolver routing and live watcher behavior are unverified.
+These gaps or failed writes return nonzero instead of a completed host setup.
 
 ## Graphics (optional)
 
