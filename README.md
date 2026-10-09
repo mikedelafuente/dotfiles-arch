@@ -559,6 +559,16 @@ their original names. Dotfiles-arch has final skill priority; duplicate replacem
 source to allow overwrites (`dfa-sync-sources add <path> --overwritable true`).
 Protected duplicates stop sync before links change. See [imports and update review](skills/README.md).
 
+Factory entrypoints: `/setup-dark-factory` accepts project council/guidance and
+tracker conventions; `/dark-factory-idea` turns intent or prototype feedback into
+a bounded versioned proposal; `/dark-factory` builds approved selected work with
+independent checks and pauses for hands-on trial. `/dark-factory-supervisor`
+reconciles finite wakes through an accepted runner, and `/dark-factory-retro`
+analyzes private evidence with separately authorized synthetic publication.
+These skills create no schedules or live runs during installation. See
+[factory contracts](skills/mikedelafuente/dark-factory/references/contracts.md)
+for authority, budgets, adapters, recovery and validation limits.
+
 `dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
 source. It displays the current setting; changes apply on the next skill sync.
 

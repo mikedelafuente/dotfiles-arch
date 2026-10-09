@@ -96,6 +96,20 @@ Use [ask-mike](mikedelafuente/ask-mike/SKILL.md) to choose a workflow:
   `adversarial-code-review`, which owns independent Standards/Spec reviewers and
   the Ponytail complexity pass. Reviewers return findings without starting another
   coordinator. Reuse this final review and verify only affected findings after fixes.
+- [setup-dark-factory](mikedelafuente/setup-dark-factory/SKILL.md) proposes and
+  reconciles accepted project council/guidance, tracker conventions and authority.
+  [dark-factory-idea](mikedelafuente/dark-factory-idea/SKILL.md) refines new intent
+  or a prototype delta and stops for exact versioned human approval.
+  [dark-factory](mikedelafuente/dark-factory/SKILL.md) executes only a selected
+  authorized finite graph with independent acceptance, then pauses for user trial.
+  [dark-factory-supervisor](mikedelafuente/dark-factory-supervisor/SKILL.md)
+  reconciles bounded wakes through an accepted runner; it builds nothing and
+  creates no schedule. [dark-factory-retro](mikedelafuente/dark-factory-retro/SKILL.md)
+  produces private evidence-backed findings; synthetic source-scoped publication
+  needs separate content/destination approval. Shared
+  [records and control seam](mikedelafuente/dark-factory/references/contracts.md)
+  retain approval, budgets, claims and trial pauses across resumes. Setup accepts
+  actual runner/tracker adapters; this package ships no network/runner adapter.
 
 Direct upstream invocations retain upstream behavior: `ask-matt`, `grill-*`,
 `code-review`, `to-spec`, `to-tickets`, and Ponytail skills. Personal wrappers resolve
@@ -125,3 +139,8 @@ sync sources. Existing registrations can be removed with
 `python3 tests/test_skill_sync.py` and `python3 tests/test_cloud_agent_config.py`
 exercise nested discovery, collisions, moves, pruning, and preservation in temporary
 homes. `bash scripts/check.sh` checks the shipped shell scripts.
+`python3 tests/test_dark_factory.py` checks the local JSON control seam with
+supplied approvals/graphs/runner/privacy facts and temporary private stores. It
+does not authenticate human evidence, validate a live tracker/runner, certify
+semantic privacy or establish real prototype/runtime delivery. Installation and
+factory runs remain separate user actions.
