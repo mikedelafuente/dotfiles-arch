@@ -771,7 +771,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
-    arch:*|ubuntu:setup-kitty.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-kitty.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
@@ -853,6 +853,8 @@ ensure_multilib_enabled() {
 # one of the ~15 setup-*.sh scripts that call ensure_yay_pkgs remember to.
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/aur-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/core-cli-lib.sh"
 
 # Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {
@@ -1140,8 +1142,15 @@ load_nvm() {
 
   if [[ ! -s "$dir/nvm.sh" && -s "$legacy/nvm.sh" ]]; then
     print_info_message "Migrating NVM from $legacy → $dir"
-    mkdir -p "$(dirname "$dir")"
-    mv "$legacy" "$dir"
+    # Do not nest the legacy install inside an existing destination or discard files.
+    if [[ -e "$dir" || -L "$dir" ]]; then
+      if [[ -L "$dir" ]] || ! rmdir "$dir"; then
+        print_error_message "NVM migration destination conflict: $dir; preserved"
+        return 1
+      fi
+    fi
+    mkdir -p "$(dirname "$dir")" || return 1
+    mv -T "$legacy" "$dir" || return 1
   fi
 
   export NVM_DIR="$dir"

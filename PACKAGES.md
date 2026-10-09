@@ -41,7 +41,91 @@ directly-installed packages are listed; transitive dependencies are not.
 | `tldr` | Example-first man pages | `tldr <cmd>` |
 | `fastfetch` | System summary | `fastfetch` |
 | `zoxide` | Directory jumping that learns | `z`, `zi`, `zq` |
+| `bash-completion` | Bash command completion | Tab |
+| `less` | Plain pager fallback | `less`, Git pager fallback |
+| `util-linux` (Arch) / `bsdextrautils` (Ubuntu) | Strip man-page formatting | `col` in `MANPAGER` |
 | `linux-firmware-intel` | Intel firmware (only on Intel hardware) | — |
+
+### Shared shell and core CLI distro slice
+
+Implemented for [#143](https://github.com/mikedelafuente/dotfiles-arch/issues/143).
+Standalone `setup-essentials.sh`, `setup-bash.sh`, `setup-git.sh`,
+`setup-github-cli.sh`, and `setup-node.sh` support rolling Arch and Ubuntu 26.04
+on x86_64/amd64. Full Ubuntu bootstrap/sync stays guarded pending other slices.
+
+| App / command | Arch package | Ubuntu package/source | Required version/capability |
+|----------------|--------------|-----------------------|-----------------------------|
+| Git / `git` | `git` | `git` | 2.35+ (`zdiff3`) |
+| Delta / `delta` | `git-delta` | [git-delta](https://packages.ubuntu.com/resolute/git-delta) | 0.16+; shared pager settings |
+| Transfers / `curl`, `wget` | `curl`, `wget` | `curl`, `wget` | Native HTTPS/TLS support |
+| Clipboard / `xsel`, `wl-copy`, `wl-paste` | `xsel`, `wl-clipboard` | `xsel`, `wl-clipboard` | XWayland / Wayland clients |
+| Listing / `eza` | `eza` | `eza` | 0.18+ (`--icons=auto`) |
+| Prompt / `starship` | `starship` | [starship](https://packages.ubuntu.com/resolute/starship) | 1.22+; shared palette/modules |
+| Finder / `fzf` | `fzf` | [fzf](https://packages.ubuntu.com/resolute/fzf) | 0.48+ (`--bash`) |
+| Search / `rg` | `ripgrep` | `ripgrep` | 13+ |
+| Finder / `fd` | `fd` | [fd-find](https://packages.ubuntu.com/resolute/fd-find), `fdfind` | 8+; user executable link to `/usr/bin/fdfind` |
+| Pager / `bat` | `bat` | [bat](https://packages.ubuntu.com/resolute/bat), `batcat` | 0.23+ and configured Catppuccin Mocha theme; user executable link to `/usr/bin/batcat` |
+| Markdown / `glow`, `md` | `glow` | [Charm's official APT repository](https://github.com/charmbracelet/glow#installation), `glow` | 1+ |
+| Resource tools | `htop`, `ncdu`, `btop`, `duf` | Same explicit package names | Native commands |
+| Utilities | `tree`, `jq`, `net-tools`, `iw`, `stow`, `shellcheck` | Same explicit package names | `tree`, `jq`, `netstat`, `iw`, `stow`, `shellcheck` |
+| GitHub / `gh` | `github-cli` | `gh` | 2+; credential helper remains `/usr/bin/gh` |
+| Examples / `tldr` | `tldr` | [tealdeer](https://packages.ubuntu.com/resolute/tealdeer) | Native `tldr`; page cache refreshed with `tldr --update` |
+| Summary / `fastfetch` | `fastfetch` | [fastfetch](https://packages.ubuntu.com/resolute/fastfetch) | Native command |
+| Navigation / `zoxide` | `zoxide` | `zoxide` | Native Bash integration |
+| Bash / completion / pager | `bash`, `bash-completion`, `less` | Same explicit package names | Bash 4+; Tab and pager fallback |
+| Man-page filter / `col` | `util-linux` | `bsdextrautils` | Required by shared `MANPAGER` |
+| SSH / `ssh`, `ssh-keygen`, `ssh-agent`, `ssh-add` | `openssh` | `openssh-client` | Ed25519 support; existing keys retained |
+| Git TUI / `lazygit`, `lzg` | `lazygit` | [lazygit](https://packages.ubuntu.com/lazygit) | 0.40+ |
+| Source prerequisites | `curl`, `coreutils`, `ca-certificates`, `gnupg`, `tar` | Same explicit package names | HTTPS, SHA-256, GPG key inspection, archive extraction |
+| NVM / `nvm` | Verified upstream archive | Same [NVM v0.40.3 archive](https://github.com/nvm-sh/nvm/tree/v0.40.3) | 0.40.3+; `~/.config/nvm` |
+| Node / `node`, `npm` | NVM's verified upstream Node binaries | Same NVM owner | Node 22+; fresh installs select current LTS |
+
+**Update owners:** every native row uses pacman on Arch and APT on Ubuntu through
+`dfa-update-system` (daily/weekly). Ubuntu's Main/Universe sources must already be
+enabled; unavailable candidates or failed acquisition fail without source fallback.
+Firmware remains Arch's Intel-gated package, or Ubuntu's existing native/IT owner.
+No AUR scan/install behavior changes. Glow is the only vendor APT exception here;
+APT also owns its updates. Package signature verification stays with pacman/APT.
+
+Glow stages Charm's HTTPS key and verifies primary fingerprint
+`ED927B38BE981E53CA09153D03BBF595D4DFD35C` before registering
+`/etc/apt/sources.list.d/dfa-charm.list` with `signed-by=/etc/apt/keyrings/dfa-charm.gpg`.
+An exact existing upstream `charm.list` / `charm.gpg` recipe with that fingerprint
+is retained verbatim. Unknown/duplicate registrations, key changes, shadowing
+launchers, or unmanaged binaries fail and remain untouched; no global trust is added.
+Key rotation needs an explicitly reviewed fingerprint update.
+
+`setup-node.sh` owns the pinned NVM files: a maintainer bumps version and archive
+SHA-256 together, then users rerun standalone setup. It stages/checks the whole
+archive before extracting only `nvm.sh`, `nvm-exec`, and `bash_completion` and
+updating older NVM files. Node/npm updates belong to user-level NVM:
+`nvm install --lts` verifies upstream Node checksums; select a new default explicitly
+with `nvm alias default 'lts/*'`. Setup retains compatible defaults, reports broken
+or Node <22 defaults, and refuses root/sudo, foreign Node sources, non-user-owned
+NVM files, and npm prefixes outside NVM. npm globals keep their existing daily
+`dfa-update-npm-clis` owner. No distro Node, root npm, or rc-file append is introduced.
+Legacy `~/.nvm` moves only into an absent/empty target; nonempty conflicts are retained.
+
+**Commands/config:** `setup-bash.sh` links shared `.bashrc`, `.inputrc`, `.profile`,
+welcome/package/Neovim reference files, and `starship.toml`; essentials links bat's
+config and checks the theme/cache; Git links shared XDG config and keeps identity
+in the real machine-local `.gitconfig`. Without arguments, Git keeps machine-local
+identity first, then uses saved identity through `load_bootstrap_config`; explicit
+name/email arguments update it. Saved profiles/preferences are not rewritten.
+Existing unrelated config files, directory symlinks, and command links are conflicts:
+back them up or resolve them explicitly before rerunning. `fd`/`bat` links live in
+`~/.local/bin`, usable by subprocesses when that directory is on PATH; shared Bash
+adds it before selecting `MANPAGER`. No aliases substitute for these commands.
+Paths derive from the checkout and `USER_HOME_DIR`, independent of username/location.
+
+**Validation:** `python3 tests/test_core_cli_decisions.py` checks supplied mapping,
+version, ownership, and link facts in temporary state with forbidden-command guards.
+`bash scripts/check.sh` checks Bash syntax and ShellCheck. No setup, package update,
+source registration, service, driver, GNOME, networked test, or VM workflow runs.
+Installation/update behavior, repository trust at runtime, NVM migration/downloads,
+shell startup, Git authentication, and actual CLI/config compatibility on either
+distro remain **unverified**. Package metadata and upstream recipes establish
+source feasibility, not successful workstation installation.
 
 ## Shell, terminal, and editor
 
@@ -64,7 +148,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | Rolling Arch, x86_64/amd64 | [Arch Extra](https://archlinux.org/packages/extra/x86_64/kitty/), `kitty` | pacman, through the existing guarded system updater |
 | Ubuntu 26.04, x86_64/amd64 | [Ubuntu Universe](https://packages.ubuntu.com/resolute/kitty), `kitty` | APT through existing configured sources, via `dfa-update-system` / daily / weekly |
 
-`bash scripts/setup-kitty.sh` is the sole converted Ubuntu setup path. No vendor
+`bash scripts/setup-kitty.sh` is a converted Ubuntu setup path. No vendor
 repository, archive, AUR-to-APT translation, or fallback source is added. Missing
 Universe/package candidates and APT errors fail setup. Package status uses
 `pacman -Q` or dpkg's actual `installed` status with an `ok` error flag (including
