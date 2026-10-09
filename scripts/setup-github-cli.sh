@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------
-# GitHub CLI Setup for Arch Linux
+# GitHub CLI Setup for rolling Arch / Ubuntu 26.04
 # -------------------------
 
 # --------------------------
@@ -24,21 +24,8 @@ fi
 
 print_tool_setup_start "GitHub CLI"
 
-if command -v gh &> /dev/null; then
-    print_info_message "GitHub CLI (gh) is already installed."
-    gh --version
-else
-    print_action_message "Installing GitHub CLI (gh)..."
-    sudo pacman -S --needed --noconfirm github-cli
-
-    if command -v gh &> /dev/null; then
-        print_success_message "GitHub CLI installed successfully!"
-        gh --version
-    else
-        print_error_message "Failed to install GitHub CLI"
-        exit 1
-    fi
-fi
+ensure_core_cli github-cli
+gh --version
 
 print_info_message ""
 print_info_message "Next step: authenticate with  gh auth login"

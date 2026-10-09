@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Git and SSH Keys for Arch Linux
+# Setup Git and SSH Keys for rolling Arch / Ubuntu 26.04
 # --------------------------
 
 # --------------------------
@@ -29,8 +29,28 @@ fi
 # --------------------------
 
 # See if username and email were passed as arguments
-USERNAME_ARG="$1"
-EMAIL_ARG="$2"
+load_bootstrap_config || true
+ensure_core_cli git
+USERNAME_ARG="${1:-${FULL_NAME:-}}"
+EMAIL_ARG="${2:-${EMAIL_ADDRESS:-}}"
+
+# An unrelated identity symlink must not be written through by git config.
+if [[ -L "$USER_HOME_DIR/.gitconfig" ]]; then
+    case "$(readlink "$USER_HOME_DIR/.gitconfig")" in
+        */home/.gitconfig) ;;
+        *) print_error_message "Git identity symlink conflict; preserved"; exit 1 ;;
+    esac
+fi
+
+# Explicit arguments change identity; otherwise preserve machine-local values.
+# Migrate legacy identity first so saved bootstrap values cannot overwrite it.
+ensure_local_gitconfig
+if [[ -z "${1:-}" ]]; then
+    USERNAME_ARG="$(git config --file "$USER_HOME_DIR/.gitconfig" --get user.name 2>/dev/null || printf '%s' "$USERNAME_ARG")"
+fi
+if [[ -z "${2:-}" ]]; then
+    EMAIL_ARG="$(git config --file "$USER_HOME_DIR/.gitconfig" --get user.email 2>/dev/null || printf '%s' "$EMAIL_ARG")"
+fi
 
 # If not passed as arguments, only prompt when a TTY is available
 if [ -z "$USERNAME_ARG" ]; then
@@ -67,12 +87,10 @@ print_tool_setup_start "Git"
 # --------------------------
 
 # Install Git if not already installed
-if ! command -v git &> /dev/null; then
-    print_info_message "Git not found. Installing Git via pacman"
-    sudo pacman -S --needed --noconfirm git
-else
-    print_info_message "Git is already installed (version: $(git --version))"
-fi
+ensure_core_cli openssh
+ensure_core_cli lazygit
+REPO_ROOT="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
+link_core_cli_config "$REPO_ROOT/config/git/config" "$USER_HOME_DIR/.config/git/config"
 
 # --------------------------
 # Configure Git Identity (machine-local)
@@ -83,7 +101,6 @@ fi
 
 print_info_message "Writing machine-local Git identity"
 
-ensure_local_gitconfig
 LOCAL_GITCONFIG="$USER_HOME_DIR/.gitconfig"
 git config --file "$LOCAL_GITCONFIG" user.name "$USERNAME_ARG"
 git config --file "$LOCAL_GITCONFIG" user.email "$EMAIL_ARG"
@@ -142,11 +159,6 @@ fi
 # Install lazygit
 # --------------------------
 print_info_message "Checking for lazygit installation"
-if ! command -v lazygit &> /dev/null; then
-    print_info_message "lazygit not found. Installing lazygit via pacman"
-    sudo pacman -S --needed --noconfirm lazygit
-else
-    print_info_message "lazygit is already installed (version: $(lazygit --version))"
-fi
+lazygit --version
 
 print_tool_setup_complete "Git"

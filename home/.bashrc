@@ -51,13 +51,6 @@ if command -v nvim &> /dev/null; then
     export VISUAL=nvim
 fi
 
-# bat as the man pager and colorizer (theme also set in ~/.config/bat/config)
-if command -v bat &> /dev/null; then
-    export BAT_THEME="Catppuccin Mocha"
-    export MANPAGER="sh -c 'col -bx | bat -l man -p'"
-    export MANROFFOPT="-c"
-fi
-
 # set PATH so it includes user's private bin if it exists
 if [ -d "$HOME/bin" ] ; then
     case ":$PATH:" in
@@ -71,6 +64,13 @@ if [ -d "$HOME/.local/bin" ] ; then
         *":$HOME/.local/bin:"*) ;;
         *) export PATH="$HOME/.local/bin:$PATH" ;;
     esac
+fi
+
+# Set PATH first so Ubuntu's fd/bat executable links work in subprocesses too.
+if command -v bat &> /dev/null; then
+    export BAT_THEME="Catppuccin Mocha"
+    export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+    export MANROFFOPT="-c"
 fi
 
 
@@ -287,7 +287,8 @@ aliases() {
         echo "  Skill source: dfa-sync-sources option 5 toggles overwrite permissions"
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
-        echo '  Kitty: bash <dotfiles-checkout>/scripts/setup-kitty.sh (Arch / Ubuntu 26.04; other Ubuntu setup is guarded)'
+        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node}.sh'
+        echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
         echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'
         echo '  npm CLI updates: only npm-owned launchers; other sources are retained and reported'

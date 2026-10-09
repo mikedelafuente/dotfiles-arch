@@ -4,7 +4,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **standalone Kitty setup and native package maintenance**
+Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI setup, and native package maintenance**
 are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
@@ -24,6 +24,24 @@ full resync on Ubuntu, that guarded step reports failure and remaining daily
 steps continue; full orchestration is a subsequent slice. Weekly NinjaOne repair
 is explicitly policy-deferred on Ubuntu, preserving the managed installation.
 See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
+
+The shared shell/core CLI slice also supports these standalone commands:
+
+```bash
+bash scripts/setup-essentials.sh
+bash scripts/setup-bash.sh
+bash scripts/setup-git.sh                 # keeps machine-local/saved identity
+bash scripts/setup-github-cli.sh
+bash scripts/setup-node.sh                # user-owned NVM, no sudo
+```
+
+Pass name/email to Git setup to change identity explicitly. Existing user configs
+and foreign command sources are preserved and reported as conflicts; resolve them
+before rerunning. Ubuntu `fd`/`bat` get executable links, Glow uses Charm's scoped
+APT repository, and the remaining CLI packages use native sources. Native updates
+belong to `dfa-update-system`; NVM files to standalone Node setup after pin updates;
+Node LTS to `nvm install --lts` with an explicitly selected default. See the
+[full command/source/version/update matrix and unverified paths](PACKAGES.md#shared-shell-and-core-cli-distro-slice).
 
 ---
 

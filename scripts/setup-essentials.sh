@@ -15,6 +15,12 @@ fi
 
 print_tool_setup_start "Essential Packages"
 
+REPO_ROOT="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
+core_cli_link_allowed "$REPO_ROOT/config/bat/config" "$USER_HOME_DIR/.config/bat/config" || {
+  print_error_message "bat config conflict; preserved"
+  exit 1
+}
+
 # Keep PACKAGES.md in sync when changing this list
 # (also keep aliases/tools listed in home/.bashrc consistent)
 ESSENTIAL_PACKAGES=(
@@ -45,20 +51,26 @@ ESSENTIAL_PACKAGES=(
   tldr
   fastfetch
   zoxide
+  bash-completion
+  less
+  util-linux
 )
 
 print_line_break "Installing essential packages"
-ensure_pacman_pkgs "${ESSENTIAL_PACKAGES[@]}"
+for app in "${ESSENTIAL_PACKAGES[@]}"; do
+  ensure_core_cli "$app" || exit 1
+done
+link_core_cli_config "$REPO_ROOT/config/bat/config" "$USER_HOME_DIR/.config/bat/config"
 
 # Intel firmware only when Intel hardware is present (CPU/PCI)
-if has_intel_hardware; then
+if [[ "$WORKSTATION_DISTRO" == arch ]] && has_intel_hardware; then
   print_info_message "Intel hardware detected — ensuring linux-firmware-intel"
   ensure_pacman_pkgs linux-firmware-intel
 else
-  print_info_message "No Intel hardware detected — skipping linux-firmware-intel"
+  print_info_message "Skipping Arch Intel firmware; Ubuntu firmware stays with its native/IT owner"
 fi
 
-if pacman -Q zoxide &>/dev/null && command -v zoxide &>/dev/null; then
+if native_package_installed zoxide && command -v zoxide &>/dev/null; then
   print_info_message "Initializing zoxide for current session"
   eval "$(zoxide init bash)"
 fi
@@ -66,7 +78,11 @@ fi
 # Refresh the bat theme/syntax cache so the configured theme resolves
 if command -v bat &>/dev/null; then
   print_info_message "Rebuilding bat cache"
-  bat cache --build >/dev/null 2>&1 || print_warning_message "bat cache --build failed (non-fatal)"
+  bat cache --build >/dev/null
+  if ! bat --list-themes | grep -Fxq 'Catppuccin Mocha'; then
+    print_error_message "bat must provide the configured Catppuccin Mocha theme; update through native packages"
+    exit 1
+  fi
 fi
 
 print_tool_setup_complete "Essential Packages"
