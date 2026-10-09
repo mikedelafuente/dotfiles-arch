@@ -175,4 +175,4 @@ claim installation or future update verification succeeded on a workstation.
 Initial download/installer/library behavior, update replacement, AppArmor sandbox
 enforcement, launchers/desktop defaults, toolchain/proxy behavior and managed
 policy effectiveness remain unverified. GNOME50 is the accepted target; only the
-Pop Shell skip above50 is an accepted feature gap, not another app/source waiver.
+Pop Shell skip above51 (GNOME 51 uses the reviewed compatibility pin) is an accepted feature gap, not another app/source waiver.

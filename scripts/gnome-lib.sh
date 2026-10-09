@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Fixed GNOME recipes; metadata must support the installed shell before activation.
 gnome_extension_recipe() {
+  local shell="${3:-}"
+  if [[ "$2" == pop && "${shell%%.*}" == 51 ]]; then
+    case "$1" in
+      arch|ubuntu) echo 'pop-shell@system76.com pop-31f04c3 pinned'; return 0 ;;
+    esac
+  fi
   case "$1:$2" in
     arch:pop) echo 'pop-shell@system76.com gnome-shell-extension-pop-shell-git aur' ;;
     arch:overview) echo 'no-overview@fthx gnome-shell-extension-no-overview aur' ;;
@@ -38,6 +44,9 @@ gnome_extension_link_allowed() {
 install_gnome_extension_pin() (
   local uuid="$1" id="$2" version="$3" url sha kind root dest stage source
   case "$id" in
+    pop-31f04c3)
+      url=https://codeload.github.com/pop-os/shell/tar.gz/31f04c32d2fbf92afcd3dd5194ac16755008bae2
+      sha=e25e0f2e1f558a2a63cd6b1a948e6c429f3512a199681ed0509613e77b132f82; kind=tar ;;
     pop-7898b65)
       url=https://codeload.github.com/pop-os/shell/tar.gz/7898b65c20735057faf0797f8ed056704ca55f0d
       sha=f1c4679dadf0d32054a180d65b3b543a3877c43e23f509328598322c3e143296; kind=tar ;;
@@ -99,7 +108,7 @@ ensure_gnome_extensions() {
   if [[ "$skips" == pop-shell@system76.com ]]; then
     GNOME_POP_SHELL_AVAILABLE=false
     apps=(overview tray panel clipboard)
-    print_warning_message "Accepted feature gap: Pop Shell skipped on GNOME $version (target: GNOME 50); native window moves remain available"
+    print_warning_message "Accepted feature gap: Pop Shell skipped on GNOME $version (supported through GNOME 51); native window moves remain available"
   fi
   # Repair the legacy bypass even when a required extension needs a source update.
   gsettings set org.gnome.shell disable-extension-version-validation false || return 1
@@ -115,7 +124,7 @@ ensure_gnome_extensions() {
   fi
   # Preflight every source conflict before adding packages or replacing links.
   for app in "${apps[@]}"; do
-    recipe="$(gnome_extension_recipe "$WORKSTATION_DISTRO" "$app")" || return 1
+    recipe="$(gnome_extension_recipe "$WORKSTATION_DISTRO" "$app" "$version")" || return 1
     read -r uuid package owner <<<"$recipe"
     if [[ -e "/usr/local/share/gnome-shell/extensions/$uuid" || -L "/usr/local/share/gnome-shell/extensions/$uuid" ]]; then
       print_error_message "Unowned system-local extension: $uuid; preserved"
@@ -123,7 +132,15 @@ ensure_gnome_extensions() {
     fi
     target="$USER_HOME_DIR/.local/share/gnome-shell/extensions/$uuid"
     if [[ "$owner" == pinned ]]; then
-      if ! gnome_extension_link_allowed "$target" || [[ -e "/usr/share/gnome-shell/extensions/$uuid" || -L "/usr/share/gnome-shell/extensions/$uuid" ]]; then
+      # The GNOME 51 pin supersedes only the known Arch AUR copy. Keep its
+      # package/files intact; unowned or other system copies remain conflicts.
+      local system_allowed=false
+      if [[ "$WORKSTATION_DISTRO:$app:$package" == arch:pop:pop-31f04c3 ]] \
+        && [[ "$(pacman -Qoq "/usr/share/gnome-shell/extensions/$uuid/metadata.json" 2>/dev/null)" == gnome-shell-extension-pop-shell-git ]]; then
+        system_allowed=true
+      fi
+      if ! gnome_extension_link_allowed "$target" || { [[ "$system_allowed" == false ]] \
+        && [[ -e "/usr/share/gnome-shell/extensions/$uuid" || -L "/usr/share/gnome-shell/extensions/$uuid" ]]; }; then
         print_error_message "GNOME source conflict: $uuid; existing extension preserved. Explicitly migrate its owner before setup."
         return 1
       fi
@@ -133,14 +150,19 @@ ensure_gnome_extensions() {
     fi
   done
   for app in "${apps[@]}"; do
-    recipe="$(gnome_extension_recipe "$WORKSTATION_DISTRO" "$app")" || return 1
+    recipe="$(gnome_extension_recipe "$WORKSTATION_DISTRO" "$app" "$version")" || return 1
     read -r uuid package owner <<<"$recipe"
     case "$owner" in
       native) ensure_native_pkgs "$package" || return $? ;;
       aur) ensure_yay_pkgs "$package" || return $? ;;
       pinned)
-        ensure_native_pkgs curl ca-certificates python3 libglib2.0-bin || return $?
-        if [[ "$app" == pop ]]; then ensure_native_pkgs node-typescript || return $?; fi
+        if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+          ensure_native_pkgs curl ca-certificates python glib2 || return $?
+          if [[ "$app" == pop ]]; then ensure_native_pkgs typescript || return $?; fi
+        else
+          ensure_native_pkgs curl ca-certificates python3 libglib2.0-bin || return $?
+          if [[ "$app" == pop ]]; then ensure_native_pkgs node-typescript || return $?; fi
+        fi
         install_gnome_extension_pin "$uuid" "$package" "$version" || return 1 ;;
       *) return 1 ;;
     esac
@@ -185,7 +207,7 @@ gnome_extension_setting() {
   local -a settings=(gsettings)
   path="$(gnome_extension_path "$uuid")" || return 1
   [[ ! -f "$path/schemas/gschemas.compiled" ]] || settings+=(--schemadir "$path/schemas")
-  if ! "${settings[@]}" list-keys "$schema" 2>/dev/null | grep -Fxq "$key"; then
+  if ! "${settings[@]}" list-keys "$schema" 2>/dev/null | grep -Fx "$key" >/dev/null; then
     if [[ "$optional" == true ]]; then
       print_warning_message "Optional GNOME setting unavailable: $schema $key"; return 0
     fi
