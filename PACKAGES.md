@@ -326,6 +326,73 @@ are run for validation.
 | `ttf-jetbrains-mono-nerd` | Kitty / Neovim terminal font with icons |
 | `ttf-meslo-nerd`, `ttf-ubuntu-nerd`, `ttf-firacode-nerd`, `ttf-hack-nerd` | Alternate Nerd Fonts |
 
+### Shared appearance sources and update owners
+
+Implemented for [#150](https://github.com/mikedelafuente/dotfiles-arch/issues/150).
+`setup-fonts.sh` supports rolling Arch and Ubuntu 26.04; GNOME's appearance
+acquisition uses `ensure_gnome_appearance` from `scripts/appearance-lib.sh`.
+Desktop settings/extension compatibility remains a separate slice.
+
+| Asset / required name | Arch source | Ubuntu 26.04 source | Update owner |
+|-----------------------|-------------|--------------------|--------------|
+| `Adwaita Sans` | `adwaita-fonts` | [fonts-adwaita-sans](https://packages.ubuntu.com/resolute/fonts-adwaita-sans) | pacman / APT |
+| `Adwaita Mono` | `adwaita-fonts` | [GNOME Adwaita Fonts 49.0](https://download.gnome.org/sources/adwaita-fonts/49/) verified archive, only unpatched Mono TTFs | pacman / maintainer pin + font setup/sync |
+| `Noto Sans`, `Noto Serif`, `Noto Sans Mono` | `noto-fonts` | [fonts-noto-core](https://packages.ubuntu.com/resolute/fonts-noto-core), `fonts-noto-mono` | pacman / APT |
+| `Noto Color Emoji` | `noto-fonts-emoji` | `fonts-noto-color-emoji` | pacman / APT |
+| `Liberation Sans`, `Liberation Serif`, `Liberation Mono` | `ttf-liberation` | [fonts-liberation](https://packages.ubuntu.com/resolute/fonts-liberation) | pacman / APT |
+| `JetBrainsMono Nerd Font`, `MesloLGS Nerd Font`, `Ubuntu Nerd Font`, `FiraCode Nerd Font`, `Hack Nerd Font` | Existing `ttf-*-nerd` rows above | [Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1): JetBrainsMono, Meslo, Ubuntu, FiraCode, Hack archives | pacman / maintainer pin + font setup/sync |
+| `catppuccin-mocha-lavender-standard+default` | Scanned `catppuccin-gtk-theme-mocha` AUR | [Catppuccin GTK v1.0.3](https://github.com/catppuccin/gtk/releases/tag/v1.0.3) exact Mocha/Lavender/Standard/default ZIP | guarded AUR / maintainer pin + GNOME setup/sync |
+| `Papirus-Dark`, `cat-mocha-lavender` folders | `papirus-icon-theme` + scanned `papirus-folders-catppuccin-git` | [papirus-icon-theme](https://packages.ubuntu.com/resolute/papirus-icon-theme) + [Catppuccin folder assets](https://github.com/catppuccin/papirus-folders/tree/f83671d17ea67e335b34f8028a7e6d78bca735d7), private user copy of native Papirus/Papirus-Dark | pacman + guarded AUR / APT for base, maintainer pin + GNOME setup/sync for overlay |
+| `Catppuccin Mocha` for bat | Prefer built-in theme | Prefer built-in theme; otherwise [pinned upstream tmTheme](https://github.com/catppuccin/bat/blob/6810349b28055dce54076712fc05fc68da4b8ec0/themes/Catppuccin%20Mocha.tmTheme) on either distro | native package, or maintainer pin + essentials setup/sync |
+| Font/data staging prerequisites | `fontconfig`, `curl`, `ca-certificates`, `python` | `fontconfig`, `curl`, `ca-certificates`, `python3`, `xz-utils` | native package owner |
+
+Ubuntu's `fonts-adwaita` metapackage contains documentation and depends on Sans;
+it does **not** ship the unpatched Mono font. Regular `fonts-jetbrains-mono` is
+also insufficient: shared Kitty/GNOME configuration requires the Nerd Font family.
+All downloaded artifacts have fixed SHA-256 values in `appearance-lib.sh`.
+Nerd Font hashes come from the official release asset metadata; GNOME publishes
+its archive checksum. Catppuccin ZIP/archive/tmTheme hashes were recorded from
+HTTPS upstream artifacts on 2026-10-09, providing a reviewed pin rather than a
+publisher signature. Archive contents are data only, staged with traversal/special
+file rejection; no upstream installer or build script executes.
+
+Downloads live in immutable, marked directories under
+`~/.local/share/dotfiles-arch/appearance/`; only recipe-owned public symlinks can
+be repointed. Fonts link from `~/.local/share/fonts/dfa-*`, GTK from `~/.themes`,
+and bat from `~/.config/bat/themes`. Ubuntu's Papirus overlay links from
+`~/.local/share/icons/Papirus{,-Dark}`; its base is recopied when the native package
+version changes on the next GNOME setup/sync. APT-owned `/usr/share/icons` is
+never recolored on Ubuntu. Existing real files, unrelated links, linked ancestor
+directories, and unmarked recipe destinations fail and remain preserved.
+Fonts already supplied by another source fail before duplicate downloaded families
+are installed; retain that owner or explicitly migrate. A compatible existing bat
+theme is retained; a user-provided theme keeps its manual user update owner.
+Old marked versions remain available; no automatic asset cleanup is introduced.
+
+`dfa-daily`/`dfa-weekly` update native/AUR assets through `dfa-update-system`.
+They do not independently refresh pinned downloads or regenerate the Ubuntu
+Papirus overlay. The maintainer reviews new artifact versions and hashes together;
+`dfa-sync-dotfiles` (or the respective font/essentials/GNOME setup) applies pins.
+A daily pull that invokes full sync inherits that behavior when the full distro
+setup is enabled. There is no claim that APT updates downloaded fonts/themes.
+
+**Maintenance limit:** [Catppuccin GTK is archived](https://github.com/catppuccin/gtk)
+since June 2024. The existing selected theme remains frozen at v1.0.3; future GTK
+compatibility repairs require an explicit maintainer decision. Setup does not
+inject GTK4/libadwaita CSS or alter GDM. These applications can retain their own
+appearance despite the GTK theme preference.
+
+**Validation:** the supplied-fact regression check
+`tests/test_appearance_decisions.py` covers package selection, exact family names,
+and owned/unowned links plus safe data-only archive extraction; it was written
+but **not run**, per the execution limit.
+Bash syntax/ShellCheck were run directly on changed shell files. Upstream artifact
+layouts and distro metadata were inspected read-only. Font rendering, fontconfig
+resolution, bat cache loading, GTK/Libadwaita behavior, GNOME theme discovery,
+Papirus inheritance/recoloring, downloads and installation on real machines remain
+**unverified**. Post-link `refresh_font_cache` remains in its existing position;
+font setup also refreshes before checking exact installed family names.
+
 ## Desktop / GNOME — `setup-gnome.sh`
 
 | Package | Purpose | Related commands |
@@ -480,15 +547,99 @@ No setup/update/service workflows, networked tests or VM provisioning are run.
 
 | Package | Script | Purpose |
 |---------|--------|---------|
-| `tableplus` (AUR) | `setup-tableplus.sh` | Database GUI |
-| `postman-bin` (AUR) | `setup-postman.sh` | API client |
-| `spotify` (AUR) | `setup-spotify.sh` | Music |
-| `obsidian` (AUR) | `setup-obsidian.sh` | Notes |
+| Arch `tableplus` (AUR), Ubuntu vendor `tableplus` | `setup-tableplus.sh` | Database GUI |
+| Arch `postman-bin` (AUR), Ubuntu official Postman Snap or existing user archive | `setup-postman.sh` | API client |
+| Arch `spotify` (AUR), Ubuntu vendor `spotify-client` or existing official Snap | `setup-spotify.sh` | Music |
+| Arch native `obsidian` (retain existing `obsidian-bin` AUR), Ubuntu official `obsidian` DEB | `setup-obsidian.sh` | Notes; installer refresh includes Electron |
 | `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
 | `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
 | `zed` | `setup-zed.sh` | Code editor |
 | `stably-orca-bin` (AUR) | `setup-orca.sh` | [Orca](https://www.onorca.dev/), an IDE for parallel coding agents; launch with `stably-orca` (the `orca` package is the GNOME screen reader) |
-| `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
+| Arch `zsa-keymapp-bin` (AUR), Ubuntu verified pinned Keymapp archive | `setup-moonlander.sh` | ZSA keyboard live layout/firmware flashing; GTK3, WebKitGTK 4.1 and libusb |
+
+### Desktop utility sources and update owners
+
+Implemented for [#152](https://github.com/mikedelafuente/dotfiles-arch/issues/152).
+The existing shared profile runner selects all five apps on both hosts; standalone
+setup paths are enabled on Ubuntu 26.04 amd64. User preferences, Obsidian vaults,
+database credentials, Postman collections and login state remain user-owned.
+
+| App / command | Arch source / update owner | Ubuntu source / update owner |
+|---------------|----------------------------|-------------------------------|
+| TablePlus / `tableplus` | Scanned AUR `tableplus` / guarded yay | [Official Ubuntu 26 APT repository](https://tableplus.com/download/linux) / APT |
+| Postman / `postman` | Scanned AUR `postman-bin` / guarded yay | [Verified official Postman Snap](https://snapcraft.io/postman) / Snap automatic refresh; preserve known writable user archives 9.13+ / genuine in-app updater |
+| Spotify / `spotify` | Scanned AUR `spotify` / guarded yay | [Official vendor APT](https://www.spotify.com/us/download/linux/) / APT; preserve an existing official Spotify Snap / Snap automatic refresh |
+| Obsidian / `obsidian` | [Native Extra](https://archlinux.org/packages/extra/x86_64/obsidian/) / pacman; preserve existing `obsidian-bin` / guarded yay | [Official stable amd64 DEB](https://github.com/obsidianmd/obsidian-releases/releases) with GitHub SHA-256 / common maintenance installer refresh |
+| Keymapp / `keymapp` | Scanned AUR `zsa-keymapp-bin` and dependencies / guarded yay | [Official ZSA archive](https://www.zsa.io/keymapp) / reviewed version/checksum pin and common maintenance verification/refresh |
+
+Ubuntu's native catalog does not supply these five apps with the required vendor
+workflows. TablePlus uses `https://deb.tableplus.com/debian/26 tableplus main`;
+Spotify uses `https://repository.spotify.com stable non-free`. Each APT source uses
+`arch=amd64`, a repository-specific `signed-by=/usr/share/keyrings/<app>.gpg`,
+one pinned primary signing key, and a candidate-origin check. Existing compatible
+scoped sources retain their paths. Duplicate, disabled, wrong-release, globally
+trusted or unofficial sources fail without automatic migration. Vendor examples
+using `trusted.gpg.d` are deliberately narrowed to repository-scoped trust here.
+
+Primary-key fingerprints inspected on 2026-10-09:
+
+- TablePlus: `211438D2880D8D98E100B1412A17818B38772786`.
+- Spotify: `E1096BCBFF6D418796DE78515384CE82BA52C83A` (vendor key URL ends `5384CE82BA52C83A.asc`). Rotation requires reviewed pin changes.
+
+Postman's Snap is the vendor-recommended bundled-library exception; the official
+Snap ID is `fFcOtEEF4EdyYb95IUE5Isy28tICYMLf` (publisher `postman-inc`).
+Spotify's existing official Snap ID is `pOBIoZ2LrCB3rDohMxoYGnbN14EHOgD7`.
+Setup checks those asserted identities and retains existing stable channels;
+maintenance leaves Snap automatic updates and holds in control rather than using
+an explicit refresh that could override a hold. Fresh Postman installs use
+`latest/stable`. Recognized writable user Postman archives retain their
+[in-app updater](https://learning.postman.com/docs/getting-started/installation/update);
+keep updates enabled and restart to apply downloads. Disabled in-app updates
+require user action; common maintenance never rewrites app settings or claims to
+have applied an in-app update. New archive installation is not selected because
+the download lacks independently published integrity metadata; no silent fallback
+from failed Snap acquisition occurs.
+
+[Obsidian's automatic updater](https://obsidian.md/help/updates) updates the app,
+but cannot update the Electron installer runtime. `dfa-update-system` separately
+checks official stable DEB metadata, stages a SHA-256 verified amd64 artifact,
+checks package name/version/architecture, and installs only a newer installer.
+APT holds defer this refresh without overriding policy. Obsidian can show a newer
+app version than its installed package; compare **Settings → General → installer
+version** when diagnosing runtime requirements. Existing AppImages/tar archives
+with unknown installer ownership are preserved and reported as required source
+gaps, not marked current merely because in-app updates work. There is no official
+Obsidian APT repository; a standalone DEB does not update through APT alone.
+
+Keymapp's vendor publishes a mutable `keymapp-latest.tar.gz` without a published
+signature/checksum. The reviewed 1.3.7 pin
+`a87bc7083cd6461ba10e0da4b94f249a29100d712542d54498f01e947cf868fa`
+matches the [IoC-inspected AUR packaging source](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zsa-keymapp-bin)
+and the official downloaded archive. Only regular `keymapp`/`icon.png` members
+are extracted; the binary must identify as x86_64 ELF. The user-owned release lives
+under `USER_HOME_DIR/.local/share/dotfiles-arch/keymapp/1.3.7`, with a stable
+`current` link, executable link and separate `dfa-keymapp.desktop` launcher.
+Reviewed pin changes publish a new version and atomically switch `current`,
+retaining the previous release. Common maintenance verifies
+the vendor archive against the pin before changing a working installation. If
+the vendor changes bytes, refresh fails clearly and requires a reviewed
+version/checksum update in the recipe; no unverified "latest" replacement occurs.
+No genuine installer updater is documented, so the repository pin owns archive
+refreshes. Ubuntu dependencies are native `libusb-1.0-0`, `libgtk-3-0t64` and
+`libwebkit2gtk-4.1-0` (verified in the official Resolute catalog).
+
+`setup-moonlander.sh` installs the shared [ZSA udev permissions](https://github.com/zsa/wally/wiki/Linux-install)
+from `scripts/zsa-udev.rules`, creates/adds the real user to `plugdev`, and reloads
+rules only when first installing them. Existing files containing all required
+rules retain user additions/comments; different rules or symlinks fail for manual
+review. The vendor's device-ID-scoped flashing permissions are retained, including
+its `0666` bootloader rules. There is no global `udevadm trigger`: log out/back in
+for group changes, then replug the keyboard. Keymapp 1.2+ requires WebKitGTK 4.1.
+Wayland launch, sandbox behavior, firmware/live training, group activation and
+keyboard access remain unverified; no installer, updater, service or device action
+was executed for validation. The offline selection/source regression check is
+`tests/test_desktop_utility_decisions.py`, deliberately left unrun; validation was
+direct Bash syntax/ShellCheck and source/acquisition/udev inspection only.
 
 ## Profile extras
 

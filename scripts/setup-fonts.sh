@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup shared UI + Nerd Fonts for Arch Linux
+# Setup shared UI + Nerd Fonts for rolling Arch / Ubuntu 26.04
 # --------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
@@ -16,35 +16,18 @@ fi
 
 print_tool_setup_start "Fonts"
 
-# GNOME 48+ UI fonts + coverage so missing names do not fall back to Courier
-SYSTEM_FONT_PACKAGES=(
-  adwaita-fonts
-  noto-fonts
-  noto-fonts-emoji
-  ttf-liberation
-)
+read -r -a FONT_PACKAGES <<<"$(appearance_font_packages "$WORKSTATION_DISTRO")"
+ensure_native_pkgs "${FONT_PACKAGES[@]}" || exit 1
+if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+  ensure_ubuntu_fonts || exit 1
+fi
 
-# Terminal / editor Nerd Fonts (Kitty uses JetBrainsMono)
-NERD_FONT_PACKAGES=(
-  ttf-meslo-nerd
-  ttf-ubuntu-nerd
-  ttf-firacode-nerd
-  ttf-jetbrains-mono-nerd
-  ttf-hack-nerd
-)
-
-print_info_message "Installing system UI fonts"
-ensure_pacman_pkgs "${SYSTEM_FONT_PACKAGES[@]}"
-
-print_info_message "Installing Nerd Fonts"
-ensure_pacman_pkgs "${NERD_FONT_PACKAGES[@]}"
-
-# Early refresh; post-link-hooks.sh refreshes again after fonts.conf is linked
+# Early refresh; post-link-hooks.sh refreshes again after fonts.conf is linked.
 refresh_font_cache
-
-if command -v fc-list &>/dev/null; then
-  print_info_message "UI: $(fc-list : family | rg -m1 -i '^Adwaita Sans$' || echo 'Adwaita Sans MISSING')"
-  print_info_message "Mono: $(fc-list : family | rg -m1 'JetBrainsMono Nerd Font$' || echo 'JetBrainsMono Nerd Font MISSING')"
+families="$(fc-list --format '%{family}\n')" || exit 1
+if ! missing="$(appearance_missing_families "$families")"; then
+  print_error_message "Required font families missing: $missing"
+  exit 1
 fi
 
 print_tool_setup_complete "Fonts"

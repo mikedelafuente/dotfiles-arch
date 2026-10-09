@@ -199,6 +199,14 @@ reports service failures. NVIDIA setup requires explicit saved opt-in or
 drivers are never replaced; reboot/MOK activation can remain pending. See
 [GPU sources and requirements](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
 
+Desktop utility setup also supports Ubuntu 26.04: `setup-tableplus.sh`,
+`setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh`, `setup-moonlander.sh`.
+`dfa-update-system` maintains vendor APT, Obsidian's separate Electron installer,
+and the verified Keymapp pin; Snap and writable Postman archive self-updates retain
+their owners/settings. A changed Keymapp archive requires a reviewed pin update.
+After first ZSA setup, log out/in and replug the keyboard. Runtime remains unverified;
+see [sources and limits](PACKAGES.md#desktop-utility-sources-and-update-owners).
+
 Language-only setup on Arch / Ubuntu 26.04: choose from
 `scripts/setup-{python,rust,golang,php,ruby}.sh` and run with Bash
 (for example `bash scripts/setup-python.sh`). Native packages update with `dfa-update-system`; user

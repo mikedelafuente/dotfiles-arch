@@ -75,14 +75,7 @@ if native_package_installed zoxide && command -v zoxide &>/dev/null; then
   eval "$(zoxide init bash)"
 fi
 
-# Refresh the bat theme/syntax cache so the configured theme resolves
-if command -v bat &>/dev/null; then
-  print_info_message "Rebuilding bat cache"
-  bat cache --build >/dev/null
-  if ! bat --list-themes | grep -Fxq 'Catppuccin Mocha'; then
-    print_error_message "bat must provide the configured Catppuccin Mocha theme; update through native packages"
-    exit 1
-  fi
-fi
+# Use the native built-in theme when available, verified upstream data otherwise.
+ensure_bat_appearance || exit 1
 
 print_tool_setup_complete "Essential Packages"

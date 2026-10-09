@@ -294,6 +294,7 @@ aliases() {
         echo '  Work apps: Chrome/Slack vendor APT on Ubuntu; signed Zoom DEB; dfa-update-system maintains all three; conflicts retained'
         echo '  GPU: setup-nvidia.sh --install explicitly opts in; existing stacks retained; activation/MOK can be pending'
         echo '  Ollama: working CUDA/hardware Vulkan only; native or verified archive updated by dfa-update-system; Ubuntu archive: systemctl --user status ollama'
+        echo '  Desktop utilities: TablePlus/Spotify vendor APT; Postman Snap/user updater; Obsidian installer and pinned Keymapp: dfa-update-system; ZSA first setup: logout/login + replug'
         echo '  Containers: bash scripts/setup-docker.sh; setup-minikube.sh; setup-devcontainer.sh as your user; sources/gaps: packages'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Python projects: python3 -m venv .venv; .venv/bin/python -m pip install <package>'

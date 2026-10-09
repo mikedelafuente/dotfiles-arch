@@ -10,6 +10,10 @@ work_app_selection() {
     ubuntu:chrome) package=google-chrome-stable; owner=apt ;;
     ubuntu:slack) package=slack-desktop; owner=apt ;;
     ubuntu:zoom) package=zoom; owner=vendor-deb ;;
+    arch:tableplus) package=tableplus; owner=aur ;;
+    arch:spotify) package=spotify; owner=aur ;;
+    ubuntu:tableplus) package=tableplus; owner=apt ;;
+    ubuntu:spotify) package=spotify-client; owner=apt ;;
     *) return 1 ;;
   esac
   if [[ "$alternate" != false || ( -n "$launcher" && "$installed" != true ) \
@@ -50,6 +54,8 @@ work_app_apt_source() {
     chrome) pattern='dl(-ssl)?\.google\.com/linux/chrome' ;;
     slack) pattern='packagecloud\.io/slacktechnologies/slack|packages\.slack-edge\.com' ;;
     zoom) pattern='zoom\.(us|com)' ;;
+    tableplus) pattern='(deb|apt)\.tableplus\.com' ;;
+    spotify) pattern='(repository|download)\.spotify\.com' ;;
     *) return 1 ;;
   esac
   local files=("$root/sources.list")
@@ -75,6 +81,8 @@ work_app_fingerprint() {
     chrome) echo EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796 ;;
     slack) echo DB085A08CA13B8ACB917E0F6D938EC0D038651BD ;;
     zoom) echo 84C365D6CC9A4886CA926BCC4F2197399706AC24 ;;
+    tableplus) echo 211438D2880D8D98E100B1412A17818B38772786 ;;
+    spotify) echo E1096BCBFF6D418796DE78515384CE82BA52C83A ;;
     *) return 1 ;;
   esac
 }
@@ -89,6 +97,8 @@ stage_work_app_key() {
       chrome) url=https://dl.google.com/linux/linux_signing_key.pub ;;
       slack) url=https://packagecloud.io/slacktechnologies/slack/gpgkey ;;
       zoom) url=https://zoom.us/linux/download/pubkey ;;
+      tableplus) url=https://deb.tableplus.com/apt.tableplus.com.gpg.key ;;
+      spotify) url=https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc ;;
     esac
     input="$stage/key.download"
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$url" -o "$input" || return 1
@@ -128,6 +138,14 @@ EOF
         source=/etc/apt/sources.list.d/slack.list
         key=/usr/share/keyrings/slack.gpg
         printf 'deb [arch=amd64 signed-by=%s] https://packagecloud.io/slacktechnologies/slack/debian/ jessie main\n' "$key" >"$stage/source" ;;
+      tableplus|spotify)
+        source="/etc/apt/sources.list.d/$app.list"
+        key="/usr/share/keyrings/$app.gpg"
+        if [[ "$app" == tableplus ]]; then
+          printf 'deb [arch=amd64 signed-by=%s] https://deb.tableplus.com/debian/26 tableplus main\n' "$key" >"$stage/source"
+        else
+          printf 'deb [arch=amd64 signed-by=%s] https://repository.spotify.com stable non-free\n' "$key" >"$stage/source"
+        fi ;;
       *) return 1 ;;
     esac
     [[ ! -e "$source" && ! -L "$source" ]] || { print_error_message "$app source destination conflict; preserved"; return 1; }
@@ -153,6 +171,8 @@ work_app_installed_selection() {
     chrome) commands=(google-chrome-stable google-chrome) ;;
     slack) commands=(slack) ;;
     zoom) commands=(zoom) ;;
+    tableplus) commands=(tableplus) ;;
+    spotify) commands=(spotify) ;;
   esac
   for command in "${commands[@]}"; do
     path="$(type -P "$command" || true)"
@@ -162,7 +182,7 @@ work_app_installed_selection() {
       if [[ "$WORKSTATION_DISTRO" == arch ]]; then
         [[ "$(pacman -Qqo "$resolved" 2>/dev/null)" == "$package" ]]
       else
-        dpkg-query -L "$package" | grep -Fxq "$resolved"
+        dpkg-query -L "$package" | grep -Fx "$resolved" >/dev/null
       fi
     }; then
       launcher=owned
@@ -173,7 +193,7 @@ work_app_installed_selection() {
   if command -v snap &>/dev/null; then
     local snaps
     snaps="$(snap list 2>/dev/null)" || { print_error_message 'Cannot inspect Snap ownership'; return 1; }
-    case "$app" in chrome) snap_name=google-chrome ;; slack) snap_name=slack ;; zoom) snap_name=zoom-client ;; esac
+    case "$app" in chrome) snap_name=google-chrome ;; slack) snap_name=slack ;; zoom) snap_name=zoom-client ;; tableplus|spotify) snap_name="$app" ;; esac
     if printf '%s\n' "$snaps" | awk '{print $1}' | grep -Fxq "$snap_name"; then alternate=true; fi
   fi
   if command -v flatpak &>/dev/null; then
@@ -183,6 +203,8 @@ work_app_installed_selection() {
       chrome) command=com.google.Chrome ;;
       slack) command=com.slack.Slack ;;
       zoom) command=us.zoom.Zoom ;;
+      tableplus) command=com.tableplus.TablePlus ;;
+      spotify) command=com.spotify.Client ;;
     esac
     if printf '%s\n' "$flatpaks" | grep -Fxq "$command"; then alternate=true; fi
   fi
@@ -190,7 +212,7 @@ work_app_installed_selection() {
     sources="$(work_app_apt_source "$app")" || return 1
     [[ -z "$sources" ]] || source=apt
     # Honor an existing update opt-out instead of silently recreating repositories.
-    if [[ "$app" != zoom && -z "$sources" && -e "/etc/default/$( [[ "$app" == chrome ]] && echo google-chrome || echo slack )" ]]; then
+    if [[ ( "$app" == chrome || "$app" == slack ) && -z "$sources" && -e "/etc/default/$( [[ "$app" == chrome ]] && echo google-chrome || echo slack )" ]]; then
       source=conflict
     fi
   fi

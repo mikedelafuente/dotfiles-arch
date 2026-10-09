@@ -59,6 +59,10 @@ after native updates. Ubuntu Zed user installs and Orca AppImages use their in-a
 self-updaters (keep enabled); DEB notifications alone do not install updates.
 Chrome/Slack use scoped vendor APT sources; source and candidate conflicts fail.
 Zoom DEBs require a pinned vendor signature and matching archive-member hashes.
+TablePlus/Spotify use scoped vendor APT; Obsidian's installer/Electron DEB and
+pinned Keymapp archive refresh separately. Changed Keymapp bytes require a reviewed
+pin update. Existing official Spotify/Postman Snaps retain automatic updates/holds;
+writable user Postman archives retain in-app updates (keep enabled).
 Other downloads require stable release metadata and SHA-256 verification; any failure
 retains the working release and prevents a successful-update stamp.
 

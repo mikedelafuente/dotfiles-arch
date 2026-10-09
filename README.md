@@ -5,7 +5,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
 Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, work apps, and package maintenance**
-are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
+and shared desktop utilities are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
 entries cause a failure before installation; resolve them explicitly and rerun.
@@ -33,6 +33,17 @@ sources, holds, and user settings are retained; unknown/duplicate ownership fail
 The shared additive `work` selection and Chrome browser identity stay unchanged;
 full Ubuntu profile/GNOME orchestration remains guarded. See
 [work app sources and runtime limits](PACKAGES.md#work-app-sources-and-update-owners).
+
+Shared desktop utilities: run the existing `scripts/setup-tableplus.sh`,
+`setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh` or `setup-moonlander.sh`.
+Ubuntu uses scoped vendor APT for TablePlus/Spotify, an official Postman Snap,
+a verified Obsidian installer DEB and a reviewed Keymapp archive pin. Existing
+official Snaps and writable user Postman archives retain their update owners.
+`dfa-update-system` covers the installer/archive owners; Obsidian's in-app updater
+cannot refresh Electron. Changed Keymapp bytes require a reviewed pin update.
+ZSA permissions require logout/login and keyboard replug after first setup;
+conflicting user udev files are preserved. See
+[desktop utility sources, update owners and unverified runtime](PACKAGES.md#desktop-utility-sources-and-update-owners).
 
 All entrypoints using the common header detect `/etc/os-release` and architecture
 before mutation. Unconverted entrypoints, including bootstrap, sync (even
@@ -548,3 +559,9 @@ because their in-app update messages only notify. See [PACKAGES.md](PACKAGES.md#
 for sources, conflicts and unverified runtime paths. Zed needs Vulkan and 1.18+;
 setup preserves unrelated desktop/MIME defaults and reports source/config conflicts.
 Full Ubuntu bootstrap/sync remains guarded while remaining slices are converted.
+
+Shared appearance: `bash scripts/setup-fonts.sh` installs required font families
+on Arch and Ubuntu 26.04. Native fonts/themes use normal distro updates; pinned
+font/GTK/Papirus/bat data uses maintainer-reviewed versions applied by setup/full
+sync. User assets are preserved on conflicts. See [PACKAGES.md](PACKAGES.md#shared-appearance-sources-and-update-owners)
+for sources, ownership, and unverified desktop behavior.
