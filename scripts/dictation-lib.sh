@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 # Dictation acquisition/backend decisions consume facts; setup owns mutations.
 dictation_source_selection() {
-  local distro="$1" app="$2" owner="$3" version="$4" minimum
-  case "$distro:$app" in arch:voxtype|ubuntu:voxtype) minimum=1.1.0 ;;
-    arch:dotool|ubuntu:dotool) minimum=1.6.0 ;; *) return 1 ;; esac
+  local distro="$1" app="$2" owner="$3" version="$4"
+  case "$distro:$app" in arch:voxtype|ubuntu:voxtype|arch:dotool|ubuntu:dotool) ;; *) return 1 ;; esac
   case "$owner" in
     none)
       if [[ "$distro" == arch ]]; then echo aur
       elif [[ "$app" == voxtype ]]; then echo release
       else echo build; fi ;;
     native|release|build|aur)
-      core_cli_version_at_least "$version" "$minimum" || {
-        print_error_message "$app requires $minimum+; update its selected owner (installation retained)" >&2; return 1;
-      }
+      core_cli_version_at_least "$version" 0.0.0 || return 1
       echo "$owner" ;;
     *) print_error_message "$app source/launcher conflict; retained, resolve its update owner explicitly" >&2; return 1 ;;
   esac
+}
+
+# Recognized older owners may refresh; the resulting install must meet the floor.
+dictation_version_supported() {
+  local app="$1" version="$2" minimum
+  case "$app" in voxtype) minimum=1.1.0 ;; dotool) minimum=1.6.0 ;; *) return 1 ;; esac
+  core_cli_version_at_least "$version" "$minimum" || {
+    print_error_message "$app requires $minimum+ after refresh; selected owner retained" >&2; return 1;
+  }
 }
 
 # CUDA13's bundled ORT covers sm70..sm120a. Require every visible GPU to fit:
@@ -81,8 +87,9 @@ voxtype_backend_selection() {
 
 # A known native repository can keep ownership. Local packages require either
 # our verified build marker or the official Voxtype package identity.
+# `verify` additionally enforces the installed minimum after acquisition/refresh.
 dictation_app_owner() {
-  local app="$1" package="$1" path resolved owner=none version='' policy homepage files other
+  local app="$1" package="$1" verify="${2:-}" path resolved owner=none version='' policy homepage files other selected
   [[ "$WORKSTATION_DISTRO:$app" != arch:voxtype ]] || package=voxtype-bin
   path="$(type -P "$app" || true)"
   if native_package_installed "$package"; then
@@ -122,7 +129,9 @@ dictation_app_owner() {
     [[ ! -e "$other" && ! -L "$other" ]] && continue
     if [[ -z "$path" || "$(readlink -f "$other")" != "$resolved" ]]; then owner=unknown; fi
   done
-  dictation_source_selection "$WORKSTATION_DISTRO" "$app" "$owner" "$version"
+  selected="$(dictation_source_selection "$WORKSTATION_DISTRO" "$app" "$owner" "$version")" || return 1
+  if [[ "$verify" == verify ]]; then dictation_version_supported "$app" "$version" || return 1; fi
+  echo "$selected"
 }
 
 # Resolve symlinks and upstream's canonical CUDA wrapper without running it.
@@ -375,6 +384,32 @@ check_dictation_owners() {
   fi
 }
 
+# Standalone setup refreshes incompatible packages through the recognized owner.
+# Ordinary updates already ran the native/AUR upgrade; never bypass its policy.
+ensure_dictation_app() {
+  local app="$1" owner="$2" mode="$3" package="$1"
+  [[ "$WORKSTATION_DISTRO:$app" != arch:voxtype ]] || package=voxtype-bin
+  case "$owner" in
+    aur)
+      ensure_yay_installed || return 1
+      if [[ "$mode" == setup ]] && native_package_installed "$package" \
+        && ! dictation_app_owner "$app" verify >/dev/null 2>&1; then
+        ensure_yay_pkgs --refresh "$package" || return 1
+      else ensure_yay_pkgs "$package" || return 1; fi ;;
+    native)
+      if [[ "$mode" == setup ]] && ! dictation_app_owner "$app" verify >/dev/null 2>&1; then
+        sudo apt-get update --error-on=any || return 1
+        [[ "$(dictation_app_owner "$app")" == native ]] || return 1
+        sudo apt-get install --yes --no-remove --no-install-recommends "$package" || return 1
+      fi ;;
+    release) install_voxtype_release || return 1 ;;
+    build) install_dotool_build || return 1 ;;
+    *) return 1 ;;
+  esac
+  hash -r
+  dictation_app_owner "$app" verify >/dev/null
+}
+
 ensure_voxtype() {
   local mode="$1" voxtype_owner dotool_owner flags facts='' cuda13=false cuda12=false vulkan=false
   local config_dir="$USER_HOME_DIR/.config" config engine=new variant='' model fresh=false active=false root_home version_before='' version_after
@@ -423,19 +458,8 @@ ensure_voxtype() {
     if [[ "$WORKSTATION_DISTRO" == arch ]]; then ensure_native_pkgs vulkan-icd-loader
     else ensure_native_pkgs libvulkan1; fi || return 1
   fi
-  case "$voxtype_owner" in
-    aur) ensure_yay_installed || return 1; ensure_yay_pkgs voxtype-bin || return 1 ;;
-    release) install_voxtype_release || return 1 ;;
-    native) ;; *) return 1 ;;
-  esac
-  case "$dotool_owner" in
-    aur) ensure_yay_installed || return 1; ensure_yay_pkgs dotool || return 1 ;;
-    build) install_dotool_build || return 1 ;;
-    native) ;; *) return 1 ;;
-  esac
-  hash -r
-  dictation_app_owner voxtype >/dev/null || return 1
-  dictation_app_owner dotool >/dev/null || return 1
+  ensure_dictation_app voxtype "$voxtype_owner" "$mode" || return 1
+  ensure_dictation_app dotool "$dotool_owner" "$mode" || return 1
   [[ -x /usr/lib/voxtype/"$VOXTYPE_SELECTED_VARIANT" ]] || return 1
   if [[ "$VOXTYPE_SELECTED_VARIANT" == voxtype-onnx-cuda-13 ]] \
     && ! voxtype_runtime_ready "$VOXTYPE_SELECTED_VARIANT"; then ensure_voxtype_cuda13 || return 1; fi
@@ -494,9 +518,9 @@ refresh_dictation() {
   if command -v voxtype >/dev/null || native_package_installed voxtype \
     || { [[ "$WORKSTATION_DISTRO" == arch ]] && native_package_installed voxtype-bin; }; then
     ensure_voxtype update || return 1
-  elif [[ "$WORKSTATION_DISTRO" == ubuntu ]] && native_package_installed dotool; then
+  elif native_package_installed dotool; then
     local owner
     owner="$(dictation_app_owner dotool)" || return 1
-    if [[ "$owner" == build ]]; then install_dotool_build || return 1; fi
+    ensure_dictation_app dotool "$owner" update || return 1
   fi
 }

@@ -39,8 +39,16 @@ def main():
             decide("dictation_source_selection", distro, "dotool", "none", "", expected="aur" if distro == "arch" else "build")
             decide("dictation_source_selection", distro, "voxtype", "unknown", "1.1.0", ok=False)
             decide("dictation_source_selection", distro, "voxtype", "native", "1.1.0", expected="native")
-            decide("dictation_source_selection", distro, "voxtype", "native", "0.7.0", ok=False)
+            for app, version, owners in (("voxtype", "0.7.0", ("native", "aur", "release")),
+                                         ("dotool", "1.5.0", ("native", "aur", "build"))):
+                for owner in owners:
+                    decide("dictation_source_selection", distro, app, owner, version, expected=owner)
+                decide("dictation_version_supported", app, version, ok=False)
+                decide("dictation_source_selection", distro, app, "unknown", version, ok=False)
+                decide("dictation_source_selection", distro, app, "native", "malformed", ok=False)
             decide("dictation_source_selection", distro, "dotool", "native", "1.6.0", expected="native")
+        decide("dictation_version_supported", "voxtype", "1.1.0")
+        decide("dictation_version_supported", "dotool", "1.6.0")
         flags = "sse4_2 ssse3 popcnt cx16 lahf_lm"
         decide("voxtype_backend_selection", "new", flags, "false", "false", "", "false", expected="voxtype-baseline")
         decide("voxtype_backend_selection", "new", flags + " avx2", "false", "true", "", "false", expected="voxtype-vulkan")

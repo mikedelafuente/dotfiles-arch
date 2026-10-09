@@ -305,6 +305,7 @@ aliases() {
         echo '  Containers: bash scripts/setup-docker.sh; setup-minikube.sh; setup-devcontainer.sh as your user; sources/gaps: packages'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Python projects: python3 -m venv .venv; .venv/bin/python -m pip install <package>'
+        echo '  User binaries (manual, user-owned only): rustup self update; composer self-update; native rustup/Composer use dfa-update-system'
         echo '  User language updates (manual): rustup update; gem update --user-install <user-gem> --no-document (bundler/rails only when user-owned); composer global update laravel/installer'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
         echo '  NinjaOne: opt-in dfa-install-ninjaone; native weekly health; IT-managed agents checked read-only'
