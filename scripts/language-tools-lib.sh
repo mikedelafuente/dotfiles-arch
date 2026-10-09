@@ -43,7 +43,7 @@ language_command_version() {
   case "$command" in
     python3) pattern='^Python ([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
     go)
-      [[ "$output" =~ ^go\ version\ go([0-9]+)\.([0-9]+)(\.([0-9]+))?\ [a-z0-9]+/[a-z0-9]+$ ]] || return 1
+      [[ "$output" =~ ^go\ version\ go([0-9]+)\.([0-9]+)(\.([0-9]+))?(-X:[a-zA-Z0-9_,]+)?\ [a-z0-9]+/[a-z0-9]+$ ]] || return 1
       printf '%s.%s.%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[4]:-0}"
       return 0 ;;
     gopls) pattern='^golang.org/x/tools/gopls v([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;

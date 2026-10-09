@@ -525,8 +525,8 @@ installations and explicit user toolchain selections retain their update owners.
 | Component | Source / retained installation | Update owner | Compatibility / configuration |
 | --- | --- | --- | --- |
 | Python | Native distro packages above | `dfa-update-system`; project dependencies use the project's venv/pip | Import pip, venv, ensurepip and pynvim; native-owned `pip3`. No system pip installs or externally-managed override. |
-| Go / gopls | Native packages above | `dfa-update-system` | Compiler tool and standard-library directories must exist. Go's optional automatic toolchain selection is left unchanged. |
-| rustup binary | Arch native `rustup`; Ubuntu verified official user `rustup-init` for new installs; compatible native/user managers retained | Native binary: `dfa-update-system`; user binary: manual `rustup self update` | Rustup proxies must share the manager's file identity. Existing user `CARGO_HOME`/`RUSTUP_HOME` remain user-owned; no pipe-to-shell installer. |
+| Go / gopls | Native packages above | `dfa-update-system` | Compiler tool and standard-library directories must exist. Go's optional automatic toolchain selection is left unchanged; stable versions with build experiment suffixes are accepted. |
+| rustup binary | Arch native `rustup`; Ubuntu verified official user `rustup-init` for new installs; compatible native/user managers retained | Native binary: `dfa-update-system`; user binary: manual `rustup self update` | Rustup proxies must share the manager's file identity; Arch provider aliases do not count as separate installed toolchains. Existing user `CARGO_HOME`/`RUSTUP_HOME` remain user-owned; no pipe-to-shell installer. |
 | Rust / Cargo | User toolchains via rustup, or existing distro Rust/Cargo | Rustup toolchains: manual `rustup update`; distro toolchain: `dfa-update-system` | Latest stable is initialized only with no selected default/toolchain; existing pinned, beta/nightly defaults and `RUSTUP_TOOLCHAIN` are retained. No distro rustup self-update. |
 | PHP / existing native Composer | Native distro packages above | `dfa-update-system` | Laravel-required builtins/extensions and GD/Intl/MySQL/SQLite/PostgreSQL are checked. Arch enables exact missing directives in shared `/etc/php/php.ini`; Ubuntu enables missing modules with `phpenmod -v <major.minor> -s cli`, using `/etc/php/<major.minor>/cli/{php.ini,conf.d}` derived from the installed PHP version and leaving web server SAPIs unchanged. |
 | New Ubuntu Composer | Official SHA384-verified PHP installer, stable user PHAR | Manual `composer self-update`; genuine binary replacement | PHP native runtime retained; writable user PHAR under `~/.local/share/dotfiles-arch/composer`, stable by default. Existing native Composer stays native. |
@@ -649,7 +649,7 @@ GNOME `Super+T` (`/usr/bin/voxtype record toggle`). No X11-only typing replaceme
 
 | Component | Source | Update owner |
 | --- | --- | --- |
-| Arch Voxtype/dotool | Scanned `voxtype-bin`/`dotool` AUR packages | Guarded AUR upgrades |
+| Arch Voxtype/dotool | Scanned `voxtype-bin`/`dotool` AUR packages; the selected Voxtype launcher may link to its package-owned backend | Guarded AUR upgrades |
 | Ubuntu Voxtype | [Official stable amd64 DEB](https://github.com/peteonrails/voxtype/releases), minimum 1.1.0; stage and verify the release API SHA256 digest before APT installation | `dfa-update-system` checks stable releases; APT alone cannot refresh a standalone DEB. A compatible existing repository package keeps its repository owner. |
 | Ubuntu dotool | [Official source](https://git.sr.ht/~geb/dotool), 1.6 commit `180af21c46dcc848d93dbec2644c011f4eea1592`, SHA256 `960f83d4fa33f9d8a8b162663b4185a970a27f37d972d4496457eff6e0b6613c` | Repo-reviewed pin changes rebuilt by standalone setup/`dfa-update-system` into `dotool` 1.6-1dfa1 local DEB. Compatible existing repository packages retain their owner. |
 | Ubuntu dotool build dependencies | Native `build-essential`, `golang-go`, `libxkbcommon-dev`, `pkg-config`, `scdoc` | APT; unprivileged staged build, pinned Go dependencies, checksum database enabled and `GOTOOLCHAIN=local` |
@@ -813,7 +813,7 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `steam` (Arch multilib) / `steam-installer` + `steam-libs-i386:i386` (Ubuntu multiverse/universe) | Games; native launcher plus Valve client updater | `steam` |
 | `discord` (Arch native; Ubuntu official DEB bootstrap) | Chat; Linux app updater retains user settings | `discord` |
 | `firefox` (Arch native; Ubuntu signed user archive, or retained Mozilla Snap/APT) | Personal browser (Super+B when personal is selected and work is not) | `firefox` |
-| `mullvad-vpn-bin` (Arch AUR) / `mullvad-vpn` (Ubuntu vendor APT) | VPN; account, connection and other VPNs unchanged | `mvup`, `mvdown`, `mvst` |
+| `mullvad-vpn-bin` + its `mullvad-vpn-daemon-bin` CLI dependency (Arch AUR) / `mullvad-vpn` (Ubuntu vendor APT) | VPN; account, connection and other VPNs unchanged | `mvup`, `mvdown`, `mvst` |
 
 ### devcontainer — `setup-devcontainer.sh`
 

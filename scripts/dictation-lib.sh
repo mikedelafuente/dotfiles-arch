@@ -98,7 +98,7 @@ dictation_app_owner() {
     if [[ "$WORKSTATION_DISTRO" == arch ]]; then
       version="$(pacman -Q "$package")" || return 1
       version="${version#* }"
-      [[ -n "$path" && "$(pacman -Qoq "$path" 2>/dev/null)" == "$package" ]] || return 1
+      [[ -n "$path" && "$(pacman -Qoq "$(readlink -f "$path")" 2>/dev/null)" == "$package" ]] || return 1
       owner=aur
     else
       version="$(dpkg-query -W -f='${Version}' "$package")" || return 1
