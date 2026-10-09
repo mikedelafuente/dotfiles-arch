@@ -66,9 +66,9 @@ def main():
             assert not decision(home, "ubuntu", f"orphan_removal_allowed {flags}"), flags
         for entrypoint in ("dfa-daily", "dfa-weekly", "update-system.sh", "dfa-remove-orphans",
                            "migrate.sh", "sync-skills.sh", "sync-rules.sh", "sync-extensions.sh",
-                           "update-npm-clis.sh", "setup-harness-agents.sh"):
+                           "update-npm-clis.sh", "setup-harness-agents.sh", "setup-zed.sh", "setup-orca.sh"):
             assert decision(home, "ubuntu", f"require_workstation_entrypoint ubuntu {entrypoint}")
-        for entrypoint in ("bootstrap.sh", "sync.sh", "setup-zed.sh", "update-ninjaone.sh"):
+        for entrypoint in ("bootstrap.sh", "sync.sh", "update-ninjaone.sh"):
             assert not decision(home, "ubuntu", f"require_workstation_entrypoint ubuntu {entrypoint}")
         assert decision(home, "arch", "select_workstation_distro arch '' x86_64")
         assert decision(home, "ubuntu", "select_workstation_distro ubuntu 26.04 amd64")

@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Zed for Arch Linux
+# Setup Zed for Arch / Ubuntu 26.04
 # --------------------------
-# Zed is installed from the official Arch repos (extra).
+# Arch: official Extra package. Ubuntu: verified self-updating user archive.
 # --------------------------
 
 # --------------------------
@@ -28,79 +28,83 @@ fi
 
 print_tool_setup_start "Zed"
 
-# --------------------------
-# Clean up a stray non-package Zed install (~/.local/zed.app)
-# --------------------------
-# Some machines may have a manually-installed, self-updating Zed under
-# ~/.local/zed.app (with a ~/.local/bin/zed shim) from before the official
-# pacman package existed. It holds Zed's single-instance lock, so `zed`/
-# `zeditor` launches can silently be served by that stray build instead of
-# the pacman-managed one — including a version whose settings schema no
-# longer matches config/zed/settings.json (e.g. it rejected a value pacman's
-# zeditor accepts, causing user settings to fail to load entirely). Remove
-# it so the pacman-installed zeditor is always the one that runs.
-LEGACY_ZED_APP_DIR="$USER_HOME_DIR/.local/zed.app"
-LEGACY_ZED_SHIM="$USER_HOME_DIR/.local/bin/zed"
+# Only the Arch package transition may remove the legacy manual install.
+# Complete package acquisition first, so failure leaves the working IDE intact.
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+    # Reject unrelated launchers before the explicitly supported legacy transition.
+    for zed_name in zed zeditor; do
+        zed_path="$(type -P "$zed_name" || true)"
+        [[ -n "$zed_path" ]] || continue
+        zed_path="$(readlink -f "$zed_path")"
+        if [[ "$zed_path" != "$USER_HOME_DIR/.local/zed.app/bin/zed" ]]; then
+            pacman -Qo "$zed_path" 2>/dev/null | grep -Fq ' is owned by zed ' || {
+                print_error_message "Zed source conflict: $zed_path; preserved"
+                exit 1
+            }
+        fi
+    done
+    editor_config_allowed "$CURRENT_FILE_DIR/../config/zed" "$USER_HOME_DIR/.config/zed" || {
+        print_error_message 'Zed config conflict; preserved'
+        exit 1
+    }
+    ensure_native_pkgs zed || exit 1
+    native_package_installed zed || exit 1
+    zed_package_version="$(/usr/bin/zeditor --version)" || exit 1
+    zed_package_version="$(desktop_ide_zed_version "$zed_package_version")" || exit 1
+    desktop_ide_selection arch zed native "$zed_package_version" >/dev/null || exit 1
+    # --------------------------
+    # Clean up a stray non-package Zed install (~/.local/zed.app)
+    # --------------------------
+    # Some machines may have a manually-installed, self-updating Zed under
+    # ~/.local/zed.app (with a ~/.local/bin/zed shim) from before the official
+    # pacman package existed. It holds Zed's single-instance lock, so `zed`/
+    # `zeditor` launches can silently be served by that stray build instead of
+    # the pacman-managed one — including a version whose settings schema no
+    # longer matches config/zed/settings.json (e.g. it rejected a value pacman's
+    # zeditor accepts, causing user settings to fail to load entirely). Remove
+    # it so the pacman-installed zeditor is always the one that runs.
+    LEGACY_ZED_APP_DIR="$USER_HOME_DIR/.local/zed.app"
+    for zed_name in zed zeditor; do
+        LEGACY_ZED_SHIM="$USER_HOME_DIR/.local/bin/$zed_name"
+        if [ -L "$LEGACY_ZED_SHIM" ] && [[ "$(readlink -f "$LEGACY_ZED_SHIM" 2>/dev/null)" == "$LEGACY_ZED_APP_DIR"/* ]]; then
+            print_action_message "Removing stray Zed shim: $LEGACY_ZED_SHIM"
+            rm -f "$LEGACY_ZED_SHIM"
+        fi
+    done
 
-if [ -L "$LEGACY_ZED_SHIM" ] && [[ "$(readlink -f "$LEGACY_ZED_SHIM" 2>/dev/null)" == "$LEGACY_ZED_APP_DIR"/* ]]; then
-    print_action_message "Removing stray Zed shim: $LEGACY_ZED_SHIM"
-    rm -f "$LEGACY_ZED_SHIM"
-fi
-
-if [ -d "$LEGACY_ZED_APP_DIR" ] && [ -x "$LEGACY_ZED_APP_DIR/libexec/zed-editor" ]; then
-    if pgrep -f "$LEGACY_ZED_APP_DIR/libexec/zed-editor" &>/dev/null; then
-        print_warning_message "A Zed process from $LEGACY_ZED_APP_DIR is currently running — quit it manually if $LEGACY_ZED_APP_DIR reappears after removal"
+    if [ ! -L "$LEGACY_ZED_APP_DIR" ] && [ -d "$LEGACY_ZED_APP_DIR" ] && [ -x "$LEGACY_ZED_APP_DIR/libexec/zed-editor" ]; then
+        if pgrep -f "$LEGACY_ZED_APP_DIR/libexec/zed-editor" &>/dev/null; then
+            print_warning_message "A Zed process from $LEGACY_ZED_APP_DIR is currently running — quit it manually if $LEGACY_ZED_APP_DIR reappears after removal"
+        fi
+        print_action_message "Removing stray manual Zed install: $LEGACY_ZED_APP_DIR (superseded by the pacman package)"
+        rm -rf "$LEGACY_ZED_APP_DIR"
     fi
-    print_action_message "Removing stray manual Zed install: $LEGACY_ZED_APP_DIR (superseded by the pacman package)"
-    rm -rf "$LEGACY_ZED_APP_DIR"
+
+    # The manual installer also dropped its own desktop entry into
+    # ~/.local/share/applications, which — being a user data dir — takes
+    # priority over the pacman package's /usr/share/applications entry of the
+    # same ID. If Exec/TryExec/Icon in it point under $LEGACY_ZED_APP_DIR (now
+    # removed above, or removed on a prior run), it's a dead entry: GNOME hides
+    # it from the app grid (TryExec target missing) and its Icon path resolves
+    # to nothing, showing a generic gear. Remove it so the system entry wins.
+    LEGACY_ZED_DESKTOP_FILE="$USER_HOME_DIR/.local/share/applications/dev.zed.Zed.desktop"
+    USER_APPLICATIONS_DIR="$USER_HOME_DIR/.local/share/applications"
+
+    if [ -f "$LEGACY_ZED_DESKTOP_FILE" ] && sed -nE 's/^(Exec|TryExec)=//p' "$LEGACY_ZED_DESKTOP_FILE" | grep -Fq "$LEGACY_ZED_APP_DIR/"; then
+        print_action_message "Removing stray Zed desktop entry: $LEGACY_ZED_DESKTOP_FILE (pointed at the removed manual install)"
+        rm -f "$LEGACY_ZED_DESKTOP_FILE"
+        if command -v update-desktop-database &>/dev/null; then
+            update-desktop-database "$USER_APPLICATIONS_DIR" &>/dev/null || true
+        fi
+        if command -v gtk-update-icon-cache &>/dev/null; then
+            gtk-update-icon-cache -qf "$USER_HOME_DIR/.local/share/icons/hicolor" &>/dev/null || true
+        fi
+    fi
+
 fi
 
-# The manual installer also dropped its own desktop entry into
-# ~/.local/share/applications, which — being a user data dir — takes
-# priority over the pacman package's /usr/share/applications entry of the
-# same ID. If Exec/TryExec/Icon in it point under $LEGACY_ZED_APP_DIR (now
-# removed above, or removed on a prior run), it's a dead entry: GNOME hides
-# it from the app grid (TryExec target missing) and its Icon path resolves
-# to nothing, showing a generic gear. Remove it so the system entry wins.
-LEGACY_ZED_DESKTOP_FILE="$USER_HOME_DIR/.local/share/applications/dev.zed.Zed.desktop"
+ensure_desktop_ide zed || exit 1
 USER_APPLICATIONS_DIR="$USER_HOME_DIR/.local/share/applications"
-
-if [ -f "$LEGACY_ZED_DESKTOP_FILE" ] && grep -q "$LEGACY_ZED_APP_DIR" "$LEGACY_ZED_DESKTOP_FILE" 2>/dev/null; then
-    print_action_message "Removing stray Zed desktop entry: $LEGACY_ZED_DESKTOP_FILE (pointed at the removed manual install)"
-    rm -f "$LEGACY_ZED_DESKTOP_FILE"
-    if command -v update-desktop-database &>/dev/null; then
-        update-desktop-database "$USER_APPLICATIONS_DIR" &>/dev/null || true
-    fi
-    if command -v gtk-update-icon-cache &>/dev/null; then
-        gtk-update-icon-cache -qf "$USER_HOME_DIR/.local/share/icons/hicolor" &>/dev/null || true
-    fi
-fi
-
-# --------------------------
-# Install Zed via pacman
-# --------------------------
-
-# Check if Zed is already installed
-if command -v zeditor &> /dev/null; then
-    print_info_message "Zed is already installed. Skipping installation."
-    print_info_message "Installed version: $(pacman -Q zed 2>/dev/null | awk '{print $2}')"
-else
-    print_info_message "Installing Zed from the official repos"
-
-    ensure_pacman_pkgs zed
-
-    if command -v zeditor &> /dev/null; then
-        print_info_message "Zed installed successfully"
-        print_info_message "You can launch Zed from your application menu or run: zeditor"
-        echo ""
-        print_info_message "To update packages safely, run:"
-        print_info_message "  dfa-update-system"
-        print_info_message "  # or: bash scripts/update-system.sh"
-    else
-        print_error_message "Zed installation failed"
-        print_info_message "You can manually install with: pacman -S zed"
-    fi
-fi
 
 # --------------------------
 # Make Zed the default handler for text-like files
@@ -115,7 +119,7 @@ ZED_DESKTOP_ID="dev.zed.Zed.desktop"
 
 if ! command -v xdg-mime &>/dev/null; then
     print_warning_message "xdg-mime not found — skipping default-application setup"
-elif [ ! -r "/usr/share/applications/$ZED_DESKTOP_ID" ]; then
+elif [ ! -r "/usr/share/applications/$ZED_DESKTOP_ID" ] && [ ! -r "$USER_APPLICATIONS_DIR/$ZED_DESKTOP_ID" ]; then
     print_warning_message "No $ZED_DESKTOP_ID in /usr/share/applications — skipping default-application setup"
 else
     # Types owned by an app that does the job better than an editor would.
@@ -156,7 +160,13 @@ else
 
     print_action_message "Setting Zed as the default for ${#ZED_MIME_TYPES[@]} MIME types (text/*, common source formats)"
 
-    if xdg-mime default "$ZED_DESKTOP_ID" "${ZED_MIME_TYPES[@]}" 2>/dev/null; then
+    ELIGIBLE_MIME_TYPES=()
+    for mime_type in "${ZED_MIME_TYPES[@]}"; do
+        current_default="$(xdg-mime query default "$mime_type" 2>/dev/null)" || exit 1
+        desktop_ide_mime_allowed "$mime_type" "$current_default" "$ZED_DESKTOP_ID" \
+            && ELIGIBLE_MIME_TYPES+=("$mime_type")
+    done
+    if [[ ${#ELIGIBLE_MIME_TYPES[@]} -eq 0 ]] || xdg-mime default "$ZED_DESKTOP_ID" "${ELIGIBLE_MIME_TYPES[@]}" 2>/dev/null; then
         print_success_message "Zed registered as the default text and source-file handler"
     else
         print_warning_message "xdg-mime rejected one or more types — check ~/.config/mimeapps.list"

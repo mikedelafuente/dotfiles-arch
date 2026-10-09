@@ -92,12 +92,13 @@ fi
 # --------------------------
 
 if [[ "$USE_TMUX" -eq 0 ]]; then
-    if ! command -v zeditor &>/dev/null; then
+    ZED_COMMAND="$(type -P zeditor || type -P zed || true)"
+    if [[ -z "$ZED_COMMAND" ]]; then
         echo "Error: zeditor is not installed. Run scripts/setup-zed.sh first."
         echo "Use 'dev --tmux' for the Neovim session instead."
         exit 1
     fi
-    exec zeditor "$TARGET_DIR"
+    exec "$ZED_COMMAND" "$TARGET_DIR"
 fi
 
 # --------------------------

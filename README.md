@@ -241,7 +241,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Shell / CLI** | bash, Starship, zoxide, eza, fzf, ripgrep, fd, bat, git-delta, jq, htop, btop, ncdu, duf, tldr, fastfetch, shellcheck, stow, wl-clipboard, xsel |
 | **Terminal** | Kitty (Catppuccin Mocha) |
 | **Multiplexer** | tmux |
-| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Codex (`codex`), Ollama (local models — NVIDIA or Vulkan GPU only), Zed, [Orca](https://www.onorca.dev/) (`stably-orca`, scanned AUR package `stably-orca-bin`) |
+| **Editors / AI** | Neovim (LazyVim-style), Claude Code (`claude`), Codex (`codex`), Ollama (local models — NVIDIA or Vulkan GPU only), Zed, [Orca](https://www.onorca.dev/) (`stably-orca` / `orca-ide`, Arch scanned AUR / Ubuntu self-updating AppImage) |
 | **Git** | git, lazygit (`lzg`), GitHub CLI (`gh`) |
 | **Languages** | Node (NVM LTS), Python, Rust (rustup), Go, PHP + Composer + Laravel, Ruby + Rails |
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
@@ -332,7 +332,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | Command | What it does |
 |---------|----------------|
 | `dev [dir]` | Open the project in Zed |
-| `stably-orca` | Launch Orca; bootstrap/sync installs it, or run `bash scripts/setup-orca.sh` individually |
+| `stably-orca`, `orca-ide` | Launch Orca; Arch scanned AUR / Ubuntu self-updating AppImage; standalone `bash scripts/setup-orca.sh` |
 | `dev --tmux [dir]` | tmux session instead: `code` window (`nvim .` + agent pane, focus on agent), `console` shell window, optional `lazygit` (git repo; `--force` for non-git; `--agent claude\|codex` to pick the agent) |
 | `v` / `vim` | Neovim |
 | `vimcheat` | Neovim cheat sheet |
@@ -484,3 +484,14 @@ not prove cloud discovery. If the environment changes `HOME`/`CODEX_HOME` betwee
 setup and task launch, use the task's actual home values for installation.
 
 Local regression check: `python3 tests/test_cloud_agent_config.py`.
+
+Desktop IDE standalone setup supports Arch and Ubuntu 26.04:
+`bash scripts/setup-zed.sh` and `bash scripts/setup-orca.sh`. `dev` accepts either
+Zed command (`zeditor` or `zed`); shared settings and default-harness terminal
+threads remain intact. Ubuntu favors true self-updates: the official Zed user
+archive and Orca AppImage, with in-app updates enabled. Arch retains native/scanned
+AUR update ownership; existing Ubuntu Orca DEBs refresh through `dfa-update-system`
+because their in-app update messages only notify. See [PACKAGES.md](PACKAGES.md#desktop-ide-sources-and-update-owners-arch--ubuntu-2604)
+for sources, conflicts and unverified runtime paths. Zed needs Vulkan and 1.18+;
+setup preserves unrelated desktop/MIME defaults and reports source/config conflicts.
+Full Ubuntu bootstrap/sync remains guarded while remaining slices are converted.

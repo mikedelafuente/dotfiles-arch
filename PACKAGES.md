@@ -475,3 +475,51 @@ checkout's shared skills and flattened global rule baseline to a cloud user's
 agent directories. Requires existing Bash, Python 3.8+, and ordinary shell
 utilities; installs no Arch packages, agent CLIs, or desktop configuration.
 See [cloud setup](README.md#shared-agent-config-in-cloud-checkouts).
+
+
+## Desktop IDE sources and update owners (Arch / Ubuntu 26.04)
+
+| Application / commands | Arch | Ubuntu 26.04 | Update owner |
+|------------------------|------|--------------|--------------|
+| Zed / `zed`, `zeditor`, `dev` | Official Extra `zed`; only this transition removes legacy `~/.local/zed.app` | Verified official stable amd64 archive at `~/.local/zed.app`; retain recognized compatible native/user installs | pacman/APT for native; Zed's in-app self-updater for user installs (must stay enabled) |
+| Stably Orca / `stably-orca`, `orca-ide` | IoC-scanned `stably-orca-bin` AUR | Verified official amd64 AppImage in `~/.local/share/dotfiles-arch/orca/Orca.AppImage`; `libfuse2t64` supplies FUSE2 | Guarded AUR on Arch; AppImage's in-app self-updater on Ubuntu (must stay enabled) |
+| Existing Ubuntu `orca-ide` DEB | — | Preserve the installed package instead of replacing it with an AppImage | Verified official stable DEB refresh through `dfa-update-system`; in-app notifications alone do **not** install updates |
+
+Favor true self-updating user installations on Ubuntu. Existing compatible sources
+retain their owners. AppImage replacements keep the fixed pathname so command
+links and desktop entries survive. No `orca` alias is created: that name belongs
+to GNOME's screen reader. No installer script, PPA, foreign APT suite, source
+fallback, sandbox bypass, or driver replacement is added. Full Ubuntu orchestration
+is still guarded pending the other application slices; these two standalone setup
+scripts are enabled.
+
+Evidence checked 2026-10-08: [Zed Linux installation](https://zed.dev/docs/linux),
+[Zed self-updates](https://zed.dev/docs/update), and
+[Orca installation/update distinctions](https://www.onorca.dev/docs/install).
+Official stable release metadata supplied Zed **1.23.2** and Orca **1.4.223**
+with SHA-256 digests for `zed-linux-x86_64.tar.gz`, `orca-linux.AppImage`, and
+`orca-ide_1.4.223_amd64.deb`. Setup resolves current stable metadata, exact asset
+names and official URLs; missing digests, unsupported assets, prereleases and
+unknown ownership fail explicitly. SHA-256 verifies integrity against official
+HTTPS metadata, not an independent publisher signature. DEB refresh validates
+package name, architecture and version, preserves package holds, refuses removals,
+never downgrades, and returns failures before update success stamps.
+
+Zed requires **1.18+** for the shared terminal-thread settings, system glibc
+**2.31+** and Vulkan support. A missing Vulkan ICD is reported; even a present ICD
+is not proof of a working GPU. Native and user command aliases must resolve to
+one installation; unknown or shadowing commands fail. User trees without a
+selected launcher are preserved and reported rather than adopted. Zed config
+uses the existing conflict-safe per-file linker, preserving extra user files and
+the default-harness/terminal-thread configuration. Existing unrelated desktop
+entries and MIME defaults are preserved; new entries declare no directory MIME.
+Only missing or already-Zed text/source defaults are eligible. An old Zed
+`inode/directory` association can still be returned to installed Nautilus.
+
+Validation: supplied source/version/release facts and temporary command links in
+`tests/test_editor_decisions.py`, plus Bash syntax, ShellCheck and static review.
+Installation, archive/AppImage execution, DEB upgrades, self-update replacement,
+FUSE/sandbox behavior, shared settings compatibility, desktop/MIME integration and
+Vulkan/Wayland runtime are **unverified**. No setup/update/cleanup/service/driver/
+GNOME workflow or networked test was executed. Resolve reported source conflicts
+explicitly; do not silently migrate a managed/work installation.
