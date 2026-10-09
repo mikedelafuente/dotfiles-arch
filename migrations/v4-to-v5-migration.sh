@@ -9,5 +9,5 @@ if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
   python3 "$DF_SCRIPT_DIR/deployment.py" status >/dev/null || exit 1
 else
   ensure_local_gitconfig || exit 1
-  python3 "$DF_SCRIPT_DIR/deployment.py" deploy --source "$(cd -- "$CURRENT_FILE_DIR/.." && pwd)" || exit 1
+  python3 "$DF_SCRIPT_DIR/deployment.py" deploy --committed --source "$(cd -- "$CURRENT_FILE_DIR/.." && pwd)" || exit 1
 fi

@@ -55,10 +55,17 @@ Example manifest fragment (per-source details also cover configured extra roots)
 ## Deterministic merge and validation policy
 
 B is the last successful incoming source, L is the current installed copy, and I
-is incoming committed Git HEAD content. A legacy resolving checkout supplies its
-working bytes as initial L and committed HEAD as B/I, preserving dirty local edits
-without treating them as shared source. Commit shared source edits before deploying;
-capture leaves those edits uncommitted for review. Non-Git extra roots use their
+is incoming source content. `dfa-deploy deploy` snapshots the primary checkout's
+working files, including staged/unstaged edits, deletions and non-ignored new files,
+without committing or fetching. Source sync, `dfa-sync-dotfiles` and standalone
+setup commands use this path so local changes can be tested immediately.
+`dfa-deploy update` still requires a clean checkout, pulls with `--ff-only`, then
+stages committed HEAD. `dfa-deploy deploy --committed` deploys HEAD without fetching;
+the initial v5 migration uses this to preserve its existing legacy-file safeguards.
+Extra Git sources continue to use committed HEAD.
+Working snapshots retain HEAD provenance plus a working-status digest and artifact
+hashes; path/content changes during staging block activation. Capture leaves edits
+uncommitted for review. Non-Git extra roots use their
 explicitly supplied content as I. A successful generation advances B to I, never to the merged
 L. The transaction boundary is the **whole generation**: any conflict or validation
 failure blocks every artifact, link and provenance advancement.
@@ -174,8 +181,10 @@ and deployment still verifies their presence and records their content origins.
 
 ## Static dependency inventory
 
-The simplest safe closure is the complete **Git-tracked committed source tree**, minus the
-explicit secret/state/cache exclusions. Raw Git blobs preserve files even when
+The closure includes the complete source tree, minus explicit secret/state/cache
+exclusions. Local deployment reads tracked working files and non-ignored additions;
+ignored tracked files remain included. Acquisition and extra Git sources use raw
+committed blobs, which preserve files even when
 export-ignore/export-subst attributes would change an archive. This deliberately includes documentation
 and skill support resources; trying to derive imports for Bash/Lua/TypeScript would
 be less reliable. Standard extra roots have the same closure; non-Git extra roots

@@ -98,7 +98,12 @@ dictation_app_owner() {
     if [[ "$WORKSTATION_DISTRO" == arch ]]; then
       version="$(pacman -Q "$package")" || return 1
       version="${version#* }"
-      [[ -n "$path" && "$(pacman -Qoq "$(readlink -f "$path")" 2>/dev/null)" == "$package" ]] || return 1
+      [[ -n "$path" ]] || return 1
+      resolved="$(readlink -f "$path")" || return 1
+      if [[ "$app" == voxtype && "$resolved" == /usr/bin/voxtype ]]; then
+        resolved="$(voxtype_dispatch_target "$path" || echo "$resolved")"
+      fi
+      [[ "$(pacman -Qoq "$resolved" 2>/dev/null)" == "$package" ]] || return 1
       owner=aur
     else
       version="$(dpkg-query -W -f='${Version}' "$package")" || return 1
@@ -134,6 +139,19 @@ dictation_app_owner() {
   echo "$selected"
 }
 
+# AUR hooks generate an unowned dispatch wrapper. Accept only the canonical
+# shell/exec form; ownership of its CUDA target is checked by the caller.
+voxtype_dispatch_target() {
+  local path="$1" dispatch
+  [[ "$(head -n1 "$path")" == '#!/bin/sh' ]] || return 1
+  dispatch="$(sed '/^#/d; /^[[:space:]]*$/d' "$path")" || return 1
+  case "$dispatch" in
+    'exec /usr/lib/voxtype/cuda-12/voxtype-onnx-cuda-12 "$@"'|'exec /usr/lib/voxtype/cuda-13/voxtype-onnx-cuda-13 "$@"')
+      dispatch="${dispatch#exec }"; echo "${dispatch% \"\$@\"}" ;;
+    *) return 1 ;;
+  esac
+}
+
 # Resolve symlinks and upstream's canonical CUDA wrapper without running it.
 voxtype_active_variant() {
   local path=/usr/bin/voxtype target
@@ -142,6 +160,7 @@ voxtype_active_variant() {
     if grep -Fxq '# Voxtype CPU-adaptive wrapper script' "$path"; then
       target=/usr/lib/voxtype/voxtype-avx2
       if grep -qw avx512f /proc/cpuinfo; then target=/usr/lib/voxtype/voxtype-avx512; fi
+    elif target="$(voxtype_dispatch_target "$path")"; then :
     else target="$(sed -n 's/^exec \(\/usr\/lib\/voxtype\/[^ ]*\) "\$@"$/\1/p' "$path")"; fi
   else return 1; fi
   [[ "$target" == /usr/lib/voxtype/* && -x "$target" ]] || return 1

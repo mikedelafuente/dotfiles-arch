@@ -305,6 +305,66 @@ def main():
         print("PASS: stable copies, merges/conflicts, structured policies, overrides, capture, rebind, rollback, concurrency and dry-run")
 
 
+def working_tree_deployment():
+    with tempfile.TemporaryDirectory(prefix="dfa-working-tree-") as tmp:
+        temp = Path(tmp); source = temp / "source"; home = temp / "home"
+        source.mkdir(); home.mkdir()
+        def git(*args):
+            return subprocess.run(["git", "-C", str(source), *args], check=True,
+                                  capture_output=True, text=True).stdout.strip()
+        git("init", "-b", "main")
+        git("config", "user.email", "fixture@example.test"); git("config", "user.name", "Fixture")
+        git("remote", "add", "origin", "https://github.com/example/anonymous.git")
+        (source / "scripts").mkdir(); (source / "home").mkdir()
+        (source / "scripts/sync.sh").write_text("#!/bin/bash\nexit 0\n")
+        shell = source / "home/.bashrc"; shell.write_text("echo committed\n")
+        deleted = source / "scripts/deleted.sh"; deleted.write_text("#!/bin/sh\nexit 0\n")
+        (source / ".gitignore").write_text("ignored.txt\n")
+        git("add", "."); git("commit", "-m", "fixture")
+        env = dict(os.environ, HOME=str(home), USER_HOME_DIR=str(home),
+                   CODEX_HOME=str(home / ".codex"), PI_CODING_AGENT_DIR=str(home / ".pi/agent"))
+        def run(*args, ok=True):
+            result = subprocess.run(["python3", str(CLI), *args, "--source", str(source)],
+                                    env=env, capture_output=True, text=True)
+            assert (result.returncode == 0) == ok, result.stdout + result.stderr
+            return result
+        run("deploy")
+        head = git("rev-parse", "HEAD")
+        shell.write_text("echo uncommitted\n")
+        deleted.unlink()
+        new = source / "scripts/new.sh"; new.write_text("#!/bin/sh\nexit 0\n"); new.chmod(0o755)
+        (source / "scripts/new-link.sh").symlink_to("new.sh")
+        (source / "ignored.txt").write_text("ignored\n")
+        (source / ".env").write_text("SECRET=excluded\n")
+        (source / "auth.json").write_text('{"token":"excluded"}\n')
+        status = git("status", "--porcelain")
+        run("deploy")
+        active = home / ".local/share/workstation/config"
+        assert (home / ".bashrc").read_text() == "echo uncommitted\n"
+        assert not (active / "scripts/deleted.sh").exists()
+        assert (active / "scripts/new.sh").stat().st_mode & 0o111
+        assert (active / "scripts/new-link.sh").read_text() == new.read_text()
+        assert all(not (active / name).exists() for name in ("ignored.txt", ".env", "auth.json"))
+        assert git("rev-parse", "HEAD") == head and git("status", "--porcelain") == status
+        generation = os.readlink(active)
+        run("deploy"); assert os.readlink(active) == generation
+        assert "dirty" in run("update", ok=False).stderr
+        run("deploy", "--committed")
+        assert (home / ".bashrc").read_text() == "echo committed\n"
+        assert not (active / "scripts/new.sh").exists()
+        run("deploy")
+        generation = os.readlink(active)
+        new.write_text("if\n")
+        run("deploy", ok=False)
+        assert os.readlink(active) == generation and (home / ".bashrc").read_text() == "echo uncommitted\n"
+        new.write_text("#!/bin/sh\nexit 0\n")
+        (source / "scripts/external.sh").symlink_to(temp / "outside.sh")
+        (temp / "outside.sh").write_text("#!/bin/sh\nexit 0\n")
+        assert "External source symlink" in run("deploy", ok=False).stderr
+        assert os.readlink(active) == generation
+        print("PASS: uncommitted edits/additions/deletions, executable links, exclusions, no pull/commit, syntax and ownership guards")
+
+
 def full_repository():
     with tempfile.TemporaryDirectory(prefix="dfa-full-repository-") as tmp:
         temp = Path(tmp); source = temp / "source"; home = temp / "home"
@@ -385,6 +445,20 @@ def full_repository():
         assert result.returncode != 0
         assert logfile.read_text().splitlines() == ["dfa-update-repos", "source-acquisition"]
         env.pop("MOCK_PULL_FAIL")
+        # The actual direct-sync wrapper deploys dirty files before executing setup.
+        local_sync = source / "scripts/sync.sh"
+        sync_before = local_sync.read_text()
+        shell_before = (source / "home/.bashrc").read_text()
+        local_sync.write_text('#!/bin/bash\nprintf "local-sync\\n" >> "$DAILY_LOG"\n')
+        (source / "home/.bashrc").write_text(shell_before + "\n# uncommitted sync test\n")
+        head = git("rev-parse", "HEAD").stdout; logfile.write_text("")
+        result = subprocess.run(["bash", str(home / ".local/bin/dfa-sync-dotfiles")], env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert logfile.read_text().splitlines() == ["local-sync"]
+        assert (home / ".bashrc").read_text().endswith("# uncommitted sync test\n")
+        assert git("rev-parse", "HEAD").stdout == head
+        local_sync.write_text(sync_before); (source / "home/.bashrc").write_text(shell_before)
+        subprocess.run(["python3", str(source / "scripts/deployment.py"), "deploy"], env=env, check=True, capture_output=True)
         # Stamped v4 resolving links migrate, retain local edits/state and replay safely.
         legacy = temp / "legacy home"; legacy.mkdir()
         legacy_bin = legacy / ".local/bin"; legacy_bin.mkdir(parents=True)
@@ -473,4 +547,5 @@ def full_repository():
 
 if __name__ == "__main__":
     main()
+    working_tree_deployment()
     full_repository()

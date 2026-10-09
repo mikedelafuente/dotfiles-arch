@@ -15,11 +15,11 @@ ROOT="$(resolve_dotfiles_arch)" || {
 
 # shellcheck source=/dev/null
 source "$ROOT/scripts/dotheader.sh"
-# Acquire and deploy first; setup uses one complete installed generation.
+# Deploy local edits first; daily maintenance owns source acquisition.
 if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
-  python3 "$ROOT/scripts/deployment.py" update || exit 1
+  python3 "$ROOT/scripts/deployment.py" deploy || exit 1
 else
-  python3 "$ROOT/scripts/deployment.py" update --source "$ROOT" || exit 1
+  python3 "$ROOT/scripts/deployment.py" deploy --source "$ROOT" || exit 1
 fi
 ROOT="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")" || exit 1
 exec bash "$ROOT/scripts/sync.sh" "$@"
