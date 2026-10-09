@@ -359,7 +359,7 @@ are run for validation.
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
 | `chatgpt-desktop` (AUR) | `setup-codex.sh` | ChatGPT desktop app (repackaged official binary) | `chatgpt` |
 | `opencode` | `setup-opencode.sh` | AI coding agent CLI | `opencode` |
-| `ollama-cuda` / `ollama-vulkan` (GPU-gated) | `setup-ollama.sh` | Local model server — `ollama-cuda` on a working NVIDIA driver, else `ollama-vulkan` on a detected Vulkan ICD; skipped entirely (no CPU-only install) if neither is present | `ollama` |
+| Arch `ollama-cuda` / `ollama-vulkan`; Ubuntu compatible native `ollama` or verified upstream archive (GPU-gated) | `setup-ollama.sh` | Local model server; working CUDA preferred, otherwise a physical Vulkan 1.2+ GPU. No CPU-only installation; existing flavors preserved. Sources/services/update owners below | `ollama` |
 
 ### Shared language sources and update owners
 
@@ -561,6 +561,59 @@ These gaps or failed writes return nonzero instead of a completed host setup.
 | Package | Script | Purpose |
 |---------|--------|---------|
 | `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` | `setup-nvidia.sh` | NVIDIA drivers, installed only when `INSTALL_NVIDIA=true` |
+
+### GPU sources, capability gates and update owners
+
+| Component | Arch source | Ubuntu 26.04 source | Update owner / requirements |
+| --- | --- | --- | --- |
+| Optional NVIDIA | Native `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` for a new Turing+ installation | Native `ubuntu-drivers-common` hardware recommendation; signed `linux-modules-nvidia-<branch>-<running-kernel>` preferred, Ubuntu DKMS otherwise | Native pacman/APT; saved explicit `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`. `--yes`, PCI detection and an unset preference do not opt in. All existing flavors, utility-only stacks, manual and work-managed installations remain untouched; no CUDA repository, purge or module loading |
+| CUDA Ollama | Native `ollama-cuda` and its `cuda` dependency | Official stable amd64 archive bundles CUDA runtime libraries; only the existing host driver is used | Ollama 0.40.0+ for the current runtime layout; native owner or verified archive refresh by `dfa-update-system` |
+| Vulkan Ollama | Native `ollama-vulkan` and `vulkan-icd-loader`; existing hardware ICD retained | Official archive bundles the Vulkan backend; host Vulkan loader/ICD remain native/vendor-owned | Same owner; Vulkan 1.2+ on a successfully enumerated discrete/integrated GPU. CPU software ICDs do not qualify |
+| GPU probes | Native `python`, `vulkan-tools` | Native `python3`, `vulkan-tools` | Native updater. NVIDIA readiness needs a supported compute capability/driver and successful CUDA initialization/device enumeration with the current user's permissions. Vulkan readiness uses `vulkaninfo --summary`, not executable or ICD presence |
+| Archive prerequisites | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python` if a managed archive already exists | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python3` | Native updater; SHA256 verified before archive extraction or switching a working installation |
+
+[Ollama's Linux instructions](https://docs.ollama.com/linux) offer archives rather
+than an official vendor APT repository. A compatible native Ubuntu candidate is
+preferred if available; a local DEB without a repository candidate is a source
+conflict. The [official stable v0.40.2 release](https://github.com/ollama/ollama/releases/tag/v0.40.2)
+was inspected on 2026-10-09: `ollama-linux-amd64.tar.zst` has a GitHub SHA256
+digest and the [pinned release build](https://github.com/ollama/ollama/blob/v0.40.2/.github/workflows/release.yaml)
+bundles CUDA v12/v13 and Vulkan. Setup resolves current stable metadata each time,
+requires a digest and the expected GPU libraries, and does not silently fall back.
+
+Archives reuse the managed release layout at
+`~/.local/share/dotfiles-arch/editor-tools/ollama/<version>` with `current` and
+`~/.local/bin/ollama`. Ubuntu archive installs use the current user's
+`~/.config/systemd/user/ollama.service`, loopback port 11434, Vulkan enabled,
+and the default user model store. The service starts with the user session;
+setup does not enable lingering, create service accounts, download models or
+grant extra device groups/capabilities. Native installs retain their
+package-owned system service. Source/launcher/unit/drop-in conflicts are reported
+before replacement; arbitrary upstream/manual installs are not adopted.
+
+[Current upstream NVIDIA requirements](https://docs.ollama.com/gpu) are compute
+capability 5.0+ and driver 550+, with driver 570+ for compute capabilities
+5.0–6.2. Existing CPU-only/ROCm Ollama flavors are preserved and report a pending
+GPU capability rather than being replaced. Missing CUDA/Vulkan capability skips
+a new installation; a previously installed app with missing capability fails
+with a diagnostic. Native service-user GPU access can differ from the interactive
+user and still requires runtime verification. Vulkan VRAM measurements can be
+approximate without additional capabilities; setup does not grant those capabilities.
+
+`dfa-update-system` refreshes recognized archives and verifies services before a
+success stamp. Archive upgrades restart the active user service; updates do not
+enable a disabled service. Acquisition, service and local-model-list failures
+return nonzero and retain harness configuration. NVIDIA installation/activation,
+Secure Boot/MOK enrollment, device permissions, archive compatibility, service
+startup, actual GPU inference, model loading and upgrades remain unverified.
+New Arch open-driver installs require recognized Turing+ PCI chipset names;
+legacy or unknown chipsets defer manual driver selection. Package installation
+does not prove GPU readiness; reboot/MOK steps are reported
+as pending, following [Ubuntu's driver guidance](https://ubuntu.com/desktop/docs/en/latest/how-to/graphics/install-nvidia-drivers/).
+
+`tests/test_gpu_decisions.py` contains isolated supplied-fact checks with blocked
+OS/network/GPU commands. It was left unrun under the implementation constraint;
+only Bash syntax, direct ShellCheck and static operation inspection were used.
 
 ## Build / AUR plumbing
 

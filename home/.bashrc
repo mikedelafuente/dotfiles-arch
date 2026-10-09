@@ -287,11 +287,13 @@ aliases() {
         echo "  Skill source: dfa-sync-sources option 5 toggles overwrite permissions"
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
-        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node,neovim,dev,zed,orca,python,rust,golang,php,ruby,chrome,slack,zoom}.sh'
+        echo '  Standalone Arch / Ubuntu 26.04: scripts/setup-{kitty,essentials,bash,git,github-cli,node,neovim,dev,zed,orca,python,rust,golang,php,ruby,chrome,slack,zoom,nvidia,ollama}.sh'
         echo '  Editor: stable nvim 0.12+, tree-sitter CLI 0.26.1+, tmux 3.2+; preserve sources/configs'
         echo '  IDEs: zed/zeditor, stably-orca/orca-ide; Ubuntu favors self-updates; existing Orca DEBs: dfa-update-system'
         echo '  Editor/container CLI updates: dfa-update-system --force (native plus verified managed upstream releases)'
         echo '  Work apps: Chrome/Slack vendor APT on Ubuntu; signed Zoom DEB; dfa-update-system maintains all three; conflicts retained'
+        echo '  GPU: setup-nvidia.sh --install explicitly opts in; existing stacks retained; activation/MOK can be pending'
+        echo '  Ollama: working CUDA/hardware Vulkan only; native or verified archive updated by dfa-update-system; Ubuntu archive: systemctl --user status ollama'
         echo '  Containers: bash scripts/setup-docker.sh; setup-minikube.sh; setup-devcontainer.sh as your user; sources/gaps: packages'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Python projects: python3 -m venv .venv; .venv/bin/python -m pip install <package>'

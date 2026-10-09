@@ -190,6 +190,15 @@ command -v tmux kitty nvim claude codex ollama
 
 Shared highlights: Kitty, tmux, Neovim, Claude Code, Codex, Ollama, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
 
+GPU-only Ollama: `bash scripts/setup-ollama.sh` on Arch / Ubuntu 26.04; working
+CUDA or hardware Vulkan 1.2+ required. Ubuntu archives use a user service
+(`systemctl --user status ollama`, `journalctl --user -u ollama`); native packages
+retain their system service. `dfa-update-system` refreshes managed archives and
+reports service failures. NVIDIA setup requires explicit saved opt-in or
+`bash scripts/setup-nvidia.sh --install`; `--yes` does not opt in. Existing
+drivers are never replaced; reboot/MOK activation can remain pending. See
+[GPU sources and requirements](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
 Language-only setup on Arch / Ubuntu 26.04: choose from
 `scripts/setup-{python,rust,golang,php,ruby}.sh` and run with Bash
 (for example `bash scripts/setup-python.sh`). Native packages update with `dfa-update-system`; user
