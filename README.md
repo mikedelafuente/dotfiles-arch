@@ -5,7 +5,8 @@
 Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
 `~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
 obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
-live files and return failure. `dfa-deploy source` identifies the shared edit destination.
+live files and return failure. `dfa-deploy deploy` snapshots local edits without committing or fetching.
+Direct sync and setup commands use those snapshots for testing. `dfa-deploy source` identifies the shared edit destination.
 Use `dfa-deploy capture <artifact>` for one selected source improvement,
 `dfa-deploy override <artifact> <file>` for a persistent local override,
 `dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
@@ -261,6 +262,7 @@ That will:
 bash scripts/sync.sh --profile work
 bash scripts/sync.sh --profile work,devcontainer
 bash scripts/sync.sh --profile personal
+# Local edits are deployed without a commit or pull; use dfa-deploy update to fetch.
 bash scripts/sync.sh --prompt               # re-ask profiles / NVIDIA / machine type
 bash scripts/sync.sh --cleanup              # preview native orphans + Arch obsolete packages
 bash scripts/sync.sh --remove-obsolete      # Arch only: terminal + type remove, then native prompt

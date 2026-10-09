@@ -252,7 +252,8 @@ def merge_file(base, live, incoming, candidate):
 
 
 class Deployment:
-    def __init__(self, home):
+    def __init__(self, home, working_tree=False):
+        self.working_tree = working_tree
         self.home = lexical(home)
         self.root = self.home / ".local/share/workstation"
         self.active = self.root / "config"
@@ -370,9 +371,12 @@ class Deployment:
                       "url": clean_url(git(path, "remote", "get-url", "origin").stdout.decode()) if is_git else None,
                       "commit": git(path, "rev-parse", "HEAD").stdout.decode().strip() if is_git else None}
             sources.append(source)
+            working_tree = is_git and self.working_tree and name == "primary"
+            if working_tree:
+                source["working_tree"] = hashlib.sha256(git(path, "status", "--porcelain", "-z", "--untracked-files=all").stdout).hexdigest()
             prefix = "" if name == "primary" else f"extras/{name}/"
             committed = {}
-            if is_git:
+            if is_git and not working_tree:
                 prefix_in_git = git(path, "rev-parse", "--show-prefix").stdout.decode().strip().rstrip("/")
                 revision = source["commit"] + (":" + prefix_in_git if prefix_in_git else "")
                 entries = []
@@ -403,6 +407,9 @@ class Deployment:
                                            "data": None if mode == b"120000" else data,
                                            "mode": 0o755 if mode == b"100755" else 0o644}
                 files = list(committed)
+            elif working_tree:
+                files = {Path(os.fsdecode(p)) for p in git(path, "ls-files", "-z", "--cached", "--others",
+                                                          "--exclude-standard").stdout.split(b"\0") if p}
             else:
                 files = [p.relative_to(path) for p in path.rglob("*") if p.is_file() or p.is_symlink()]
             for relative in sorted(files):
@@ -412,13 +419,15 @@ class Deployment:
                        or p.startswith(".env.") for p in relative.parts):
                     continue
                 src = path / relative
-                if not is_git and not src.exists() and not src.is_symlink():
+                if (not is_git or working_tree) and not src.exists() and not src.is_symlink():
                     continue
-                if not is_git and src.is_dir() and not src.is_symlink():
+                if (not is_git or working_tree) and src.is_dir() and not src.is_symlink():
                     continue
                 key = prefix + relative.as_posix()
                 dest = incoming / key
-                link = committed[relative]["target"] if is_git else os.readlink(src) if src.is_symlink() else None
+                if working_tree:
+                    safe_parents(src, path)
+                link = committed[relative]["target"] if is_git and not working_tree else os.readlink(src) if src.is_symlink() else None
                 if link is not None:
                     resolved = lexical(src.parent / link)
                     # Explicit rebind retains the mapping for old absolute internal source links.
@@ -432,7 +441,7 @@ class Deployment:
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     target = incoming / prefix / resolved.relative_to(path)
                     dest.symlink_to(os.path.relpath(target, dest.parent))
-                elif is_git:
+                elif is_git and not working_tree:
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(committed[relative]["data"])
                     dest.chmod(committed[relative]["mode"])
@@ -677,6 +686,9 @@ class Deployment:
                         url_now = clean_url(git(path, "remote", "get-url", "origin").stdout.decode())
                         if commit_now != source["commit"] or url_now != source["url"]:
                             raise Pending(f"Source provenance changed during staging: {source['id']}; retry deployment")
+                        if source.get("working_tree") and source["working_tree"] != hashlib.sha256(
+                                git(path, "status", "--porcelain", "-z", "--untracked-files=all").stdout).hexdigest():
+                            raise Pending("Source paths changed during staging; retry deployment")
                 if identity(registry) != registry_before:
                     raise Pending("Source registry edited during staging; retry deployment")
                 if tree and self.active.resolve() != tree:
@@ -1041,6 +1053,8 @@ def main():
         p = sub.add_parser(command)
         p.add_argument("--source", type=Path)
         p.add_argument("--dry-run", action="store_true")
+        if command == "deploy":
+            p.add_argument("--committed", action="store_true", help="Deploy HEAD instead of local working files")
         if command == "source":
             p.add_argument("--source-id", default="primary")
     p = sub.add_parser("rebind"); p.add_argument("path", type=Path)
@@ -1051,7 +1065,8 @@ def main():
     for command in ("rollback", "recover", "status", "help"):
         sub.add_parser(command)
     args = parser.parse_args()
-    deployment = Deployment(os.environ.get("USER_HOME_DIR", os.environ["HOME"]))
+    deployment = Deployment(os.environ.get("USER_HOME_DIR", os.environ["HOME"]),
+                            working_tree=args.command == "deploy" and not args.committed)
     try:
         if args.command in {"deploy", "update", "rebind", "capture", "override", "rollback", "recover"}:
             # Use the same read-only host gate as shell entrypoints; never a saved distro preference.
@@ -1091,6 +1106,7 @@ def main():
                               "pending": sorted(str(p) for p in (deployment.root / "staging").glob("*/blocked.json"))}, indent=2))
         else:
             print("dfa-deploy deploy|update|source [--source PATH] [--dry-run]\n"
+                  "dfa-deploy deploy [--committed] (default: local working files; no fetch)\n"
                   "dfa-deploy status|rollback|recover\n"
                   "dfa-deploy rebind PATH [--accept-origin-change] [--source-id ID]\n"
                   "dfa-deploy capture ARTIFACT\n"

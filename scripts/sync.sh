@@ -208,9 +208,9 @@ print_info_message "Repo: $REPO_ROOT"
 # Ensure we're up to date
 # --------------------------
 
-# Source acquisition is explicit and checked before package/setup mutations.
+# Direct sync tests the local checkout; daily maintenance owns source acquisition.
 if [[ -e "$REPO_ROOT/.git" ]]; then
-  python3 "$DF_SCRIPT_DIR/deployment.py" update --source "$REPO_ROOT" || exit 1
+  python3 "$DF_SCRIPT_DIR/deployment.py" deploy --source "$REPO_ROOT" || exit 1
   exec bash "$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")/scripts/sync.sh" "$@"
 fi
 
