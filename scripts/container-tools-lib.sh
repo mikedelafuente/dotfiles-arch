@@ -145,9 +145,10 @@ ensure_devcontainer_tool() {
   else
     ensure_native_pkgs "$package" || return 1
   fi
-  native_package_installed "$package" && [[ -x "$expected" ]] || {
-    print_error_message "Missing $app capability after installing $package"; return 1;
-  }
+  if ! native_package_installed "$package" || [[ ! -x "$expected" ]]; then
+    print_error_message "Missing $app capability after installing $package"
+    return 1
+  fi
 }
 
 # A client alone does not prove its privilege-separated D-Bus backend is available.
