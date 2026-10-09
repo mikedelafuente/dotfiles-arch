@@ -4,7 +4,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, and package maintenance**
+Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, and package maintenance**
 are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
@@ -12,6 +12,18 @@ entries cause a failure before installation; resolve them explicitly and rerun.
 The script also applies the existing KDE/GNOME terminal preferences when their
 tools are available. It does not install fonts: JetBrainsMono Nerd Font is the
 shared preference; Kitty falls back to an installed monospace font when absent.
+
+Container standalone setup: `bash scripts/setup-docker.sh`,
+`bash scripts/setup-minikube.sh`, `bash scripts/setup-devcontainer.sh` (as your user).
+Docker uses native Arch/Ubuntu Engine, Compose and Buildx packages; other providers
+are preserved and reported as conflicts. Ubuntu Kubernetes tools use verified user
+releases, refreshed by `dfa-update-system`. Devcontainer setup adds native CLI tools,
+OpenVPN3 (scanned AUR on Arch), user-owned mkcert CA trust, `~test` split DNS and
+watcher limits. Split DNS requires active systemd-resolved with its resolver stub;
+existing alternate resolver policy is preserved and reported as a gap.
+See [PACKAGES.md](PACKAGES.md#container-source-and-update-contract) for sources,
+update owners and unverified runtime behavior. No setup/service/VPN operations
+are executed as tests.
 
 All entrypoints using the common header detect `/etc/os-release` and architecture
 before mutation. Unconverted entrypoints, including bootstrap, sync (even

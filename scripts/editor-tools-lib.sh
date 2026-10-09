@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Explicit editor recipes. Selection consumes facts; installers gather them separately.
+# Explicit editor/container CLI recipes. Selection consumes facts separately from setup.
 editor_tool_recipe() {
   case "$1" in
     nvim) echo 'neovim 0.12.0 neovim/neovim-releases' ;;
     tree-sitter) echo 'tree-sitter-cli 0.26.1 tree-sitter/tree-sitter' ;;
     tmux) echo 'tmux 3.2.0 -' ;;
     lazydocker) echo 'lazydocker 0.20.0 jesseduffield/lazydocker' ;;
+    minikube) echo 'minikube 1.0.0 kubernetes/minikube' ;;
+    kubectl) echo 'kubectl 1.0.0 dl.k8s.io' ;;
+    k9s) echo 'k9s 0.1.0 derailed/k9s' ;;
     *) return 1 ;;
   esac
 }
@@ -45,6 +48,11 @@ editor_tool_version() {
     nvim) pattern='^NVIM v([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
     tree-sitter) pattern='^tree-sitter ([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
     lazydocker) pattern='^Version: ([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
+    minikube) pattern='^v([0-9]+\.[0-9]+\.[0-9]+)$' ;;
+    k9s) pattern='^Version[[:space:]]+v?([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
+    kubectl)
+      output="$(jq -er '.clientVersion.gitVersion' <<<"$output")" || return 1
+      pattern='^v([0-9]+\.[0-9]+\.[0-9]+)$' ;;
     tmux)
       [[ "$output" =~ ^tmux\ ([0-9]+)\.([0-9]+)[a-z]?($|[[:space:]]) ]] || return 1
       printf '%s.%s.0\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
@@ -57,11 +65,12 @@ editor_tool_version() {
 
 editor_installed_version() {
   local app="$1" binary="$2" output
-  if [[ "$app" == tmux ]]; then
-    output="$("$binary" -V)" || return 1
-  else
-    output="$("$binary" --version)" || return 1
-  fi
+  case "$app" in
+    tmux) output="$("$binary" -V)" || return 1 ;;
+    minikube|k9s) output="$("$binary" version --short)" || return 1 ;;
+    kubectl) output="$("$binary" version --client --output=json)" || return 1 ;;
+    *) output="$("$binary" --version)" || return 1 ;;
+  esac
   editor_tool_version "$app" "$output"
 }
 
@@ -78,6 +87,8 @@ editor_release_asset() {
     nvim) asset=nvim-linux-x86_64.tar.gz ;;
     tree-sitter) asset=tree-sitter-linux-x64.gz ;;
     lazydocker) asset="lazydocker_${version}_Linux_x86_64.tar.gz" ;;
+    minikube) asset=minikube-linux-amd64 ;;
+    k9s) asset=k9s_Linux_amd64.tar.gz ;;
     *) return 1 ;;
   esac
   fields="$(jq -er --arg name "$asset" '
@@ -88,6 +99,12 @@ editor_release_asset() {
   [[ "$url" == "https://github.com/$repo/releases/download/$tag/$asset" \
     && "$digest" =~ ^sha256:([a-f0-9]{64})$ ]] || return 1
   printf '%s %s %s\n' "$version" "$url" "${BASH_REMATCH[1]}"
+}
+
+# Kubernetes publishes a versioned binary and checksum outside GitHub assets.
+kubectl_release_asset() {
+  [[ "$1" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ && "$2" =~ ^[a-f0-9]{64}$ ]] || return 1
+  printf '%s https://dl.k8s.io/release/%s/bin/linux/amd64/kubectl %s\n' "${1#v}" "$1" "$2"
 }
 
 # Read-only preflight of the managed release tree and command link. No adoption.
@@ -215,7 +232,7 @@ ensure_editor_tool() {
 
 # Stage and validate a full release before switching the command/runtime together.
 install_editor_release() (
-  local app="$1" _package _minimum repo recipe metadata release version url digest stage current
+  local app="$1" _package _minimum repo recipe metadata release version url digest stage current tag
   local base="$USER_HOME_DIR/.local/share/dotfiles-arch/editor-tools"
   local root="$base/$app" launcher="$USER_HOME_DIR/.local/bin/$app"
   [[ ":$PATH:" == *":$USER_HOME_DIR/.local/bin:"* ]] || {
@@ -226,10 +243,17 @@ install_editor_release() (
   }
   recipe="$(editor_tool_recipe "$app")" || return 1
   read -r _package _minimum repo <<<"$recipe"
-  metadata="$(curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$repo/releases/latest")" || return 1
-  release="$(editor_release_asset "$app" "$metadata")" || {
-    print_error_message "No verified compatible stable $app release; preserved"; return 1;
-  }
+  if [[ "$app" == kubectl ]]; then
+    tag="$(curl --proto '=https' --tlsv1.2 -fsSL https://dl.k8s.io/release/stable.txt)" || return 1
+    [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    digest="$(curl --proto '=https' --tlsv1.2 -fsSL "https://dl.k8s.io/release/$tag/bin/linux/amd64/kubectl.sha256")" || return 1
+    release="$(kubectl_release_asset "$tag" "$digest")" || return 1
+  else
+    metadata="$(curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$repo/releases/latest")" || return 1
+    release="$(editor_release_asset "$app" "$metadata")" || {
+      print_error_message "No verified compatible stable $app release; preserved"; return 1;
+    }
+  fi
   read -r version url digest <<<"$release"
   if [[ -d "$root" ]]; then
     current="$(editor_installed_version "$app" "$root/current/bin/$app")" || return 1
@@ -257,7 +281,9 @@ import tarfile
 
 app, artifact, destination = sys.argv[1:]
 dest = Path(destination)
-if app == "tree-sitter":
+if app in ("minikube", "kubectl"):
+    shutil.copyfile(artifact, dest / "bin" / app)
+elif app == "tree-sitter":
     with gzip.open(artifact, "rb") as source, (dest / "bin/tree-sitter").open("wb") as out:
         shutil.copyfileobj(source, out)
 else:
@@ -273,11 +299,11 @@ else:
                 path.rename(dest / path.name)
             tree.rmdir()
             (dest / "unpacked").rmdir()
-        elif app == "lazydocker":
-            member = archive.getmember("lazydocker")
+        elif app in ("lazydocker", "k9s"):
+            member = archive.getmember(app)
             if not member.isfile():
-                raise ValueError("Expected regular lazydocker binary")
-            with archive.extractfile(member) as source, (dest / "bin/lazydocker").open("wb") as out:
+                raise ValueError("Expected regular CLI binary")
+            with archive.extractfile(member) as source, (dest / "bin" / app).open("wb") as out:
                 shutil.copyfileobj(source, out)
         else:
             raise ValueError("Unknown tool")
@@ -306,7 +332,7 @@ PY
 # Called inside the common updater before any successful-update stamp.
 refresh_editor_tools() {
   local app root failed=0
-  for app in nvim tree-sitter lazydocker; do
+  for app in nvim tree-sitter lazydocker minikube kubectl k9s; do
     root="$USER_HOME_DIR/.local/share/dotfiles-arch/editor-tools/$app"
     [[ -e "$root" || -L "$root" ]] || continue
     ensure_editor_tool "$app" || failed=1

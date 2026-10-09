@@ -1,22 +1,8 @@
 #!/bin/bash
-# --------------------------
-# Host prerequisites for the devcontainer
-# --------------------------
-# Installs CLI tools + OS config for devcontainer host setup:
-#   - just, mkcert (+ nss for Firefox trust store)
-#   - dig (bind) for DNS smoke checks
-#   - OpenVPN 3 Linux client (AUR openvpn3 — CloudConnexa / work VPN)
-#   - systemd-resolved: route ~test to 127.0.0.1:5354
-#   - fs.inotify max_user_watches (large monorepo watchers)
-#   - mkcert root CA trust (user-level; do not sudo mkcert -install)
-#
-# Shared stack already provides: Docker Engine/Compose/Buildx, GitHub CLI.
-# Cert generation under .devcontainer/services/traefik/certs is left to after clone.
-#
-# Safe to re-run (used by bootstrap + sync).
+# Devcontainer host tools, user CA trust, split DNS and watcher limits.
+# Safe to rerun on rolling Arch / Ubuntu 26.04. No VPN/cluster is started.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-
 if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
   # shellcheck source=/dev/null
   source "$CURRENT_FILE_DIR/dotheader.sh"
@@ -25,172 +11,100 @@ else
   exit 1
 fi
 
+# mkcert must own its CA as the workstation user, even when sudo is available.
+if [[ "$EUID" == 0 ]]; then
+  print_error_message 'Run setup-devcontainer.sh as your workstation user, without sudo (user-owned mkcert CA)'
+  exit 1
+fi
 print_tool_setup_start "Devcontainer host prerequisites"
+FAILED=0
 
-# --------------------------
-# Packages
-# --------------------------
-
-# bind → dig; nss → mkcert Firefox store; just + mkcert are host CLI deps
-DEVCONTAINER_PKGS=(
-  bind
-  just
-  mkcert
-  nss
-)
-
-print_info_message "Ensuring host packages: ${DEVCONTAINER_PKGS[*]}"
-ensure_pacman_pkgs "${DEVCONTAINER_PKGS[@]}"
-
-# Docker + gh live on the shared path; re-check so a standalone run still works
-if ! command -v docker &>/dev/null; then
-  print_warning_message "Docker not found — installing via setup-docker.sh"
-  bash "$DF_SCRIPT_DIR/setup-docker.sh" || print_error_message "setup-docker.sh failed"
-fi
-if ! command -v gh &>/dev/null; then
-  print_warning_message "GitHub CLI not found — installing via setup-github-cli.sh"
-  bash "$DF_SCRIPT_DIR/setup-github-cli.sh" || print_error_message "setup-github-cli.sh failed"
-fi
-
-# --------------------------
-# OpenVPN 3 Linux client (official CloudConnexa path — Arch via AUR)
-# --------------------------
-# Upstream prebuilt repos only cover Debian/Ubuntu/Fedora/RHEL. On Arch we
-# install the same openvpn3-linux project from the AUR (package: openvpn3).
-# Docs: OpenVPN CloudConnexa "Install and Control the OpenVPN 3 Client" tutorial.
+for app in just mkcert dig nss; do
+  ensure_devcontainer_tool "$app" || exit 1
+done
+# Recheck the complete shared stack even when docker/gh are already on PATH.
+bash "$DF_SCRIPT_DIR/setup-docker.sh" || exit 1
+ensure_core_cli github-cli || exit 1
 
 install_openvpn3_client() {
-  if command -v openvpn3 &>/dev/null && pacman -Q openvpn3 &>/dev/null; then
-    print_info_message "OpenVPN 3 client already installed: $(command -v openvpn3)"
-  else
-    print_action_message "Installing OpenVPN 3 Linux client from AUR (openvpn3)"
-    if ! ensure_yay_installed; then
-      print_error_message "yay is required to install openvpn3 from the AUR"
-      return 1
-    fi
-    if ! ensure_yay_pkgs openvpn3; then
-      print_error_message "Failed to install openvpn3 (AUR)"
-      return 1
-    fi
+  local admin client=false backend=true service
+  ensure_devcontainer_tool openvpn3 || return 1
+  case "$WORKSTATION_DISTRO" in
+    arch) admin=/usr/bin/openvpn3-admin ;;
+    ubuntu) admin=/usr/sbin/openvpn3-admin ;;
+  esac
+  [[ -x /usr/bin/openvpn3 ]] && client=true
+  for service in backends configuration sessions netcfg; do
+    [[ -r "/usr/share/dbus-1/system-services/net.openvpn.v3.$service.service" ]] || backend=false
+  done
+  local admin_available=false
+  [[ -x "$admin" ]] && admin_available=true
+  openvpn3_capabilities_complete "$client" "$admin_available" || return 1
+  if [[ "$backend" != true ]]; then
+    print_error_message 'OpenVPN3 D-Bus backend registration gap; VPN unavailable'
+    return 1
   fi
-
-  # Package .install runs init-config, but re-run is safe and covers older partial installs
-  if command -v openvpn3-admin &>/dev/null; then
-    print_info_message "Ensuring OpenVPN 3 backend configs (openvpn3-admin init-config)"
-    sudo openvpn3-admin init-config --write-configs 2>/dev/null \
-      || print_warning_message "openvpn3-admin init-config failed — try: sudo openvpn3-admin init-config --write-configs"
-    sudo systemctl reload dbus 2>/dev/null \
-      || print_warning_message "Could not reload dbus after openvpn3 config"
-  fi
-
-  if command -v openvpn3 &>/dev/null; then
-    print_success_message "openvpn3 available: $(command -v openvpn3)"
-    print_info_message "Import CloudConnexa .ovpn (once), then connect:"
-    print_info_message "  openvpn3 config-import --config /path/to/profile.ovpn --name CloudConnexa --persistent"
-    print_info_message "  openvpn3 session-start --config CloudConnexa"
-    print_info_message "  openvpn3 sessions-list"
-    print_info_message "  openvpn3 session-manage --config CloudConnexa --disconnect"
-  else
-    print_warning_message "openvpn3 not on PATH after install — re-login or check: pacman -Ql openvpn3"
-  fi
+  sudo "$admin" init-config --write-configs || return 1
+  sudo systemctl reload dbus.service || return 1
+  print_info_message 'OpenVPN3 client/backend files configured; VPN connection, DNS integration and DCO unverified'
+  print_info_message 'Import your profile with openvpn3 config-import --config /path/to/profile.ovpn --name CloudConnexa --persistent'
+}
+install_openvpn3_client || {
+  print_error_message 'OpenVPN3 setup incomplete; devcontainer VPN may be unavailable'
+  FAILED=1
 }
 
-install_openvpn3_client || print_warning_message "OpenVPN 3 setup had errors (devcontainer VPN may be unavailable)"
-
-# --------------------------
-# Trust mkcert CA (user; never sudo on Linux)
-# --------------------------
-
-if command -v mkcert &>/dev/null; then
-  print_info_message "Ensuring local mkcert CA is trusted (mkcert -install; no sudo)"
-  # mkcert -install is idempotent; may prompt for password on some desktops
-  if mkcert -install 2>/dev/null; then
-    print_success_message "mkcert CA installed/trusted for this user"
-  else
-    print_warning_message "mkcert -install failed — run without sudo after bootstrap: mkcert -install"
-  fi
-  print_info_message "After cloning the platform devcontainer repo, generate Traefik certs"
-  print_info_message "(see that repo's host TLS steps; paths are usually under .devcontainer/…/certs)"
-else
-  print_warning_message "mkcert missing after package install — skip CA trust"
+# Never sudo mkcert: the CA and private key belong to this user. mkcert itself
+# may request sudo for the system trust store, retaining the existing trust intent.
+if ! mkcert -install; then
+  print_error_message 'CA trust incomplete; rerun mkcert -install as your workstation user'
+  FAILED=1
 fi
 
-# --------------------------
-# Host DNS for local *.test domains (container DNS on 127.0.0.1:5354)
-# --------------------------
-
 configure_test_domain_dns() {
-  local conf_dir="/etc/systemd/resolved.conf.d"
-  local conf_file="$conf_dir/dotfiles-arch-test.conf"
-  local expected
-  expected="[Resolve]
+  local conf_dir=/etc/systemd/resolved.conf.d
+  local conf_file="$conf_dir/dotfiles-arch-test.conf" loaded active=false resolver expected
+  loaded="$(systemctl show -p LoadState --value systemd-resolved.service)" || return 1
+  systemctl is-active --quiet systemd-resolved.service && active=true
+  resolver="$(readlink -f /etc/resolv.conf || true)"
+  devcontainer_dns_ready "$loaded" "$active" "$resolver" || return 1
+  expected='[Resolve]
 DNS=127.0.0.1:5354
-Domains=~test
-"
-
-  if ! systemctl list-unit-files systemd-resolved.service &>/dev/null; then
-    print_warning_message "systemd-resolved not available — configure *.test DNS manually (see devcontainer docs)"
-    return 0
+Domains=~test'
+  [[ ! -L "$conf_file" ]] || { print_error_message "DNS config symlink conflict: $conf_file; preserved"; return 1; }
+  if [[ ! -f "$conf_file" || "$(cat "$conf_file")" != "$expected" ]]; then
+    sudo mkdir -p "$conf_dir" || return 1
+    printf '%s\n' "$expected" | sudo tee "$conf_file" >/dev/null || return 1
   fi
-
-  if [[ -f "$conf_file" ]] && [[ "$(cat "$conf_file")" == "$expected" ]]; then
-    print_info_message "DNS split for ~test already configured: $conf_file"
-  else
-    print_action_message "Writing $conf_file (route Domains=~test to 127.0.0.1:5354)"
-    sudo mkdir -p "$conf_dir"
-    printf '%s' "$expected" | sudo tee "$conf_file" >/dev/null
-  fi
-
-  if systemctl is-active --quiet systemd-resolved 2>/dev/null \
-    || systemctl is-enabled --quiet systemd-resolved 2>/dev/null; then
-    print_info_message "Restarting systemd-resolved to apply test domain config"
-    sudo systemctl restart systemd-resolved \
-      || print_warning_message "Could not restart systemd-resolved"
-  else
-    print_warning_message "systemd-resolved is not active/enabled — enable it or use NetworkManager DNS docs"
-  fi
+  # Retry application on reruns too: a prior write may have succeeded before restart failed.
+  sudo systemctl restart systemd-resolved.service || return 1
+  print_info_message "Split DNS configured in $conf_file; application DNS behavior unverified"
 }
-
-configure_test_domain_dns
-
-# --------------------------
-# inotify watches (large repo trees on Linux hosts)
-# --------------------------
+configure_test_domain_dns || {
+  print_error_message 'Split DNS incomplete; resolve host DNS policy before using *.test'
+  FAILED=1
+}
 
 configure_inotify_watches() {
-  local conf="/etc/sysctl.d/99-dotfiles-arch-inotify.conf"
-  local key="fs.inotify.max_user_watches"
-  local desired=524288
-  local current
-
-  current="$(sysctl -n "$key" 2>/dev/null || echo 0)"
-  if [[ "$current" -ge "$desired" ]] && [[ -f "$conf" ]]; then
-    print_info_message "$key already >= $desired ($current)"
-    return 0
+  local conf=/etc/sysctl.d/99-dotfiles-arch-inotify.conf current desired expected
+  current="$(sysctl -n fs.inotify.max_user_watches)" || return 1
+  desired="$(devcontainer_watch_limit "$current")" || return 1
+  expected="fs.inotify.max_user_watches=$desired"
+  [[ ! -L "$conf" ]] || { print_error_message "Watcher config symlink conflict: $conf; preserved"; return 1; }
+  if [[ ! -f "$conf" || "$(cat "$conf")" != "$expected" ]]; then
+    printf '%s\n' "$expected" | sudo tee "$conf" >/dev/null || return 1
   fi
-
-  print_action_message "Setting $key=$desired"
-  printf '%s=%s\n' "$key" "$desired" | sudo tee "$conf" >/dev/null
-  sudo sysctl --system >/dev/null 2>&1 \
-    || sudo sysctl -p "$conf" >/dev/null 2>&1 \
-    || print_warning_message "Could not apply sysctl live — reboot may be required"
+  if [[ "$current" -lt "$desired" ]]; then
+    sudo sysctl -p "$conf" || return 1
+  fi
 }
+configure_inotify_watches || { print_error_message 'Watcher limit configuration incomplete'; FAILED=1; }
 
-configure_inotify_watches
-
-# --------------------------
-# Summary
-# --------------------------
-
-echo ""
-print_info_message "Host prereqs for the platform devcontainer:"
-print_info_message "  just=$(command -v just 2>/dev/null || echo missing)"
-print_info_message "  mkcert=$(command -v mkcert 2>/dev/null || echo missing)"
-print_info_message "  openvpn3=$(command -v openvpn3 2>/dev/null || echo missing)"
-print_info_message "  gh=$(command -v gh 2>/dev/null || echo missing)"
-print_info_message "  docker=$(command -v docker 2>/dev/null || echo missing)"
-print_info_message "  dig=$(command -v dig 2>/dev/null || echo missing)"
-print_info_message "Next: clone the platform devcontainer repo and Reopen in Container."
-print_info_message "When the stack is up, verify DNS with dig @127.0.0.1 -p 5354 <name>.test +short"
-
+if [[ "$FAILED" != 0 ]]; then
+  print_error_message 'Devcontainer host setup finished with gaps; see errors above'
+  exit 1
+fi
+print_info_message 'Next: generate project Traefik certs after clone, then Reopen in Container'
+print_info_message 'With the stack running, check DNS: dig @127.0.0.1 -p 5354 <name>.test +short'
+print_info_message 'Installation/service/certificate/VPN/networking runtime behavior has not been validated by repository tests'
 print_tool_setup_complete "Devcontainer host prerequisites"

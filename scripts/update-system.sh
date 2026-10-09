@@ -40,7 +40,7 @@ FORCE=false
 
 usage() {
   cat <<'EOF'
-System updater (Arch: pacman + guarded AUR; Ubuntu 26.04: APT; managed editor releases)
+System updater (Arch: pacman + guarded AUR; Ubuntu 26.04: APT; managed CLI releases)
 
 Usage:
   bash scripts/update-system.sh [options]
@@ -54,7 +54,7 @@ Options:
 Arch scans AUR PKGBUILDs and dependencies before yay upgrades. Ubuntu uses
 configured APT sources, retains holds/pins and automatic security updates,
 and refuses removals. Release upgrades are excluded. --yes is not cleanup approval.
-Managed upstream Neovim/tree-sitter/lazydocker and existing Ubuntu Orca DEBs refresh
+Managed upstream Neovim/tree-sitter/lazydocker/minikube/kubectl/k9s and existing Ubuntu Orca DEBs refresh
 after native updates. Ubuntu Zed user installs and Orca AppImages use their in-app
 self-updaters (keep enabled); DEB notifications alone do not install updates.
 Downloads require stable release metadata and SHA-256 verification; any failure
