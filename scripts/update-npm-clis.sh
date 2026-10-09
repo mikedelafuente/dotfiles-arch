@@ -3,11 +3,10 @@
 # --------------------------
 # Update npm-installed agent CLIs and recognized user-native Claude
 # --------------------------
-# claude, codex, and pi are installed via `npm install -g` (setup-claude.sh /
-# setup-codex.sh / setup-pi.sh), which only installs when missing — it never
-# upgrades an existing install. This script covers that gap with
-# `npm update -g` for whichever of those CLIs are actually installed.
-# Recognized native Claude uses its own updater, without NVM/npm or sudo.
+# Existing npm Claude, Codex and Pi keep user npm maintenance. New Ubuntu
+# Claude uses verified native acquisition; recognized native Claude uses its
+# own updater without NVM/npm or sudo. Visible DISABLE_UPDATES policy defers
+# either Claude owner without changing settings.
 #
 # opencode uses native updates on Arch and user npm on Ubuntu. Unknown
 # launchers fail rather than silently acquiring another source.
@@ -27,6 +26,7 @@ fi
 print_line_break "Update agent CLIs through their selected owners"
 updated=0
 failed=0
+deferred=0
 load_nvm || true
 
 for harness in claude codex pi opencode; do
@@ -39,6 +39,19 @@ for harness in claude codex pi opencode; do
     ((failed++)) || true
     continue
   }
+  if [[ "$harness" == claude && "$owner" != native ]]; then
+    policy_status=0
+    claude_updates_allowed || policy_status=$?
+    if [[ "$policy_status" == 2 ]]; then
+      print_info_message 'Claude updates deferred by user/managed DISABLE_UPDATES; owner retained'
+      ((deferred++)) || true
+      continue
+    elif [[ "$policy_status" != 0 ]]; then
+      print_error_message 'Cannot read Claude update policy; owner retained'
+      ((failed++)) || true
+      continue
+    fi
+  fi
   case "$owner" in
     native)
       print_info_message "$harness is native-package-owned — dfa-update-system handles it"
@@ -73,6 +86,6 @@ for harness in claude codex pi opencode; do
   fi
 done
 
-print_info_message "Agent CLI updates: $updated checked, $failed failed"
+print_info_message "Agent CLI updates: $updated checked, $deferred policy-deferred, $failed failed"
 ((failed > 0)) && exit 1
 exit 0

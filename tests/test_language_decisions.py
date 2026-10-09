@@ -44,6 +44,11 @@ def main():
         decide("language_packages", "fedora", "python", ok=False)
         decide("language_packages", "ubuntu", "unknown", ok=False)
         decide("language_command_package", "ubuntu", "php", expected="php-cli")
+        decide("composer_source_selection", "ubuntu", "false", "", "false", expected="self")
+        decide("composer_source_selection", "arch", "false", "", "false", expected="native")
+        decide("composer_source_selection", "ubuntu", "true", "/usr/bin/composer", "false", expected="native")
+        decide("composer_source_selection", "ubuntu", "false", "self", "true", expected="self")
+        decide("composer_source_selection", "ubuntu", "true", "self", "true", ok=False)
         for command, output, version in (
             ("python3", "Python 3.14.0", "3.14.0"),
             ("go", "go version go1.26 linux/amd64", "1.26.0"),
@@ -62,6 +67,9 @@ def main():
                                 ("php", "PHP 8.6.0RC1"), ("python3", "Python 3.14.0rc1")):
             decide("language_command_version", command, output, ok=False)
         for distro in ("arch", "ubuntu"):
+            decide("rust_manager_selection", distro, "none", expected="user-rustup" if distro == "ubuntu" else "native-rustup")
+            decide("rust_manager_selection", distro, "native-rustup", expected="native-rustup")
+            decide("rust_manager_selection", distro, "user-rustup", expected="user-rustup")
             decide("rust_toolchain_selection", distro, "none", "", "", "", expected="initialize")
             decide("rust_toolchain_selection", distro, "native-rustup", "", "", "", expected="initialize")
             decide("rust_toolchain_selection", distro, "user-rustup", "nightly", "1.90.0", "1.90.0",

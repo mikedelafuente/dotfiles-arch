@@ -11,7 +11,7 @@ language_packages() {
     ubuntu:go) echo 'golang-go gopls' ;;
     arch:rust|ubuntu:rust) echo rustup ;;
     arch:php) echo 'php php-gd php-intl php-sqlite php-pgsql composer' ;;
-    ubuntu:php) echo 'php-cli php-curl php-gd php-intl php-mbstring php-xml php-mysql php-sqlite3 php-pgsql composer' ;;
+    ubuntu:php) echo 'php-cli php-curl php-gd php-intl php-mbstring php-xml php-mysql php-sqlite3 php-pgsql' ;;
     arch:ruby) echo 'ruby sqlite base-devel' ;;
     ubuntu:ruby) echo 'ruby ruby-dev sqlite3 libsqlite3-dev build-essential libyaml-dev' ;;
     *) return 1 ;;
@@ -145,6 +145,7 @@ language_rust_owner() {
     if [[ "$rustup_path" == /usr/bin/rustup ]] && native_package_installed rustup; then
       echo native-rustup
     elif [[ "$rustup_path" == "${CARGO_HOME:-$USER_HOME_DIR/.cargo}/bin/rustup" && -O "$rustup_path" ]]; then
+      native_package_installed rustup && { echo conflict; return 0; }
       echo user-rustup
     else
       echo conflict; return 0
@@ -154,11 +155,39 @@ language_rust_owner() {
   elif [[ "$native" == true && "$rustc_path" == /usr/bin/rustc && "$cargo_path" == /usr/bin/cargo ]]; then
     echo native
   elif [[ "$native" == false && -z "$rustc_path" && -z "$cargo_path" ]]; then
+    native_package_installed rustup && { echo conflict; return 0; }
     echo none
   else
     echo conflict
   fi
 }
+
+# Prefer the genuine user updater only for a missing Ubuntu manager.
+rust_manager_selection() {
+  case "$1:$2" in
+    ubuntu:none) echo user-rustup ;;
+    arch:none) echo native-rustup ;;
+    arch:native-rustup|ubuntu:native-rustup|arch:user-rustup|ubuntu:user-rustup|arch:native|ubuntu:native) echo "$2" ;;
+    *) return 1 ;;
+  esac
+}
+
+install_user_rustup() (
+  local stage checksum url=https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/rustup-init
+  [[ "$WORKSTATION_DISTRO" == ubuntu && "$EUID" != 0 ]] || return 1
+  language_user_path_allowed "$USER_HOME_DIR" "$CARGO_HOME" && language_user_path_allowed "$USER_HOME_DIR" "$RUSTUP_HOME" || return 1
+  [[ ! -e "$CARGO_HOME/bin/rustup" && ! -L "$CARGO_HOME/bin/rustup" ]] || return 1
+  ensure_native_pkgs curl ca-certificates || return 1
+  stage="$(mktemp -d)" || return 1
+  trap 'rm -rf "$stage"' EXIT
+  checksum="$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$url.sha256")" || return 1
+  [[ "$checksum" =~ ^([a-f0-9]{64})[[:space:]]+\*?(\./)?rustup-init[[:space:]]*$ ]] || return 1
+  checksum="${BASH_REMATCH[1]}"
+  curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$url" -o "$stage/rustup-init" || return 1
+  printf '%s  %s\n' "$checksum" "$stage/rustup-init" | sha256sum -c - || return 1
+  chmod 755 "$stage/rustup-init" || return 1
+  "$stage/rustup-init" -y --no-modify-path --default-toolchain none --profile minimal || return 1
+)
 
 # Only CLI configuration is touched; never enable/change an Ubuntu web SAPI.
 php_modules_allowed() {
@@ -241,3 +270,72 @@ ensure_user_gem() {
     print_info_message "$command updates: dfa-update-system"
   fi
 }
+
+# Supplied owner facts; a distro-managed Composer never self-updates its PHAR.
+composer_source_selection() {
+  local distro="$1" native="$2" launcher="$3" self_owned="$4"
+  case "$distro" in arch|ubuntu) ;; *) return 1 ;; esac
+  if [[ "$native" == true ]]; then
+    [[ "$launcher" == /usr/bin/composer && "$self_owned" == false ]] || return 1
+    echo native
+  elif [[ "$self_owned" == true ]]; then
+    [[ "$distro" == ubuntu && "$launcher" == self ]] || return 1
+    echo self
+  elif [[ -z "$launcher" ]]; then
+    [[ "$distro" == ubuntu ]] && echo self || echo native
+  else return 1; fi
+}
+
+composer_installed_owner() {
+  local root="$USER_HOME_DIR/.local/share/dotfiles-arch/composer" path native=false owned=false
+  path="$(type -P composer || true)"
+  [[ -z "$path" ]] || path="$(readlink -f "$path")" || return 1
+  native_package_installed composer && native=true
+  if [[ -e "$root" || -L "$root" ]]; then
+    core_cli_parent_links_allowed "$root/composer.phar" || return 1
+    [[ -d "$root" && ! -L "$root" && -f "$root/.dfa-source" && ! -L "$root/.dfa-source" \
+      && "$(cat "$root/.dfa-source")" == composer-self && -f "$root/composer.phar" \
+      && ! -L "$root/composer.phar" && -O "$root/composer.phar" && -w "$root/composer.phar" ]] || return 1
+    [[ "$path" == "$root/composer.phar" ]] || return 1
+    owned=true; path=self
+  fi
+  composer_source_selection "$WORKSTATION_DISTRO" "$native" "$path" "$owned"
+}
+
+ensure_composer_cli() (
+  local owner="$1" root="$USER_HOME_DIR/.local/share/dotfiles-arch/composer" stage digest
+  if [[ "$owner" == native ]]; then
+    ensure_native_pkgs composer || return 1
+    language_native_preflight composer || return 1
+    return 0
+  fi
+  [[ "$owner" == self && "$WORKSTATION_DISTRO" == ubuntu && "$EUID" != 0 ]] || return 1
+  local setting
+  for setting in "${COMPOSER_HOME:-${XDG_CONFIG_HOME:-$USER_HOME_DIR/.config}/composer}" "$USER_HOME_DIR/.composer" "${XDG_CACHE_HOME:-$USER_HOME_DIR/.cache}/composer"; do
+    language_user_path_allowed "$USER_HOME_DIR" "$setting" || return 1
+  done
+  if [[ ! -e "$root" && ! -L "$root" ]]; then
+    core_cli_parent_links_allowed "$root/composer.phar" \
+      && core_cli_link_allowed "$root/composer.phar" "$USER_HOME_DIR/.local/bin/composer" || return 1
+    [[ ":$PATH:" == *":$USER_HOME_DIR/.local/bin:"* ]] || return 1
+    ensure_native_pkgs curl ca-certificates || return 1
+    stage="$(mktemp -d)" || return 1
+    trap 'rm -rf "$stage"' EXIT
+    digest="$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL https://composer.github.io/installer.sig)" || return 1
+    [[ "$digest" =~ ^[a-f0-9]{96}$ ]] || return 1
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL https://getcomposer.org/installer -o "$stage/setup.php" || return 1
+    printf '%s  %s\n' "$digest" "$stage/setup.php" | sha384sum -c - || return 1
+    mkdir "$stage/install" || return 1
+    # Verified PHP installer verifies the stable PHAR and installs updater keys;
+    # it does not replace the distro package or change shell startup files.
+    php "$stage/setup.php" --install-dir="$stage/install" --filename=composer.phar || return 1
+    chmod 755 "$stage/install/composer.phar" || return 1
+    printf '%s\n' composer-self >"$stage/install/.dfa-source" || return 1
+    mkdir -p "$(dirname "$root")" || return 1
+    mv -T "$stage/install" "$root" || return 1
+    link_core_cli_config "$root/composer.phar" "$USER_HOME_DIR/.local/bin/composer" || return 1
+  fi
+  language_installed_version composer >/dev/null || return 1
+  [[ "$(composer_installed_owner)" == self ]] || return 1
+  print_info_message 'Composer PHAR self-update owner: composer self-update (manual); existing channel/settings retained'
+)
