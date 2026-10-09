@@ -20,7 +20,7 @@ CHORD_RIGHT="['<Primary><Super>Right']"
 CHORD_UP="['<Primary><Super>Up']"
 CHORD_DOWN="['<Primary><Super>Down']"
 
-# GNOME 50 is the Pop Shell target. Above it, use the explicitly accepted native
+# Pop Shell supports through GNOME 51. Above it, use the explicitly accepted native
 # fallback even if an old Pop schema remains installed (also guards autostart).
 GNOME_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]+)*).*$/\1/p')"
 [[ "$GNOME_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || {
@@ -28,7 +28,7 @@ GNOME_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]
   exit 1
 }
 POP_AVAILABLE=true
-if [[ "${GNOME_VERSION%%.*}" -gt 50 ]]; then
+if [[ "${GNOME_VERSION%%.*}" -gt 51 ]]; then
   POP_AVAILABLE=false
   echo "rebind-window-push: accepted Pop Shell gap on GNOME $GNOME_VERSION; using native window moves" >&2
 fi

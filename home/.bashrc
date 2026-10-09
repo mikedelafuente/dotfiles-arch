@@ -297,7 +297,7 @@ aliases() {
         echo '  Editor/container CLI updates: dfa-update-system --force (native plus verified managed upstream releases)'
         echo '  Work apps: Chrome/Slack vendor APT on Ubuntu; signed Zoom DEB; dfa-update-system maintains all three; conflicts retained'
         echo '  GNOME: compatible native/pinned extensions; setup/sync applies reviewed pins; foreign machine policies retained'
-        echo '  Pop Shell: GNOME 50 target; accepted gap above 50 uses native window moves, no Super+Y/G/Escape'
+        echo '  Pop Shell: GNOME 50–51 support; accepted gap above 51 uses native window moves, no Super+Y/G/Escape'
         echo '  Audio: dfa-refresh-audio requires active PipeWire/WirePlumber services; --status only prints wpctl status'
         echo '  GPU: setup-nvidia.sh --install explicitly opts in; existing stacks retained; activation/MOK can be pending'
         echo '  Ollama: working CUDA/hardware Vulkan only; native or verified archive updated by dfa-update-system; Ubuntu archive: systemctl --user status ollama'

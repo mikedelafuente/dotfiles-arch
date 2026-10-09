@@ -2,6 +2,7 @@
 """GNOME decisions from supplied facts and safe staging of verified archives."""
 import ast
 import json
+import posixpath
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -22,8 +23,8 @@ def extension_compatible(metadata, uuid, shell):
 
 
 def accepted_extension_skips(shell):
-    # Accepted Pop Shell gap above our GNOME 50 target; no other feature is exempt.
-    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", shell) and int(shell.split(".")[0]) > 50:
+    # Accepted Pop Shell gap above our GNOME 51 support; no other feature is exempt.
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", shell) and int(shell.split(".")[0]) > 51:
         return ["pop-shell@system76.com"]
     return []
 
@@ -90,7 +91,17 @@ def stage_extension(kind, artifact, dest):
                     raise ValueError("Multiple GNOME archive roots")
                 if member.isdir():
                     continue
-                if not member.isfile() or len(path.parts) < 2:
+                if len(path.parts) < 2:
+                    raise ValueError("Non-file GNOME archive member")
+                if member.issym():
+                    # Pop shares config.ts through a relative source link. Copy
+                    # only an in-root regular archive member, never create links.
+                    linked = PurePosixPath(posixpath.normpath(str(path.parent / member.linkname)))
+                    if (PurePosixPath(member.linkname).is_absolute() or ".." in linked.parts
+                            or not linked.parts or linked.parts[0] != root):
+                        raise ValueError("Unsafe GNOME archive link")
+                    member = archive.getmember(str(linked))
+                if not member.isfile():
                     raise ValueError("Non-file GNOME archive member")
                 path = PurePosixPath(*path.parts[1:])
                 source = archive.extractfile(member)

@@ -130,7 +130,9 @@ aur_srcinfo_deps() {
 # True when package is available from an official pacman sync DB (not AUR-only).
 aur_is_official_pkg() {
   local pkg="$1"
-  pacman -Si "$pkg" &>/dev/null
+  # -Si does not resolve virtual names such as sh (provided by bash).
+  # A print-only sync transaction also resolves providers in official DBs.
+  pacman -Si "$pkg" &>/dev/null || pacman -Sp --print-format '%r' -- "$pkg" &>/dev/null
 }
 
 # Scan an AUR package and recurse into AUR-only dependencies (.SRCINFO).

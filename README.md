@@ -315,7 +315,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
 | **Apps** | TablePlus, Postman, Spotify, Obsidian, ZSA Keymapp (Moonlander) |
 | **Fonts** | Adwaita Sans/Mono (GNOME UI), Noto + Liberation fallbacks, Meslo / Ubuntu / Fira Code / JetBrains Mono / Hack Nerd Fonts |
-| **Desktop** | GNOME, compatible Pop Shell (tiling off by default; accepted gap above GNOME 50), Dash to Panel (top bar), No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
+| **Desktop** | GNOME, compatible Pop Shell (tiling off by default; accepted gap above GNOME 51), Dash to Panel (top bar), No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
 
 Standalone `scripts/setup-{python,rust,golang,php,ruby}.sh` now select native
 packages for Arch / Ubuntu 26.04, check capabilities, and report source
@@ -329,7 +329,7 @@ and update behavior has only read-only/static validation.
 
 ### GNOME extras (via `setup-gnome.sh`)
 
-- Compatible Pop Shell (GNOME 50 target): no gaps / no hint radius; active hint on; auto-tiling **off** by default — toggle with Super+Y
+- Compatible Pop Shell (GNOME 50–51 support): no gaps / no hint radius; active hint on; auto-tiling **off** by default — toggle with Super+Y
 - Dash to Panel: always-visible full-width top bar on every monitor (small centered app icons)
 - Skip Activities overview at login
 - Clipboard history (GPaste)
@@ -340,11 +340,10 @@ and update behavior has only read-only/static validation.
 
 The setup path covers Arch and Ubuntu 26.04, whose installed desktop is
 [GNOME 50](https://documentation.ubuntu.com/release-notes/26.04/summary-for-lts-users/).
-Pop Shell targets GNOME 50; its gap on newer shells, including Arch GNOME 51,
-is explicitly accepted. Setup skips its acquisition/settings, disables any old
-Pop extension, and retains native half-snap/monitor moves. Super+Y, Super+G and
-Super+Escape are unavailable there. No shell downgrade, pin or replacement tiler
-is applied. Other required extension metadata must support the installed shell;
+GNOME 51 uses the checksum-pinned [Pop Shell compatibility patch](https://github.com/pop-os/shell/pull/1830),
+including the new widget orientation API. GNOME 50 keeps its existing source.
+Above GNOME 51, setup skips Pop acquisition/settings, disables any old Pop
+extension, and retains native half-snap/monitor moves; Super+Y/G/Escape are unavailable. Other required extension metadata must support the installed shell;
 missing settings, acquisition failures and source conflicts still fail setup.
 On GNOME 50, Pop Shell retains those same checks. Ubuntu uses native
 GPaste/AppIndicator and verified pinned Pop Shell, No Overview and Dash to Panel
@@ -426,8 +425,8 @@ is unverified. Archive service status/logs: `systemctl --user status ollama` /
 | **Super+Y** | Toggle Pop Shell tiling (rebinds Super+Ctrl+Arrows) |
 | **Alt+Tab** | Switch windows |
 
-Pop Shell shortcuts and tiled behavior require a compatible shell (target GNOME 50).
-Above GNOME 50, the accepted gap leaves only native half-snap and monitor moves.
+Pop Shell shortcuts and tiled behavior require a compatible shell (GNOME 50–51).
+Above GNOME 51, the accepted gap leaves only native half-snap and monitor moves.
 
 ### tmux (prefix = **Ctrl+B**)
 
@@ -462,7 +461,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
 | `orphans` | Preview native removal candidates; `dfa-remove-orphans --remove` separately confirms removal |
-| `rebind-window-push` | Keep Super+Ctrl+Arrows on compatible Pop Shell (tiled) or Mutter (floating / accepted gap above GNOME 50) |
+| `rebind-window-push` | Keep Super+Ctrl+Arrows on compatible Pop Shell (tiled) or Mutter (floating / accepted gap above GNOME 51) |
 | `gs` `ga` `gc` `gp` `gpush` … | Git aliases (diffs paged through delta) |
 | `welcome` | Shell cheat sheet |
 | `aliases` | Aliases + key bindings |

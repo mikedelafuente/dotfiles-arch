@@ -26,9 +26,13 @@ def main():
     skips = api["accepted_extension_skips"]
     assert skips("50.1") == []
     assert skips("49") == []
-    assert skips("51.0") == ["pop-shell@system76.com"]
+    assert skips("51.0") == []
+    assert skips("52.0") == ["pop-shell@system76.com"]
     assert skips("unknown") == []
     assert not compatible({"uuid": "x", "shell-version": ["50"]}, "x", "51")
+
+    assert compatible({"uuid": "pop-shell@system76.com", "shell-version": ["50", "51"]},
+                      "pop-shell@system76.com", "51.0")
 
     required = ["pop-shell@system76.com", "ubuntu-appindicators@ubuntu.com"]
     enabled, disabled = api["extension_lists"](
@@ -44,11 +48,11 @@ def main():
         "ubuntu-dock@ubuntu.com", "pop-shell@system76.com"]
     gap_lists = api["extension_lists"](
         "['pop-shell@system76.com', 'user-extension']", "['user-disabled']",
-        ["pop-shell@system76.com", "dash-to-panel@jderose9.github.com"], "arch", "51.0")
+        ["pop-shell@system76.com", "dash-to-panel@jderose9.github.com"], "arch", "52.0")
     assert gap_lists == (["user-extension", "dash-to-panel@jderose9.github.com"],
                          ["user-disabled", "pop-shell@system76.com"])
     assert api["extension_lists"](*map(repr, gap_lists),
-                                  ["dash-to-panel@jderose9.github.com"], "arch", "51.0") == gap_lists
+                                  ["dash-to-panel@jderose9.github.com"], "arch", "52.0") == gap_lists
     assert api["merge_shortcuts"]("['/user/shortcut/']", ["/dfa/shortcut/"]) == [
         "/user/shortcut/", "/dfa/shortcut/"]
     action = api["policy_action"]
@@ -87,6 +91,12 @@ def main():
                 env=env, capture_output=True, text=True)
             assert result.returncode == 0 and result.stdout.strip() == recipe, result.stderr
             assert "Forbidden command" not in result.stdout + result.stderr
+        for distro in ("arch", "ubuntu"):
+            result = subprocess.run(["bash", "-eu", "-c",
+                'source "$1"; gnome_extension_recipe "$2" pop 51.0', "decide",
+                str(ROOT / "scripts/gnome-lib.sh"), distro], env=env, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+            assert result.stdout.strip() == "pop-shell@system76.com pop-31f04c3 pinned"
         archive = Path(temp) / "extension.zip"
         metadata = {"uuid": "x", "shell-version": ["50"]}
         with zipfile.ZipFile(archive, "w") as supplied:

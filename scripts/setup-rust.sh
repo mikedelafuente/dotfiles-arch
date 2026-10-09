@@ -41,7 +41,7 @@ case "$OWNER" in
         elif DEFAULT="$(rustup default 2>&1)"; then
             RUST_VERSION="$(language_installed_version rustc)" || exit 1
             CARGO_VERSION="$(language_installed_version cargo)" || exit 1
-        elif [[ "$DEFAULT" == *'no default toolchain configured'* ]]; then
+        elif [[ "$DEFAULT" == *'no default toolchain '*'configured'* ]]; then
             DEFAULT=''
         else
             print_error_message "Cannot read Rust default: $DEFAULT"
@@ -65,7 +65,7 @@ if [[ "$OWNER" == none ]]; then
     [[ "$OWNER" == "$MANAGER" ]] || { print_error_message 'Rustup installation incomplete'; exit 1; }
     if [[ -n "${RUSTUP_TOOLCHAIN:-}" ]] || DEFAULT="$(rustup default 2>&1)"; then
         ACTION=retain
-    elif [[ "$DEFAULT" != *'no default toolchain configured'* ]]; then
+    elif [[ "$DEFAULT" != *'no default toolchain '*'configured'* ]]; then
         print_error_message "Cannot read Rust default: $DEFAULT"
         exit 1
     fi
