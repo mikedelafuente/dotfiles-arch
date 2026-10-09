@@ -1,5 +1,5 @@
 #!/bin/bash
-# Setup Orca, the Stably AI coding IDE, from the scanned AUR package.
+# Setup Stably Orca: Arch scanned AUR / Ubuntu verified self-updating AppImage.
 # The launcher is stably-orca; Arch's orca package is the GNOME screen reader.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
@@ -13,18 +13,6 @@ fi
 
 print_tool_setup_start "Orca"
 
-if pacman -Q stably-orca-bin &>/dev/null; then
-  print_info_message "Orca is already installed. Skipping installation."
-else
-  print_info_message "Installing Orca from AUR (stably-orca-bin)"
-  ensure_yay_installed
-  ensure_yay_pkgs stably-orca-bin
-fi
-
-if ! pacman -Q stably-orca-bin &>/dev/null; then
-  print_error_message "Orca installation failed"
-  exit 1
-fi
-
-print_info_message "Launch Orca from your application menu or run: stably-orca"
+ensure_desktop_ide orca || exit 1
+print_info_message "Launch with stably-orca or orca-ide (never the screen-reader command orca)"
 print_tool_setup_complete "Orca"

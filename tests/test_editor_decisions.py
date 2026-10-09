@@ -34,6 +34,27 @@ def main():
             if ok:
                 assert result.stdout.strip() == expected, result.stdout
 
+        for distro in ("arch", "ubuntu"):
+            for app in ("zed", "orca"):
+                decide("desktop_ide_selection", distro, app, "unknown", "1.23.2", ok=False)
+                decide("desktop_ide_selection", distro, app, "conflict", "1.23.2", ok=False)
+            decide("desktop_ide_selection", distro, "zed", "native", "1.18.0", expected="native")
+            decide("desktop_ide_selection", distro, "zed", "native", "0.180.0", ok=False)
+        decide("desktop_ide_selection", "ubuntu", "zed", "user", "1.23.2", expected="self")
+        decide("desktop_ide_selection", "arch", "zed", "none", "", expected="native")
+        decide("desktop_ide_selection", "ubuntu", "zed", "none", "", expected="self")
+        decide("desktop_ide_selection", "arch", "orca", "none", "", expected="aur")
+        decide("desktop_ide_selection", "ubuntu", "orca", "none", "", expected="self")
+        decide("desktop_ide_selection", "ubuntu", "orca", "native", "1.4.223", expected="release-deb")
+        decide("desktop_ide_selection", "ubuntu", "orca", "appimage", "1.4.223", expected="self")
+        decide("desktop_ide_mime_allowed", "text/plain", "", "dev.zed.Zed.desktop")
+        decide("desktop_ide_mime_allowed", "text/plain", "user.desktop", "dev.zed.Zed.desktop", ok=False)
+        decide("desktop_ide_mime_allowed", "inode/directory", "", "dev.zed.Zed.desktop", ok=False)
+        decide("desktop_ide_mime_allowed", "text/html", "", "dev.zed.Zed.desktop", ok=False)
+        decide("desktop_ide_zed_version", "Zed 1.23.2 abc /tmp/zed", expected="1.23.2")
+        for output in ("Zed 1.23.2-rc1", "Zed 0.180.0-dev", "unknown"):
+            decide("desktop_ide_zed_version", output, ok=False)
+        decide("desktop_ide_selection", "fedora", "zed", "none", "", ok=False)
         decide("editor_tool_selection", "ubuntu", "nvim", "none", "", "0.11.6",
                expected="upstream")
         for distro in ("arch", "ubuntu"):
@@ -89,6 +110,36 @@ def main():
                              ("name", "nvim-linux-arm64.tar.gz")):
             bad = dict(release, assets=[dict(release["assets"][0], **{field: value})])
             decide("editor_release_asset", "nvim", json.dumps(bad), ok=False)
+        for app, version, repo, asset in (
+            ("zed", "1.23.2", "zed-industries/zed", "zed-linux-x86_64.tar.gz"),
+            ("orca", "1.4.223", "stablyai/orca", "orca-linux.AppImage"),
+            ("orca-deb", "1.4.223", "stablyai/orca", "orca-ide_1.4.223_amd64.deb"),
+        ):
+            url = f"https://github.com/{repo}/releases/download/v{version}/{asset}"
+            release = {"tag_name": "v" + version, "prerelease": False, "draft": False,
+                       "assets": [{"name": asset, "browser_download_url": url,
+                                   "digest": "sha256:" + "c" * 64}]}
+            decide("desktop_ide_release_asset", app, json.dumps(release),
+                   expected=version + " " + url + " " + "c" * 64)
+            for field, value in (("digest", None), ("digest", "sha256:bad"),
+                                 ("browser_download_url", "https://example.com/asset"),
+                                 ("name", "wrong-architecture")):
+                bad = dict(release, assets=[dict(release["assets"][0], **{field: value})])
+                decide("desktop_ide_release_asset", app, json.dumps(bad), ok=False)
+            for field, value in (("prerelease", True), ("draft", True), ("tag_name", "nightly")):
+                decide("desktop_ide_release_asset", app, json.dumps(dict(release, **{field: value})), ok=False)
+        # Alias resolution reads only supplied executables and detects a split source.
+        for name in ("zed", "zeditor"):
+            (guard / name).symlink_to("../supplied-zed")
+        (Path(temp) / "supplied-zed").write_text("supplied executable fact")
+        (Path(temp) / "supplied-zed").chmod(0o755)
+        decide("desktop_ide_command", "zed", expected=str(Path(temp) / "supplied-zed"))
+        (guard / "zed").unlink()
+        (guard / "zed").write_text("#!/bin/sh\nexit 97\n")
+        (guard / "zed").chmod(0o755)
+        decide("desktop_ide_command", "zed", ok=False)
+        for name in ("zed", "zeditor"):
+            (guard / name).unlink()
         root = Path(temp) / ".local/share/dotfiles-arch/editor-tools/nvim"
         launcher = Path(temp) / ".local/bin/nvim"
         decide("editor_upstream_layout_allowed", "nvim", str(root), str(launcher))
