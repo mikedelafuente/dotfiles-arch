@@ -480,15 +480,99 @@ No setup/update/service workflows, networked tests or VM provisioning are run.
 
 | Package | Script | Purpose |
 |---------|--------|---------|
-| `tableplus` (AUR) | `setup-tableplus.sh` | Database GUI |
-| `postman-bin` (AUR) | `setup-postman.sh` | API client |
-| `spotify` (AUR) | `setup-spotify.sh` | Music |
-| `obsidian` (AUR) | `setup-obsidian.sh` | Notes |
+| Arch `tableplus` (AUR), Ubuntu vendor `tableplus` | `setup-tableplus.sh` | Database GUI |
+| Arch `postman-bin` (AUR), Ubuntu official Postman Snap or existing user archive | `setup-postman.sh` | API client |
+| Arch `spotify` (AUR), Ubuntu vendor `spotify-client` or existing official Snap | `setup-spotify.sh` | Music |
+| Arch native `obsidian` (retain existing `obsidian-bin` AUR), Ubuntu official `obsidian` DEB | `setup-obsidian.sh` | Notes; installer refresh includes Electron |
 | `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
 | `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
 | `zed` | `setup-zed.sh` | Code editor |
 | `stably-orca-bin` (AUR) | `setup-orca.sh` | [Orca](https://www.onorca.dev/), an IDE for parallel coding agents; launch with `stably-orca` (the `orca` package is the GNOME screen reader) |
-| `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
+| Arch `zsa-keymapp-bin` (AUR), Ubuntu verified pinned Keymapp archive | `setup-moonlander.sh` | ZSA keyboard live layout/firmware flashing; GTK3, WebKitGTK 4.1 and libusb |
+
+### Desktop utility sources and update owners
+
+Implemented for [#152](https://github.com/mikedelafuente/dotfiles-arch/issues/152).
+The existing shared profile runner selects all five apps on both hosts; standalone
+setup paths are enabled on Ubuntu 26.04 amd64. User preferences, Obsidian vaults,
+database credentials, Postman collections and login state remain user-owned.
+
+| App / command | Arch source / update owner | Ubuntu source / update owner |
+|---------------|----------------------------|-------------------------------|
+| TablePlus / `tableplus` | Scanned AUR `tableplus` / guarded yay | [Official Ubuntu 26 APT repository](https://tableplus.com/download/linux) / APT |
+| Postman / `postman` | Scanned AUR `postman-bin` / guarded yay | [Verified official Postman Snap](https://snapcraft.io/postman) / Snap automatic refresh; preserve known writable user archives 9.13+ / genuine in-app updater |
+| Spotify / `spotify` | Scanned AUR `spotify` / guarded yay | [Official vendor APT](https://www.spotify.com/us/download/linux/) / APT; preserve an existing official Spotify Snap / Snap automatic refresh |
+| Obsidian / `obsidian` | [Native Extra](https://archlinux.org/packages/extra/x86_64/obsidian/) / pacman; preserve existing `obsidian-bin` / guarded yay | [Official stable amd64 DEB](https://github.com/obsidianmd/obsidian-releases/releases) with GitHub SHA-256 / common maintenance installer refresh |
+| Keymapp / `keymapp` | Scanned AUR `zsa-keymapp-bin` and dependencies / guarded yay | [Official ZSA archive](https://www.zsa.io/keymapp) / reviewed version/checksum pin and common maintenance verification/refresh |
+
+Ubuntu's native catalog does not supply these five apps with the required vendor
+workflows. TablePlus uses `https://deb.tableplus.com/debian/26 tableplus main`;
+Spotify uses `https://repository.spotify.com stable non-free`. Each APT source uses
+`arch=amd64`, a repository-specific `signed-by=/usr/share/keyrings/<app>.gpg`,
+one pinned primary signing key, and a candidate-origin check. Existing compatible
+scoped sources retain their paths. Duplicate, disabled, wrong-release, globally
+trusted or unofficial sources fail without automatic migration. Vendor examples
+using `trusted.gpg.d` are deliberately narrowed to repository-scoped trust here.
+
+Primary-key fingerprints inspected on 2026-10-09:
+
+- TablePlus: `211438D2880D8D98E100B1412A17818B38772786`.
+- Spotify: `E1096BCBFF6D418796DE78515384CE82BA52C83A` (vendor key URL ends `5384CE82BA52C83A.asc`). Rotation requires reviewed pin changes.
+
+Postman's Snap is the vendor-recommended bundled-library exception; the official
+Snap ID is `fFcOtEEF4EdyYb95IUE5Isy28tICYMLf` (publisher `postman-inc`).
+Spotify's existing official Snap ID is `pOBIoZ2LrCB3rDohMxoYGnbN14EHOgD7`.
+Setup checks those asserted identities and retains existing stable channels;
+maintenance leaves Snap automatic updates and holds in control rather than using
+an explicit refresh that could override a hold. Fresh Postman installs use
+`latest/stable`. Recognized writable user Postman archives retain their
+[in-app updater](https://learning.postman.com/docs/getting-started/installation/update);
+keep updates enabled and restart to apply downloads. Disabled in-app updates
+require user action; common maintenance never rewrites app settings or claims to
+have applied an in-app update. New archive installation is not selected because
+the download lacks independently published integrity metadata; no silent fallback
+from failed Snap acquisition occurs.
+
+[Obsidian's automatic updater](https://obsidian.md/help/updates) updates the app,
+but cannot update the Electron installer runtime. `dfa-update-system` separately
+checks official stable DEB metadata, stages a SHA-256 verified amd64 artifact,
+checks package name/version/architecture, and installs only a newer installer.
+APT holds defer this refresh without overriding policy. Obsidian can show a newer
+app version than its installed package; compare **Settings → General → installer
+version** when diagnosing runtime requirements. Existing AppImages/tar archives
+with unknown installer ownership are preserved and reported as required source
+gaps, not marked current merely because in-app updates work. There is no official
+Obsidian APT repository; a standalone DEB does not update through APT alone.
+
+Keymapp's vendor publishes a mutable `keymapp-latest.tar.gz` without a published
+signature/checksum. The reviewed 1.3.7 pin
+`a87bc7083cd6461ba10e0da4b94f249a29100d712542d54498f01e947cf868fa`
+matches the [IoC-inspected AUR packaging source](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zsa-keymapp-bin)
+and the official downloaded archive. Only regular `keymapp`/`icon.png` members
+are extracted; the binary must identify as x86_64 ELF. The user-owned release lives
+under `USER_HOME_DIR/.local/share/dotfiles-arch/keymapp/1.3.7`, with a stable
+`current` link, executable link and separate `dfa-keymapp.desktop` launcher.
+Reviewed pin changes publish a new version and atomically switch `current`,
+retaining the previous release. Common maintenance verifies
+the vendor archive against the pin before changing a working installation. If
+the vendor changes bytes, refresh fails clearly and requires a reviewed
+version/checksum update in the recipe; no unverified "latest" replacement occurs.
+No genuine installer updater is documented, so the repository pin owns archive
+refreshes. Ubuntu dependencies are native `libusb-1.0-0`, `libgtk-3-0t64` and
+`libwebkit2gtk-4.1-0` (verified in the official Resolute catalog).
+
+`setup-moonlander.sh` installs the shared [ZSA udev permissions](https://github.com/zsa/wally/wiki/Linux-install)
+from `scripts/zsa-udev.rules`, creates/adds the real user to `plugdev`, and reloads
+rules only when first installing them. Existing files containing all required
+rules retain user additions/comments; different rules or symlinks fail for manual
+review. The vendor's device-ID-scoped flashing permissions are retained, including
+its `0666` bootloader rules. There is no global `udevadm trigger`: log out/back in
+for group changes, then replug the keyboard. Keymapp 1.2+ requires WebKitGTK 4.1.
+Wayland launch, sandbox behavior, firmware/live training, group activation and
+keyboard access remain unverified; no installer, updater, service or device action
+was executed for validation. The offline selection/source regression check is
+`tests/test_desktop_utility_decisions.py`, deliberately left unrun; validation was
+direct Bash syntax/ShellCheck and source/acquisition/udev inspection only.
 
 ## Profile extras
 
