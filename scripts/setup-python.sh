@@ -21,31 +21,14 @@ fi
 # --------------------------
 
 print_tool_setup_start "Python"
-
-# --------------------------
-# Install Python
-# --------------------------
-
-# Check if Python is already installed
-if command -v python3 &> /dev/null; then
-    print_info_message "Python is already installed. Skipping installation."
-else
-    print_info_message "Installing Python from official Arch repositories"
-
-    # Install Python
-    sudo pacman -S --needed --noconfirm python
-fi
-
-# Print Python version
-print_info_message "Python version: $(python3 --version)"
-
-# Install pip if not already installed
-if command -v pip3 &> /dev/null; then
-    print_info_message "pip is already installed. Skipping installation."
-else
-    print_info_message "Installing pip for Python"
-    sudo pacman -S --needed --noconfirm python-pip
-fi
-
+ensure_language_runtime python python3 || exit 1
+# Respect externally managed system Python; project packages belong in a venv.
+python3 -I -c 'import pip, venv, ensurepip, pynvim' || {
+    print_error_message 'Python requires pip, venv/ensurepip, and pynvim from native packages'
+    exit 1
+}
+language_native_file_owned "$(type -P pip3 || true)" || {
+    print_error_message 'pip3 command is missing or has a conflicting source'; exit 1;
+}
+print_info_message 'Project packages: python3 -m venv .venv; .venv/bin/python -m pip install <package>'
 print_tool_setup_complete "Python"
-

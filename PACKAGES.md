@@ -348,17 +348,70 @@ are run for validation.
 
 | Package | Script | Purpose | Related commands |
 |---------|--------|---------|------------------|
-| `python`, `python-pip` | `setup-python.sh` | Python toolchain | `py`, `pip`, `serve`, `jsonpp` |
-| `go`, `gopls` | `setup-golang.sh` | Go toolchain + LSP | `go` |
-| `rustup` | `setup-rust.sh` | Rust toolchains | `cargo`, `rustc` |
-| `ruby`, `sqlite`, `base-devel` | `setup-ruby.sh` | Ruby / Rails development | `ruby`, `rails` |
-| `php`, `php-gd`, `php-intl`, `php-sqlite`, `php-pgsql`, `composer` | `setup-php.sh` | PHP development | `php`, `composer` |
+| Arch `python`, `python-pip`, `python-pynvim`; Ubuntu `python3`, `python3-pip`, `python3-venv`, `python3-pynvim`, `python3-dev` | `setup-python.sh` | Interpreter, pip, venv/ensurepip, Neovim provider, native extension headers | `py`, `pip`, `serve`, `jsonpp` |
+| Arch `go`, `gopls`; Ubuntu `golang-go`, `gopls` | `setup-golang.sh` | Go compiler, standard library, language server | `go`, `gopls` |
+| `rustup` (both distros) | `setup-rust.sh` | User Rust toolchain manager; compatible existing distro Rust is retained | `cargo`, `rustc`, `rustup` |
+| Arch `ruby`, `sqlite`, `base-devel`; Ubuntu `ruby`, `ruby-dev`, `sqlite3`, `libsqlite3-dev`, `build-essential`, `libyaml-dev` | `setup-ruby.sh` | Ruby/RubyGems, Ruby headers, Rails database, native gem compilation and YAML headers | `ruby`, `gem`, `bundle`, `rails` |
+| Arch `php`, `php-gd`, `php-intl`, `php-sqlite`, `php-pgsql`, `composer`; Ubuntu `php-cli`, `php-curl`, `php-gd`, `php-intl`, `php-mbstring`, `php-xml`, `php-mysql`, `php-sqlite3`, `php-pgsql`, `composer` | `setup-php.sh` | PHP CLI, HTTP/image/Unicode/XML extensions, MySQL/SQLite/PostgreSQL drivers, Composer and user Laravel installer | `php`, `composer`, `laravel` |
+| Arch `base-devel`, `openssl`, `zlib`, `libffi`, `libyaml`, `pkgconf`, `sqlite`; Ubuntu `build-essential`, `libssl-dev`, `zlib1g-dev`, `libffi-dev`, `libyaml-dev`, `pkg-config`, `sqlite3`, `libsqlite3-dev` | All five language setups | C/C++ compiler/linker/make, TLS/compression/FFI/YAML headers, library discovery, SQLite CLI/headers for native builds | `cc`, `make`, `pkg-config`, `sqlite3` |
 | NVM + Node LTS (not pacman) | `setup-node.sh` | Node via NVM at `~/.config/nvm` | `nvm`, `node`, `npm` |
 | Claude Code (user-level npm) | `setup-claude.sh` | Claude Code CLI | `claude` |
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
 | `chatgpt-desktop` (AUR) | `setup-codex.sh` | ChatGPT desktop app (repackaged official binary) | `chatgpt` |
 | `opencode` | `setup-opencode.sh` | AI coding agent CLI | `opencode` |
 | `ollama-cuda` / `ollama-vulkan` (GPU-gated) | `setup-ollama.sh` | Local model server — `ollama-cuda` on a working NVIDIA driver, else `ollama-vulkan` on a detected Vulkan ICD; skipped entirely (no CPU-only install) if neither is present | `ollama` |
+
+### Shared language sources and update owners
+
+The five standalone language setups support rolling Arch and Ubuntu 26.04 amd64.
+They use the existing native backend, without vendor repositories, AUR additions,
+runtime managers replacing native Python/Go/PHP/Ruby, or root-owned user installs.
+Full Ubuntu bootstrap/sync is still guarded pending the remaining app slices.
+
+| Component | Source / retained installation | Update owner | Compatibility / configuration |
+| --- | --- | --- | --- |
+| Python | Native distro packages above | `dfa-update-system`; project dependencies use the project's venv/pip | Python 3.10+; import pip, venv, ensurepip and pynvim; native-owned `pip3`. No system pip installs or externally-managed override. |
+| Go / gopls | Native packages above | `dfa-update-system` | Go 1.24+, gopls 0.16+; compiler tool and standard-library directories must exist. Go's optional automatic toolchain selection is left unchanged. |
+| rustup binary | Native `rustup` preferred for new setups; existing user rustup retained | Native binary: `dfa-update-system`; user binary: manual `rustup self update` | Rustup proxies must share the manager's file identity. Existing user `CARGO_HOME`/`RUSTUP_HOME` remain user-owned; no pipe-to-shell installer. |
+| Rust / Cargo | User toolchains via rustup, or compatible existing distro Rust/Cargo | Rustup toolchains: manual `rustup update`; distro toolchain: `dfa-update-system` | Rust/Cargo 1.70+ baseline. Stable is initialized only with no selected default/toolchain; existing pinned, beta/nightly defaults and `RUSTUP_TOOLCHAIN` are retained. No distro rustup self-update. |
+| PHP / Composer | Native distro packages above | `dfa-update-system` | PHP 8.2+, Composer 2+; Laravel-required builtins/extensions and GD/Intl/MySQL/SQLite/PostgreSQL are checked. Arch enables exact missing directives in `/etc/php/php.ini`; Ubuntu enables missing modules with `phpenmod -v <major.minor> -s cli`, using `/etc/php/<major.minor>/cli/{php.ini,conf.d}`. Web server SAPIs stay unchanged. |
+| Laravel installer | Composer global package in the existing user Composer home/bin-dir | Manual `composer global update laravel/installer` | Preserve `COMPOSER_HOME`/global bin-dir; verify the installer command. Shell PATH includes XDG/explicit Composer homes and legacy `~/.composer/vendor/bin`; custom bin-dir must already be on PATH. |
+| Ruby / native headers | Native distro packages above | `dfa-update-system` | Ruby 3.2+; RubyGems, OpenSSL and Psych must work; NVM Node is required for the existing Rails JS workflow. |
+| Bundler / Rails | User gems (`gem install --user-install`) or compatible existing native commands | User gems: manual `gem update --user-install <user-gem> --no-document` (`bundler` or `rails` only when user-owned); native gems: `dfa-update-system` | Use RubyGems' actual `Gem.user_dir`, not a hardcoded Ruby ABI. PATH covers XDG `gem/ruby/*/bin` and legacy `~/.gem/ruby/*/bin`; verify `bundle` and `rails`, even when a gem is listed. Never `sudo gem` or `gem update --system`. |
+
+Manual toolchain/gem/Composer updates retain the existing opt-in workflow; daily
+native updates do not claim to refresh them. All package, rustup, gem and Composer
+mutation failures exit nonzero before setup completion; these setups write no
+successful-update stamps. Native update stamps retain the shared backend's failure
+contract. User tooling is rejected when run as root. Unknown/shadowing launchers,
+unowned alternatives, unsupported versions, custom PHP config overrides, and
+linked/root-owned/outside-home user state are reported and retained. A native runtime
+without the selected package identity (for example a version-only PHP package without
+`php-cli`) needs source resolution before setup rather than acquiring another runtime.
+Custom conflicting `GEM_HOME`/`GEM_PATH` is reported instead of rewritten.
+
+Primary-source evidence: Ubuntu packages
+[rustup](https://packages.ubuntu.com/resolute/rustup),
+[golang-go](https://packages.ubuntu.com/resolute/golang-go),
+[gopls](https://packages.ubuntu.com/resolute/gopls),
+[Ruby](https://packages.ubuntu.com/resolute/ruby),
+[Ruby headers](https://packages.ubuntu.com/resolute/ruby-dev), and
+[PHP CLI](https://packages.ubuntu.com/resolute/php8.5-cli).
+[Laravel's PHP/extension requirements](https://laravel.com/framework/docs/12.x/deployment),
+[Rails' Ruby requirements](https://guides.rubyonrails.org/getting_started.html),
+[RubyGems user paths](https://guides.rubygems.org/faqs/),
+[Composer globals](https://getcomposer.org/doc/03-cli.md#global), and
+[Arch's PHP file layout](https://archlinux.org/packages/extra/x86_64/php/files/)
+support the configuration choices. Runtime floors are workflow baselines, not version
+pins or permission to upgrade an incompatible existing runtime silently.
+
+**Validation:** `python3 tests/test_language_decisions.py` uses supplied package,
+version, ownership, PHP module/config-path and Rust default facts, with temporary
+user state and forbidden-command guards. Bash syntax/ShellCheck and static inspection
+cover package/config writes and failure paths. Installation, repeated setup on real
+hosts, compiler/native-gem builds, venv creation, live module loading, proxy packaging,
+networked toolchain/gem/Composer updates and shell PATH behavior remain unverified;
+no OS-changing workflows, networked tests or VMs are run.
 
 ## Containers and Kubernetes
 

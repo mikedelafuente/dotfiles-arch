@@ -257,6 +257,14 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Fonts** | Adwaita Sans/Mono (GNOME UI), Noto + Liberation fallbacks, Meslo / Ubuntu / Fira Code / JetBrains Mono / Hack Nerd Fonts |
 | **Desktop** | GNOME + Pop Shell (tiling off by default), Dash to Panel (top bar), No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
 
+Standalone `scripts/setup-{python,rust,golang,php,ruby}.sh` now select native
+packages for Arch / Ubuntu 26.04, check versions/capabilities, and report source
+conflicts. Rust defaults and user Composer/gem paths are preserved. See the
+[language source/update matrix](PACKAGES.md#shared-language-sources-and-update-owners)
+for prerequisites and manual toolchain/gem updates. Use `python3 -m venv .venv`
+for project Python packages. Ubuntu full bootstrap remains guarded; installation
+and update behavior has only read-only/static validation.
+
 ### GNOME extras (via `setup-gnome.sh`)
 
 - Pop Shell available (no gaps / no hint radius; active hint on); auto-tiling **off** by default — toggle with Super+Y

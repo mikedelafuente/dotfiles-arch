@@ -190,6 +190,14 @@ command -v tmux kitty nvim claude codex ollama
 
 Shared highlights: Kitty, tmux, Neovim, Claude Code, Codex, Ollama, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
 
+Language-only setup on Arch / Ubuntu 26.04: choose from
+`scripts/setup-{python,rust,golang,php,ruby}.sh` and run with Bash
+(for example `bash scripts/setup-python.sh`). Native packages update with `dfa-update-system`; user
+toolchains/gems stay manual: `rustup update`,
+`gem update --user-install <user-gem> --no-document` (Bundler/Rails only when user-owned),
+`composer global update laravel/installer`. Use `python3 -m venv .venv` for project
+Python packages. See `packages` for sources, conflicts and unverified runtime paths.
+
 ### …reload shell config after editing bashrc
 
 ```bash
