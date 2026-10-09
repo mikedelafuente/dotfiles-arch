@@ -9,12 +9,16 @@ APT_URLS = {
     "slack": {"https://packagecloud.io/slacktechnologies/slack/debian"},
     "tableplus": {"https://deb.tableplus.com/debian/26"},
     "spotify": {"https://repository.spotify.com"},
+    "mullvad": {"https://repository.mullvad.net/deb/stable"},
+    "firefox": {"https://packages.mozilla.org/apt"},
 }
 APT_VENDORS = {
     "chrome": r"dl(-ssl)?\.google\.com/linux/chrome",
     "slack": r"packagecloud\.io/slacktechnologies/slack|packages\.slack-edge\.com",
     "tableplus": r"(?:deb|apt)\.tableplus\.com",
     "spotify": r"(?:repository|download)\.spotify\.com",
+    "mullvad": r"repository\.mullvad\.net",
+    "firefox": r"packages\.mozilla\.org|mozillateam",
 }
 
 
@@ -50,7 +54,7 @@ def apt_key(app, text):
         if fields.get("Types") != "deb" or fields.get("Components") != component or fields.get("Architectures", "amd64") != "amd64":
             raise ValueError("unsupported source layout")
         url, suite, key = fields.get("URIs", ""), fields.get("Suites", ""), fields.get("Signed-By", "")
-    suites = {"slack": "jessie", "tableplus": "tableplus"}
+    suites = {"slack": "jessie", "tableplus": "tableplus", "firefox": "mozilla"}
     if url.rstrip("/") not in urls or suite != suites.get(app, "stable"):
         raise ValueError("unexpected vendor source")
     if not re.fullmatch(r"/(?:etc/apt/keyrings|usr/share/keyrings)/[A-Za-z0-9_.-]+\.(?:gpg|asc)", key):
@@ -60,7 +64,7 @@ def apt_key(app, text):
 
 def package_version(app, version):
     pattern = r"[0-9]+(?:\.[0-9]+)+(?:\.g[a-f0-9]+)?(?:[-+][A-Za-z0-9.]+)?" if app == "spotify" else r"[0-9]+(?:\.[0-9]+)+(?:[-+][A-Za-z0-9.]+)?"
-    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian"} or not re.fullmatch(pattern, version):
+    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox"} or not re.fullmatch(pattern, version):
         raise ValueError("missing stable package version")
     minimum = {"slack": (4, 35, 121), "zoom": (6, 7, 5)}.get(app, (0,))
     numbers = tuple(map(int, re.split(r"[-+]|\.g", version)[0].split(".")))
@@ -90,6 +94,40 @@ def apt_candidate(app, text):
     if not origins or any(origin not in urls for origin in origins):
         raise ValueError("candidate has unknown/conflicting update owner")
     return version
+
+
+def steam_candidate(package, text, indexes):
+    """Accept native Ubuntu Steam/i386 indexes, including authenticated local mirrors."""
+    component = "multiverse" if package == "steam-installer" else ("main" if package == "libc6:i386" else "universe")
+    arch = "amd64" if package == "steam-installer" else "i386"
+    candidate = re.search(r"^  Candidate: (\S+)$", text, re.M)
+    if not candidate or candidate[1] == "(none)":
+        raise ValueError("missing Steam/i386 candidate")
+    trusted = set()
+    for block in re.split(r"(?=^ [0-9]+ )", indexes, flags=re.M):
+        header = re.search(r"^ [0-9]+ (\S+) (\S+) " + arch + r" Packages$", block, re.M)
+        release = re.search(r"^\s+release (.+)$", block, re.M)
+        if not header or not release:
+            continue
+        fields = dict(item.split("=", 1) for item in release[1].split(",") if "=" in item)
+        if (fields.get("o") == "Ubuntu" and fields.get("n") == "resolute"
+                and fields.get("a") in {"resolute", "resolute-updates", "resolute-security", "resolute-backports"}
+                and fields.get("c") == component and fields.get("b") == arch):
+            trusted.add((header[1], header[2]))
+    selected, origins = False, []
+    for line in text.splitlines():
+        header = re.fullmatch(r"\s+(?:\*\*\* )?(\S+) +[0-9]+", line)
+        if header:
+            selected = header[1] == candidate[1]
+        elif selected:
+            origin = re.fullmatch(r"\s+[0-9]+ +(\S+) +(\S+) +" + arch + r" Packages", line)
+            if origin:
+                origins.append((origin[1], origin[2]))
+            elif "Packages" in line:
+                raise ValueError("unknown Steam candidate origin")
+    if not origins or any(origin not in trusted for origin in origins):
+        raise ValueError("Steam candidate must come from native Ubuntu indexes")
+    return candidate[1]
 
 
 def zoom_members(path):
@@ -152,6 +190,8 @@ if __name__ == "__main__":
             print(package_version(sys.argv[2], sys.argv[3]))
         elif sys.argv[1] == "apt-candidate":
             print(apt_candidate(sys.argv[2], sys.argv[3]))
+        elif sys.argv[1] == "steam-candidate":
+            print(steam_candidate(sys.argv[2], sys.argv[3], sys.argv[4]))
         elif sys.argv[1] == "zoom-manifest":
             zoom_manifest(sys.argv[2], Path(sys.argv[3]).read_text())
         else:

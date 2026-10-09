@@ -56,6 +56,8 @@ work_app_apt_source() {
     zoom) pattern='zoom\.(us|com)' ;;
     tableplus) pattern='(deb|apt)\.tableplus\.com' ;;
     spotify) pattern='(repository|download)\.spotify\.com' ;;
+    mullvad) pattern='repository\.mullvad\.net' ;;
+    firefox) pattern='packages\.mozilla\.org|mozillateam' ;;
     *) return 1 ;;
   esac
   local files=("$root/sources.list")
@@ -83,6 +85,8 @@ work_app_fingerprint() {
     zoom) echo 84C365D6CC9A4886CA926BCC4F2197399706AC24 ;;
     tableplus) echo 211438D2880D8D98E100B1412A17818B38772786 ;;
     spotify) echo E1096BCBFF6D418796DE78515384CE82BA52C83A ;;
+    mullvad) echo A1198702FC3E0A09A9AE5B75D5A1D4F266DE8DDF ;;
+    firefox) echo 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3 ;;
     *) return 1 ;;
   esac
 }
@@ -99,6 +103,8 @@ stage_work_app_key() {
       zoom) url=https://zoom.us/linux/download/pubkey ;;
       tableplus) url=https://deb.tableplus.com/apt.tableplus.com.gpg.key ;;
       spotify) url=https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc ;;
+      mullvad) url=https://repository.mullvad.net/deb/mullvad-keyring.asc ;;
+      firefox) url=https://packages.mozilla.org/apt/repo-signing-key.gpg ;;
     esac
     input="$stage/key.download"
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$url" -o "$input" || return 1
@@ -138,6 +144,10 @@ EOF
         source=/etc/apt/sources.list.d/slack.list
         key=/usr/share/keyrings/slack.gpg
         printf 'deb [arch=amd64 signed-by=%s] https://packagecloud.io/slacktechnologies/slack/debian/ jessie main\n' "$key" >"$stage/source" ;;
+      mullvad)
+        source=/etc/apt/sources.list.d/mullvad.list
+        key=/usr/share/keyrings/mullvad-keyring.gpg
+        printf 'deb [arch=amd64 signed-by=%s] https://repository.mullvad.net/deb/stable stable main\n' "$key" >"$stage/source" ;;
       tableplus|spotify)
         source="/etc/apt/sources.list.d/$app.list"
         key="/usr/share/keyrings/$app.gpg"

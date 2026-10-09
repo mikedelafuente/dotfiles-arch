@@ -172,7 +172,7 @@ bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
 | Profile | Extra | Browser |
 |---------|-------|---------|
 | **work** | Zoom, Slack, Chrome | Chrome |
-| **personal** | Steam, Discord, Firefox, Mullvad | Firefox |
+| **personal** | Steam, Discord, Firefox, Mullvad (Arch / Ubuntu 26.04) | Firefox; selected Snap/DEB launcher, work still wins |
 
 Saved in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`, along with
 `MACHINE_TYPE=laptop|desktop`, which drives the power profile, lid behavior
