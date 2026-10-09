@@ -1,6 +1,6 @@
 #!/bin/bash
 # ----------------
-# Bootstrap Script for Arch
+# Bootstrap for rolling Arch / installed Ubuntu 26.04 GNOME
 # ----------------
 # Flags:
 #   --yes, -y                              Non-interactive: use saved config / defaults
@@ -45,6 +45,7 @@ while [ $# -gt 0 ]; do
 Usage: $(basename "$0") [options]
 
 Full new-machine bootstrap for dotfiles-arch.
+Supports rolling Arch / installed Ubuntu 26.04 GNOME on x86_64/amd64.
 Do not run with sudo.
 
   --yes, -y                 Non-interactive (saved config / hardware defaults)
@@ -174,21 +175,25 @@ sudo -v
 start_sudo_keepalive
 
 # --------------------------
-# Allow multilib in pacman
+# Arch repository preparation
 # --------------------------
 
-ensure_multilib_enabled || true
+BOOTSTRAP_STATUS=0
 PACMAN_CHANGES_MADE=false
-if [[ "${MULTILIB_CHANGED:-false}" == "true" ]]; then
-  PACMAN_CHANGES_MADE=true
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+  ensure_multilib_enabled || BOOTSTRAP_STATUS=1
+  if [[ "${MULTILIB_CHANGED:-false}" == "true" ]]; then
+    PACMAN_CHANGES_MADE=true
+  fi
+  ensure_yay_installed || {
+    print_error_message "yay install failed — required AUR setup may fail"
+    BOOTSTRAP_STATUS=1
+  }
 fi
 
 # --------------------------
 # Rate-limited guarded system update
 # --------------------------
-
-ensure_yay_installed || print_warning_message "yay install failed — AUR steps may fail"
-BOOTSTRAP_STATUS=0
 
 if [ "$PACMAN_CHANGES_MADE" = true ] || system_upgrade_cooldown_expired; then
   if [ "$PACMAN_CHANGES_MADE" = true ]; then
@@ -198,7 +203,9 @@ if [ "$PACMAN_CHANGES_MADE" = true ] || system_upgrade_cooldown_expired; then
   fi
   export DOTFILES_AUR_ASSUME_YES=true
   if safe_system_upgrade --yes; then
-    record_system_upgrade_stamps || BOOTSTRAP_STATUS=1
+    if [[ "$BOOTSTRAP_STATUS" -eq 0 ]]; then
+      record_system_upgrade_stamps || BOOTSTRAP_STATUS=1
+    fi
   else
     BOOTSTRAP_STATUS=1
     print_warning_message "Guarded system update failed — continuing with setup scripts"
@@ -215,11 +222,11 @@ print_info_message "Running bootstrap with profiles: $(format_setup_profiles)"
 
 run_profile_setup_scripts "true" || BOOTSTRAP_STATUS=1
 
-bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)"
-bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)" || BOOTSTRAP_STATUS=1
+bash "$DF_SCRIPT_DIR/post-link-hooks.sh" || BOOTSTRAP_STATUS=1
 
 print_line_break "Cleaning up"
-remove_orphaned_packages
+remove_orphaned_packages || BOOTSTRAP_STATUS=1
 
 if [[ "$BOOTSTRAP_STATUS" -ne 0 ]]; then
   print_error_message "Bootstrap finished with failures (see above)"

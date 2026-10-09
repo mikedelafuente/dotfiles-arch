@@ -5,7 +5,7 @@
 # Arch: pacman + guarded AUR updates. Ubuntu 26.04: native APT upgrade.
 #
 # Usage:
-#   bash scripts/update-system.sh           # interactive pacman/yay prompts
+#   bash scripts/update-system.sh           # interactive native update prompts
 #   bash scripts/update-system.sh --yes     # non-interactive after clean scan
 #   bash scripts/update-system.sh --scan-only
 #   bash scripts/update-system.sh --force   # bypass the cooldown check
@@ -103,7 +103,7 @@ if [ "$FORCE" != true ] && ! system_upgrade_cooldown_expired; then
   exit 0
 fi
 
-# Keep sudo warm for pacman
+# Authenticate for the selected native update backend
 if [ "$(whoami)" = "${SUDO_USER:-$(whoami)}" ]; then
   sudo -v
 fi

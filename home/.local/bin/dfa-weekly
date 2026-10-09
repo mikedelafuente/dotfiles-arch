@@ -4,8 +4,8 @@
 # 24h cooldown) and native orphan/removal preview (cleanup is separately confirmed).
 #
 # Edit WEEKLY_STEPS below to add or reorder the maintenance-only tasks. Each
-# name must be on PATH (~/.local/bin). Missing commands are skipped with a
-# message. dfa-daily's own dotfiles-arch-update auto-resync/restart special
+# name must be on PATH (~/.local/bin). Missing repository steps fail; custom
+# steps may skip. dfa-daily's own dotfiles-arch-update auto-resync/restart special
 # case is inherited for free since it's run as the first step here — it is
 # not duplicated in this script.
 #
@@ -36,7 +36,7 @@ usage() {
 Usage: dfa-weekly [args…]
 
 Run dfa-daily, then the weekly-only maintenance steps. Edit WEEKLY_STEPS in
-this script to customize. Steps not on PATH are skipped.
+this script to customize. Missing repository steps fail; custom steps may skip.
 
 Steps:
   dfa-daily                 the full daily routine (see dfa-daily --help)
@@ -81,8 +81,13 @@ main() {
 
   for step in "${WEEKLY_STEPS[@]}"; do
     if ! command -v "$step" &>/dev/null; then
-      printf 'dfa-weekly: skip %s (not on PATH)\n' "$step" >&2
-      skipped+=("$step")
+      if [[ -f "$ROOT/home/.local/bin/$step" ]]; then
+        printf 'dfa-weekly: required %s missing from PATH; relink dotfiles\n' "$step" >&2
+        failures+=("$step")
+      else
+        printf 'dfa-weekly: skip custom %s (not on PATH)\n' "$step" >&2
+        skipped+=("$step")
+      fi
       continue
     fi
 

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # dotfiles-arch
 
-Arch Linux workstation automation: GNOME (Wayland), Kitty, tmux, Neovim, Claude Code,
+Rolling Arch / installed Ubuntu 26.04 GNOME workstation automation on x86_64/amd64: Kitty, tmux, Neovim, Claude Code,
 Codex. Profiles are **additive multi-select** (`work`, `personal`, `devcontainer`).
 
 ## Orchestration
@@ -13,6 +13,10 @@ Codex. Profiles are **additive multi-select** (`work`, `personal`, `devcontainer
 - `scripts/bootstrap.sh` (new machine) and `scripts/sync.sh` (drifted machine) both run
   a guarded upgrade → `scripts/run-profile-setup.sh` → `link-dotfiles.sh` → `post-link-hooks.sh`.
 - Never duplicate the setup-script list; it lives only in `run-profile-setup.sh`.
+- Detect hosts via the common header before mutation; disk provisioning and AUR-only utilities remain Arch-only.
+- Use `native_package_installed` / `ensure_native_pkgs` for native packages and explicit app recipes for exceptions. Sources/update owners: [PACKAGES.md](../../PACKAGES.md).
+- Required failures reach final status; successful update stamps follow all requested update owners. Cleanup previews until separately authorized with a terminal and typing `remove`; `--yes` is insufficient.
+- Preserve foreign config files/links, driver flavor, managed agents, holds/pins and automatic security updates.
 - Dotfiles are symlinks: `home/` → `$HOME`, `config/` → `$HOME/.config`.
 
 ## Paths and config
@@ -22,7 +26,7 @@ Codex. Profiles are **additive multi-select** (`work`, `personal`, `devcontainer
   `write_bootstrap_config` — never hand-edit `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`.
 - Keys: `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
   `SETUP_PROFILE` (primary, for older readers / Super+B preference), `INSTALL_NVIDIA`,
-  `MACHINE_TYPE`.
+  `MACHINE_TYPE`, `DEFAULT_HARNESS` (legacy `DEFAULT_AGENT` migrates through the accessor).
 - Profile helpers: `has_setup_profile`, `normalize_setup_profiles`, `primary_setup_profile`.
 - `MACHINE_TYPE` is `laptop|desktop` and drives power policy in `setup-gnome.sh`
   (`power-profiles-daemon`, the logind lid drop-in — laptop: suspend on battery,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # --------------------------
-# fn-lib.sh - A library of reusable bash functions for Arch setup scripts
+# fn-lib.sh - Shared workstation helpers for Arch / Ubuntu 26.04
 # --------------------------
 
 print_tool_setup_start() {
@@ -721,18 +721,28 @@ detect_workstation_distro() {
   select_workstation_distro "$ID" "$VERSION_ID" "$(uname -m)"
 }
 
-# Ubuntu conversion is incremental: native maintenance and user-only syncs are ready.
+# Converted Ubuntu consumers only; disk provisioning and AUR utilities stay Arch-only.
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
+    ubuntu:bootstrap.sh|ubuntu:sync.sh|ubuntu:run-profile-setup.sh|ubuntu:link-dotfiles.sh) return 0 ;;
+    ubuntu:v1-to-v2-migration.sh|ubuntu:v2-to-v3-migration.sh|ubuntu:v3-to-v4-migration.sh) return 0 ;;
     ubuntu:setup-ninjaone.sh|ubuntu:update-ninjaone.sh|ubuntu:uninstall-ninjaone.sh) return 0 ;;
     ubuntu:setup-steam.sh|ubuntu:setup-discord.sh|ubuntu:setup-firefox.sh|ubuntu:setup-mullvad.sh) return 0 ;;
     ubuntu:setup-nvidia.sh|ubuntu:setup-ollama.sh) return 0 ;;
     ubuntu:setup-voxtype.sh) return 0 ;;
     ubuntu:setup-tableplus.sh|ubuntu:setup-postman.sh|ubuntu:setup-spotify.sh|ubuntu:setup-obsidian.sh|ubuntu:setup-moonlander.sh) return 0 ;;
     arch:*|ubuntu:setup-gnome.sh|ubuntu:post-link-hooks.sh|ubuntu:setup-fonts.sh|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-python.sh|ubuntu:setup-rust.sh|ubuntu:setup-golang.sh|ubuntu:setup-php.sh|ubuntu:setup-ruby.sh|ubuntu:setup-claude.sh|ubuntu:setup-codex.sh|ubuntu:setup-pi.sh|ubuntu:setup-opencode.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:setup-zed.sh|ubuntu:setup-orca.sh|ubuntu:setup-docker.sh|ubuntu:setup-minikube.sh|ubuntu:setup-devcontainer.sh|ubuntu:setup-chrome.sh|ubuntu:setup-slack.sh|ubuntu:setup-zoom.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
-    *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
+    *) print_error_message "$entrypoint is not supported on $distro; disk provisioning and AUR utilities require Arch" >&2; return 1 ;;
   esac
+}
+
+# Supplied desktop fact; full Ubuntu setup starts from an installed GNOME desktop.
+require_workstation_desktop() {
+  [[ "$1" != ubuntu || "$2" == true ]] || {
+    print_error_message "Ubuntu workstation setup requires an installed GNOME desktop" >&2
+    return 1
+  }
 }
 
 # Native package status must not be inferred from an executable on PATH.
@@ -794,7 +804,7 @@ ensure_multilib_enabled() {
     return 0
   fi
   if grep -q '^#\[multilib\]' "$conf"; then
-    sudo sed -i '/^#\[multilib\]/{ s/^#//; n; s/^#//; }' "$conf"
+    sudo sed -i '/^#\[multilib\]/{ s/^#//; n; s/^#//; }' "$conf" || return $?
     print_info_message "[multilib] and its Include line have been uncommented in $conf"
     export MULTILIB_CHANGED=true
     return 0
@@ -846,8 +856,8 @@ ensure_yay_installed() {
     return 0
   fi
   print_action_message "Installing yay from AUR"
-  ensure_pacman_pkgs base-devel git
-  tmp="$(mktemp -d)"
+  ensure_pacman_pkgs base-devel git || return $?
+  tmp="$(mktemp -d)" || return 1
   if ! git clone https://aur.archlinux.org/yay.git "$tmp/yay"; then
     print_error_message "Failed to clone yay from AUR"
     rm -rf "$tmp"
@@ -919,12 +929,16 @@ safe_system_upgrade() (
   case "$WORKSTATION_DISTRO" in
     ubuntu)
       [[ "$assume_yes" != true ]] || flags+=(--yes)
+      check_claude_apt_owner || return $?
+      check_chatgpt_apt_owner || return $?
       check_work_app_owners || return $?
       check_desktop_utility_owners || return $?
       check_personal_app_owners || return $?
       check_dictation_owners || return $?
       print_action_message "Updating configured APT sources"
       sudo apt-get update --error-on=any || return $?
+      check_claude_apt_owner || return $?
+      check_chatgpt_apt_owner || return $?
       check_work_app_candidates || return $?
       check_desktop_utility_candidates || return $?
       check_personal_app_candidates || return $?
@@ -1188,17 +1202,22 @@ load_nvm() {
 ensure_local_gitconfig() {
   local target="$USER_HOME_DIR/.gitconfig"
   local legacy_identity="$USER_HOME_DIR/.config/git/identity"
-  local key value
+  local key value repo_legacy
+
+  core_cli_parent_links_allowed "$target" || {
+    print_error_message "Git config parent link conflict; preserved"; return 1;
+  }
 
   if [ -L "$target" ]; then
-    case "$(readlink "$target")" in
-      */home/.gitconfig)
+    repo_legacy="$(readlink -m "$DF_SCRIPT_DIR/../home/.gitconfig")" || return 1
+    case "$(readlink -m "$target")" in
+      "$repo_legacy")
         print_action_message "Replacing legacy ~/.gitconfig symlink with a machine-local file"
-        rm -f "$target"
+        rm -f "$target" || return 1
         ;;
       *)
-        print_warning_message "$target is a symlink not managed by dotfiles-arch — leaving it alone"
-        return 0
+        print_error_message "$target is a foreign symlink; preserved"
+        return 1
         ;;
     esac
   fi
@@ -1206,17 +1225,22 @@ ensure_local_gitconfig() {
   if [ ! -e "$target" ]; then
     printf '%s\n' \
       "# Machine-local Git config (not in dotfiles-arch). Shared settings come from" \
-      "# ~/.config/git/config; values here override them." > "$target"
+      "# ~/.config/git/config; values here override them." > "$target" || return 1
   fi
+
+  [[ -f "$target" ]] || { print_error_message "Git config is not a file; preserved"; return 1; }
+  core_cli_parent_links_allowed "$legacy_identity" || {
+    print_error_message "Legacy Git identity parent link conflict; preserved"; return 1;
+  }
 
   if [ -f "$legacy_identity" ]; then
     for key in user.name user.email; do
       if ! git config --file "$target" --get "$key" >/dev/null 2>&1 \
         && value="$(git config --file "$legacy_identity" --get "$key" 2>/dev/null)"; then
-        git config --file "$target" "$key" "$value"
+        git config --file "$target" "$key" "$value" || return 1
       fi
     done
-    rm -f "$legacy_identity"
+    rm -f "$legacy_identity" || return 1
     print_info_message "Migrated $legacy_identity into $target"
   fi
 }
@@ -1228,6 +1252,9 @@ ensure_local_gitconfig() {
 refresh_font_cache() {
   if command -v fc-cache &>/dev/null; then
     print_info_message "Refreshing font cache (fc-cache)"
-    fc-cache -f >/dev/null || print_warning_message "fc-cache reported an error"
+    fc-cache -f >/dev/null || { print_error_message "fc-cache reported an error"; return 1; }
+  else
+    print_error_message "fc-cache is missing; run setup-fonts.sh"
+    return 1
   fi
 }

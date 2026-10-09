@@ -9,12 +9,13 @@
 #   git pull
 #   bash scripts/sync.sh
 #
-# Always runs a guarded pacman + yay upgrade (same path as update-system.sh).
+# Always runs a guarded native upgrade and selected app updaters.
 #
 # Flags:
 #   --profile LIST            One or more profiles: work, personal, devcontainer
 #   --prompt                  Re-ask profiles / NVIDIA / machine type even when saved
-#   --cleanup                 Remove obsolete packages (herdr, ghostty, etc.)
+#   --cleanup                 Preview native orphans and Arch obsolete packages
+#   --remove-obsolete         Arch-only obsolete removal; terminal + type remove
 #   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
 #   --yes                     Non-interactive; requires --profile if none saved
 # -----------------------------------------------------------------------------
@@ -34,6 +35,7 @@ fi
 
 FORCE_PROFILE=""
 DO_CLEANUP=false
+REMOVE_OBSOLETE=false
 SKIP_BOOTSTRAP=false
 ASSUME_YES=false
 FORCE_PROMPT=false
@@ -43,13 +45,16 @@ usage() {
 Usage: $(basename "$0") [options]
 
 Bring this machine in line with the current dotfiles-arch repo.
-Always runs a guarded system upgrade (pacman + yay with AUR IoC scan).
+Rolling Arch / installed Ubuntu 26.04 GNOME on x86_64/amd64.
+Always runs guarded native updates and selected app updaters.
 
 Options:
   --profile LIST            One or more profiles (comma/space): work, personal, devcontainer
                             Required with --yes if none is saved. Example: work,devcontainer
   --prompt                  Re-ask profiles / NVIDIA / machine type even when saved
-  --cleanup                 Remove obsolete packages (herdr, ghostty, etc.)
+  --cleanup                 Preview native orphans and Arch obsolete packages
+  --remove-obsolete         Arch only: preview recursive obsolete removal, then
+                            require a terminal and typing remove (--yes is insufficient)
   --skip-bootstrap          Skip setup-*.sh runs (still upgrades + links)
   --yes, -y                 Non-interactive where safe (also AUR --noconfirm after scan)
   -h, --help                Show this help
@@ -80,6 +85,11 @@ while [ $# -gt 0 ]; do
       DO_CLEANUP=true
       shift
       ;;
+    --remove-obsolete)
+      REMOVE_OBSOLETE=true
+      DO_CLEANUP=true
+      shift
+      ;;
     --skip-bootstrap)
       SKIP_BOOTSTRAP=true
       shift
@@ -99,6 +109,11 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+if [[ "$REMOVE_OBSOLETE" == true && "$WORKSTATION_DISTRO" != arch ]]; then
+  print_error_message "--remove-obsolete is Arch-only; use dfa-remove-orphans --remove for native cleanup"
+  exit 1
+fi
 
 # --------------------------
 # Resolve profiles (multi-select)
@@ -185,6 +200,7 @@ FULL_NAME="${FULL_NAME:-}"
 EMAIL_ADDRESS="${EMAIL_ADDRESS:-}"
 write_bootstrap_config
 
+SYNC_STATUS=0
 print_line_break "Syncing machine to dotfiles-arch ($(format_setup_profiles))"
 print_info_message "Repo: $REPO_ROOT"
 
@@ -197,6 +213,7 @@ if [ -d "$REPO_ROOT/.git" ]; then
   if git -C "$REPO_ROOT" pull --ff-only; then
     print_success_message "Repo updated"
   else
+    SYNC_STATUS=1
     print_warning_message "git pull --ff-only failed (local commits/diverged?). Continuing with current tree."
   fi
 fi
@@ -211,7 +228,12 @@ fi
 
 start_sudo_keepalive
 
-ensure_yay_installed || print_warning_message "yay install failed — AUR steps may fail"
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+  ensure_yay_installed || {
+    print_error_message "yay install failed — required AUR setup may fail"
+    SYNC_STATUS=1
+  }
+fi
 
 set +e
 if [ "$ASSUME_YES" = true ]; then
@@ -219,11 +241,14 @@ if [ "$ASSUME_YES" = true ]; then
 else
   safe_system_upgrade
 fi
-SYNC_STATUS=$?
+UPGRADE_STATUS=$?
 set -e
-if [ "$SYNC_STATUS" -eq 0 ]; then
-  record_system_upgrade_stamps || SYNC_STATUS=1
+if [ "$UPGRADE_STATUS" -eq 0 ]; then
+  if [[ "$SYNC_STATUS" -eq 0 ]]; then
+    record_system_upgrade_stamps || SYNC_STATUS=1
+  fi
 else
+  SYNC_STATUS=1
   print_warning_message "Guarded system update failed — continuing with link/setup/cleanup."
 fi
 
@@ -243,8 +268,8 @@ fi
 # --------------------------
 
 print_line_break "Linking dotfiles"
-bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)"
-bash "$DF_SCRIPT_DIR/post-link-hooks.sh"
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)" || SYNC_STATUS=1
+bash "$DF_SCRIPT_DIR/post-link-hooks.sh" || SYNC_STATUS=1
 
 # --------------------------
 # Optional cleanup of obsolete tooling
@@ -276,84 +301,43 @@ collect_obsolete_pkgs() {
 }
 
 cleanup_obsolete() {
-  print_line_break "Cleaning obsolete packages / configs"
-
-  collect_obsolete_pkgs
-  local pkgs_to_remove=("${OBSOLETE_PKGS_INSTALLED[@]}")
-
-  if [ ${#pkgs_to_remove[@]} -gt 0 ]; then
-    print_action_message "Will remove: ${pkgs_to_remove[*]}"
-    if [ "$ASSUME_YES" = true ]; then
-      CONFIRM_RM=y
-    else
-      read -rp "Remove these packages? [y/n] (Enter = $(fmt_choice "no")): " CONFIRM_RM
-    fi
-    if [[ "${CONFIRM_RM:-}" =~ ^[Yy]$ ]]; then
-      sudo pacman -Rns --noconfirm "${pkgs_to_remove[@]}" || print_warning_message "Some packages could not be removed"
-    else
-      print_info_message "Kept obsolete packages"
-    fi
-  else
-    print_info_message "No obsolete pacman packages found"
-  fi
-
-  # npm global Copilot CLI (user-level NVM npm — never sudo npm)
-  if load_nvm && command -v npm &>/dev/null; then
-    if npm list -g --depth=0 @githubnext/github-copilot-cli &>/dev/null 2>&1; then
-      print_action_message "Removing global npm package @githubnext/github-copilot-cli"
-      npm uninstall -g @githubnext/github-copilot-cli || true
-    fi
-  else
-    print_info_message "NVM/npm not available — skip Copilot CLI cleanup"
-  fi
-
-  # Stale config dirs that are no longer linked from this repo
-  local stale_dirs=(
-    "$USER_HOME_DIR/.config/ghostty"
-    "$USER_HOME_DIR/.config/alacritty"
-    "$USER_HOME_DIR/.config/hypr"
-    "$USER_HOME_DIR/.config/waybar"
-    "$USER_HOME_DIR/.config/tmuxinator"
-    "$USER_HOME_DIR/.config/herdr"
-  )
-
-  for dir in "${stale_dirs[@]}"; do
-    if [ -e "$dir" ] || [ -L "$dir" ]; then
-      if [ -L "$dir" ]; then
-        local target
-        target="$(readlink -f "$dir" 2>/dev/null || true)"
-        if [[ "$target" == "$REPO_ROOT"* ]]; then
-          continue
+  local plan reply="" interactive=false
+  # Legacy package names apply only to Arch. Preserve npm packages and user
+  # config directories: they have no repository-owned removal contract.
+  if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+    collect_obsolete_pkgs
+    if ((${#OBSOLETE_PKGS_INSTALLED[@]})); then
+      plan="$(pacman -Rns --print --print-format '%n %v' "${OBSOLETE_PKGS_INSTALLED[@]}")" || return $?
+      print_action_message "Arch obsolete removal plan (including dependencies):"
+      printf '%s\n' "$plan"
+      if [[ "$REMOVE_OBSOLETE" == true ]]; then
+        [[ ! -t 0 || ! -t 1 ]] || interactive=true
+        if [[ "$interactive" == true ]]; then
+          read -r -p "Type remove to authorize obsolete package removal: " reply || return 1
         fi
+        orphan_removal_allowed "$REMOVE_OBSOLETE" "$interactive" "$reply" || {
+          print_error_message "Obsolete removal not authorized: terminal + type remove required"
+          return 1
+        }
+        sudo pacman -Rns "${OBSOLETE_PKGS_INSTALLED[@]}" || return $?
+      else
+        print_info_message "Preview only. Use --remove-obsolete in a terminal for obsolete package removal."
       fi
-      print_action_message "Backing up stale config: $dir → ${dir}.obsolete.bak"
-      mv "$dir" "${dir}.obsolete.bak"
+    else
+      print_info_message "No obsolete Arch packages installed"
     fi
-  done
-
-  remove_orphaned_packages
+  fi
+  remove_orphaned_packages || return $?
 }
 
-collect_obsolete_pkgs
-
-if [ "$DO_CLEANUP" = true ]; then
-  cleanup_obsolete
-elif [ ${#OBSOLETE_PKGS_INSTALLED[@]} -eq 0 ]; then
-  print_info_message "No obsolete packages installed; skipping cleanup"
-elif [ "$ASSUME_YES" = false ]; then
-  echo ""
-  read -rp "Also remove obsolete packages (${OBSOLETE_PKGS_INSTALLED[*]})? [y/n] (Enter = $(fmt_choice "no")): " ASK_CLEAN
-  if [[ "${ASK_CLEAN:-}" =~ ^[Yy]$ ]]; then
-    cleanup_obsolete
-  else
-    print_info_message "Skipped cleanup (re-run with --cleanup later if needed)"
-  fi
+if [[ "$DO_CLEANUP" == true ]]; then
+  cleanup_obsolete || SYNC_STATUS=1
 else
-  print_info_message "Skipped cleanup (pass --cleanup with --yes to remove: ${OBSOLETE_PKGS_INSTALLED[*]})"
+  print_info_message "Cleanup skipped. --cleanup previews; dfa-remove-orphans --remove separately confirms native removal."
 fi
 
 if [[ "$SYNC_STATUS" -ne 0 ]]; then
-  print_error_message "Sync finished with update/setup failures (see above)"
+  print_error_message "Sync finished with failures (see above)"
   exit 1
 fi
 print_line_break "Sync complete"
