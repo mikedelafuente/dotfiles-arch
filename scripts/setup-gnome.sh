@@ -76,40 +76,8 @@ fi
 # Install Catppuccin GTK Theme
 # --------------------------
 
-CATPPUCCIN_GTK_DIR="$USER_HOME_DIR/.themes"
 CATPPUCCIN_THEME_NAME="catppuccin-mocha-lavender-standard+default"
-
-if [ -d "$CATPPUCCIN_GTK_DIR/$CATPPUCCIN_THEME_NAME" ]; then
-    print_info_message "Catppuccin GTK theme already installed. Skipping."
-else
-    print_info_message "Installing Catppuccin GTK theme"
-
-    # Create themes directory if it doesn't exist
-    mkdir -p "$CATPPUCCIN_GTK_DIR"
-
-    # Install from AUR
-    ensure_yay_pkgs catppuccin-gtk-theme-mocha
-
-    # Link the theme to user directory for easy access
-    if [ -d "/usr/share/themes/$CATPPUCCIN_THEME_NAME" ]; then
-        ln -sf "/usr/share/themes/$CATPPUCCIN_THEME_NAME" "$CATPPUCCIN_GTK_DIR/"
-        print_info_message "Catppuccin GTK theme installed successfully"
-    fi
-fi
-
-# --------------------------
-# Install Catppuccin Icon Theme (Papirus)
-# --------------------------
-
-print_info_message "Installing Papirus icon theme with Catppuccin colors"
-ensure_pacman_pkgs papirus-icon-theme
-ensure_yay_pkgs papirus-folders-catppuccin-git
-
-# Apply Catppuccin colors to Papirus folders
-if command -v papirus-folders &> /dev/null; then
-    print_info_message "Applying Catppuccin Mocha colors to Papirus folders"
-    papirus-folders -C cat-mocha-lavender --theme Papirus-Dark
-fi
+ensure_gnome_appearance || exit 1
 
 # --------------------------
 # Configure GNOME Settings for Dark Theme

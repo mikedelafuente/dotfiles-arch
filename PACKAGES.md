@@ -326,6 +326,73 @@ are run for validation.
 | `ttf-jetbrains-mono-nerd` | Kitty / Neovim terminal font with icons |
 | `ttf-meslo-nerd`, `ttf-ubuntu-nerd`, `ttf-firacode-nerd`, `ttf-hack-nerd` | Alternate Nerd Fonts |
 
+### Shared appearance sources and update owners
+
+Implemented for [#150](https://github.com/mikedelafuente/dotfiles-arch/issues/150).
+`setup-fonts.sh` supports rolling Arch and Ubuntu 26.04; GNOME's appearance
+acquisition uses `ensure_gnome_appearance` from `scripts/appearance-lib.sh`.
+Desktop settings/extension compatibility remains a separate slice.
+
+| Asset / required name | Arch source | Ubuntu 26.04 source | Update owner |
+|-----------------------|-------------|--------------------|--------------|
+| `Adwaita Sans` | `adwaita-fonts` | [fonts-adwaita-sans](https://packages.ubuntu.com/resolute/fonts-adwaita-sans) | pacman / APT |
+| `Adwaita Mono` | `adwaita-fonts` | [GNOME Adwaita Fonts 49.0](https://download.gnome.org/sources/adwaita-fonts/49/) verified archive, only unpatched Mono TTFs | pacman / maintainer pin + font setup/sync |
+| `Noto Sans`, `Noto Serif`, `Noto Sans Mono` | `noto-fonts` | [fonts-noto-core](https://packages.ubuntu.com/resolute/fonts-noto-core), `fonts-noto-mono` | pacman / APT |
+| `Noto Color Emoji` | `noto-fonts-emoji` | `fonts-noto-color-emoji` | pacman / APT |
+| `Liberation Sans`, `Liberation Serif`, `Liberation Mono` | `ttf-liberation` | [fonts-liberation](https://packages.ubuntu.com/resolute/fonts-liberation) | pacman / APT |
+| `JetBrainsMono Nerd Font`, `MesloLGS Nerd Font`, `Ubuntu Nerd Font`, `FiraCode Nerd Font`, `Hack Nerd Font` | Existing `ttf-*-nerd` rows above | [Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1): JetBrainsMono, Meslo, Ubuntu, FiraCode, Hack archives | pacman / maintainer pin + font setup/sync |
+| `catppuccin-mocha-lavender-standard+default` | Scanned `catppuccin-gtk-theme-mocha` AUR | [Catppuccin GTK v1.0.3](https://github.com/catppuccin/gtk/releases/tag/v1.0.3) exact Mocha/Lavender/Standard/default ZIP | guarded AUR / maintainer pin + GNOME setup/sync |
+| `Papirus-Dark`, `cat-mocha-lavender` folders | `papirus-icon-theme` + scanned `papirus-folders-catppuccin-git` | [papirus-icon-theme](https://packages.ubuntu.com/resolute/papirus-icon-theme) + [Catppuccin folder assets](https://github.com/catppuccin/papirus-folders/tree/f83671d17ea67e335b34f8028a7e6d78bca735d7), private user copy of native Papirus/Papirus-Dark | pacman + guarded AUR / APT for base, maintainer pin + GNOME setup/sync for overlay |
+| `Catppuccin Mocha` for bat | Prefer built-in theme | Prefer built-in theme; otherwise [pinned upstream tmTheme](https://github.com/catppuccin/bat/blob/6810349b28055dce54076712fc05fc68da4b8ec0/themes/Catppuccin%20Mocha.tmTheme) on either distro | native package, or maintainer pin + essentials setup/sync |
+| Font/data staging prerequisites | `fontconfig`, `curl`, `ca-certificates`, `python` | `fontconfig`, `curl`, `ca-certificates`, `python3`, `xz-utils` | native package owner |
+
+Ubuntu's `fonts-adwaita` metapackage contains documentation and depends on Sans;
+it does **not** ship the unpatched Mono font. Regular `fonts-jetbrains-mono` is
+also insufficient: shared Kitty/GNOME configuration requires the Nerd Font family.
+All downloaded artifacts have fixed SHA-256 values in `appearance-lib.sh`.
+Nerd Font hashes come from the official release asset metadata; GNOME publishes
+its archive checksum. Catppuccin ZIP/archive/tmTheme hashes were recorded from
+HTTPS upstream artifacts on 2026-10-09, providing a reviewed pin rather than a
+publisher signature. Archive contents are data only, staged with traversal/special
+file rejection; no upstream installer or build script executes.
+
+Downloads live in immutable, marked directories under
+`~/.local/share/dotfiles-arch/appearance/`; only recipe-owned public symlinks can
+be repointed. Fonts link from `~/.local/share/fonts/dfa-*`, GTK from `~/.themes`,
+and bat from `~/.config/bat/themes`. Ubuntu's Papirus overlay links from
+`~/.local/share/icons/Papirus{,-Dark}`; its base is recopied when the native package
+version changes on the next GNOME setup/sync. APT-owned `/usr/share/icons` is
+never recolored on Ubuntu. Existing real files, unrelated links, linked ancestor
+directories, and unmarked recipe destinations fail and remain preserved.
+Fonts already supplied by another source fail before duplicate downloaded families
+are installed; retain that owner or explicitly migrate. A compatible existing bat
+theme is retained; a user-provided theme keeps its manual user update owner.
+Old marked versions remain available; no automatic asset cleanup is introduced.
+
+`dfa-daily`/`dfa-weekly` update native/AUR assets through `dfa-update-system`.
+They do not independently refresh pinned downloads or regenerate the Ubuntu
+Papirus overlay. The maintainer reviews new artifact versions and hashes together;
+`dfa-sync-dotfiles` (or the respective font/essentials/GNOME setup) applies pins.
+A daily pull that invokes full sync inherits that behavior when the full distro
+setup is enabled. There is no claim that APT updates downloaded fonts/themes.
+
+**Maintenance limit:** [Catppuccin GTK is archived](https://github.com/catppuccin/gtk)
+since June 2024. The existing selected theme remains frozen at v1.0.3; future GTK
+compatibility repairs require an explicit maintainer decision. Setup does not
+inject GTK4/libadwaita CSS or alter GDM. These applications can retain their own
+appearance despite the GTK theme preference.
+
+**Validation:** the supplied-fact regression check
+`tests/test_appearance_decisions.py` covers package selection, exact family names,
+and owned/unowned links plus safe data-only archive extraction; it was written
+but **not run**, per the execution limit.
+Bash syntax/ShellCheck were run directly on changed shell files. Upstream artifact
+layouts and distro metadata were inspected read-only. Font rendering, fontconfig
+resolution, bat cache loading, GTK/Libadwaita behavior, GNOME theme discovery,
+Papirus inheritance/recoloring, downloads and installation on real machines remain
+**unverified**. Post-link `refresh_font_cache` remains in its existing position;
+font setup also refreshes before checking exact installed family names.
+
 ## Desktop / GNOME — `setup-gnome.sh`
 
 | Package | Purpose | Related commands |

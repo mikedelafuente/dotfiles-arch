@@ -1,5 +1,5 @@
 # bat configuration (~/.config/bat/config)
-# Catppuccin Mocha ships with bat on Arch — no vendored theme needed.
+# Setup prefers the built-in Catppuccin Mocha theme, with verified upstream data when absent.
 
 --theme="Catppuccin Mocha"
 --style="numbers,changes,header"

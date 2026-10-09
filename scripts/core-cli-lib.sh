@@ -59,14 +59,18 @@ core_cli_source_allowed() {
 }
 
 # Read-only link decision: absent or the same resolved target. Never adopt user files.
-core_cli_link_allowed() {
+core_cli_parent_links_allowed() {
   local parent
-  parent="$(dirname "$2")"
+  parent="$(dirname "$1")"
   while [[ "$parent" != / ]]; do
     # Refuse writes through user directory links or non-directory ancestors.
     [[ ! -L "$parent" && ( ! -e "$parent" || -d "$parent" ) ]] || return 1
     parent="$(dirname "$parent")"
   done
+}
+
+core_cli_link_allowed() {
+  core_cli_parent_links_allowed "$2" || return 1
   [[ ! -e "$2" && ! -L "$2" ]] \
     || { [[ -L "$2" ]] && [[ "$(readlink -f "$1")" == "$(readlink -f "$2")" ]]; }
 }
