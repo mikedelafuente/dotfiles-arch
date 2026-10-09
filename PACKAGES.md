@@ -648,7 +648,7 @@ GNOME `Super+T` (`/usr/bin/voxtype record toggle`). No X11-only typing replaceme
 
 | Component | Source | Update owner |
 | --- | --- | --- |
-| Arch Voxtype/dotool | Scanned `voxtype-bin`/`dotool` AUR packages; the selected Voxtype launcher may link to its package-owned backend | Guarded AUR upgrades |
+| Arch Voxtype/dotool | Scanned `voxtype-bin`/`dotool` AUR packages; the selected Voxtype launcher may link to its package-owned backend or use the canonical generated CUDA dispatch wrapper targeting a package-owned binary | Guarded AUR upgrades |
 | Ubuntu Voxtype | [Official stable amd64 DEB](https://github.com/peteonrails/voxtype/releases), minimum 1.1.0; stage and verify the release API SHA256 digest before APT installation | `dfa-update-system` checks stable releases; APT alone cannot refresh a standalone DEB. A compatible existing repository package keeps its repository owner. |
 | Ubuntu dotool | [Official source](https://git.sr.ht/~geb/dotool), 1.6 commit `180af21c46dcc848d93dbec2644c011f4eea1592`, SHA256 `960f83d4fa33f9d8a8b162663b4185a970a27f37d972d4496457eff6e0b6613c` | Repo-reviewed pin changes rebuilt by standalone setup/`dfa-update-system` into `dotool` 1.6-1dfa1 local DEB. Compatible existing repository packages retain their owner. |
 | Ubuntu dotool build dependencies | Native `build-essential`, `golang-go`, `libxkbcommon-dev`, `pkg-config`, `scdoc` | APT; unprivileged staged build, pinned Go dependencies, checksum database enabled and `GOTOOLCHAIN=local` |
