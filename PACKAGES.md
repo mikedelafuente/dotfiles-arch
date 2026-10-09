@@ -136,10 +136,88 @@ source feasibility, not successful workstation installation.
 | `tmux` | `setup-dev.sh` | Terminal multiplexer | `tmux`, `dev --tmux` |
 | `neovim` | `setup-neovim.sh` | Editor | `v`, `vim`, `nvim`, `dev --tmux` |
 | `gcc`, `make` | `setup-neovim.sh` | Build Treesitter parsers / native plugins | — |
-| `python-pynvim` | `setup-neovim.sh` | Neovim Python provider | — |
+| `python-pynvim` / Ubuntu `python3-pynvim` | `setup-neovim.sh` | Neovim Python provider | — |
 | `tree-sitter-cli` | `setup-neovim.sh` | Treesitter grammars | `:TSUpdate` |
 | `lazygit` | `setup-git.sh` | Git TUI | `lzg` |
-| `lazydocker` (AUR) | `setup-docker.sh` / `setup-dev.sh` | Docker TUI | `lzd` |
+| `lazydocker` | `setup-docker.sh` / `setup-dev.sh` | Docker TUI; Arch Extra / verified Ubuntu release exception | `lzd` |
+
+### Neovim and tmux distro slice
+
+Implemented for [#144](https://github.com/mikedelafuente/dotfiles-arch/issues/144).
+Standalone `setup-neovim.sh` and `setup-dev.sh` support rolling Arch and Ubuntu
+26.04 on amd64/x86_64. Full Ubuntu bootstrap/sync remains guarded.
+
+| App / commands | Arch source | Ubuntu 26.04 source | Minimum / update owner |
+|----------------|-------------|---------------------|------------------------|
+| Neovim / `nvim`, `v`, `vim`, `dev --tmux` | Compatible native `neovim` preferred | Native 0.11.6 is insufficient; missing installs use [official stable archives](https://github.com/neovim/neovim-releases/releases) | **0.12.0+**; native updater or managed upstream refresh via `dfa-update-system` |
+| Treesitter / `tree-sitter`, `:TSUpdate` | Compatible native `tree-sitter-cli` preferred | Native 0.25.9 is insufficient; missing installs use [official stable releases](https://github.com/tree-sitter/tree-sitter/releases) | **0.26.1+**; native updater or managed upstream refresh via `dfa-update-system`; never npm |
+| tmux / `tmux`, `dev --tmux` | Native `tmux` | Native `tmux` | **3.2+**; native updater |
+| Git TUI / `lazygit`, `lzg` | Native `lazygit` | Native Universe `lazygit` | **0.40+**; native updater and existing core CLI ownership checks |
+| Container TUI / `lazydocker`, `lzd` | [Arch Extra `lazydocker`](https://archlinux.org/packages/extra/x86_64/lazydocker/) | Compatible native candidate if available, otherwise [verified official releases](https://github.com/jesseduffield/lazydocker/releases) | **0.20+**; native updater or managed upstream refresh via `dfa-update-system` |
+| Build/archive/TLS helpers | `gcc`, `make`, `tar`, `gzip`, `unzip`, `ca-certificates` | Same native names | Native updater; parser/native-plugin builds and verified downloads |
+| Python provider / Mason tools | `python`, `python-pynvim`, `python-pip` | `python3`, `python3-pynvim`, `python3-pip`, `python3-venv` | Native updater; Ubuntu virtual environments respect externally managed system Python |
+| Search/Git/hooks/clipboard | `fd`, `ripgrep`, `git`, `curl`, `jq`, `wl-clipboard`, `xsel` | `fd-find` plus executable `fd` link; remaining names match | Existing core CLI/native updater; `jq` supports reveal-hook payloads |
+| Node / LSP runtimes | User NVM | User NVM | Run `setup-node.sh` first; Node LTS and agent updates retain existing owners |
+
+Evidence checked 2026-10-08: [Ubuntu Neovim 0.11.6](https://packages.ubuntu.com/resolute/amd64/neovim),
+[tree-sitter 0.25.9](https://packages.ubuntu.com/resolute/amd64/tree-sitter-cli),
+[tmux 3.6a](https://packages.ubuntu.com/resolute/tmux), and
+[lazygit 0.57.0](https://packages.ubuntu.com/lazygit).
+Official GitHub release metadata identified stable Neovim **0.12.5**, tree-sitter
+**0.27.1**, and lazydocker **0.25.2**, with amd64 asset SHA-256 digests. They satisfy
+the numeric floors in the [pinned Treesitter contract](https://github.com/nvim-treesitter/nvim-treesitter/blob/8b98b4470eb326f1c7b50dae79f8c963568e5720/README.md);
+runtime compatibility remains unverified. Selection queries the host's configured
+native candidate metadata instead of hardcoding these facts. Unreadable metadata
+fails; refresh native indexes before setup. No PPA, foreign APT suite, plugin
+downgrade, npm generator, or fallback after failed acquisition is added.
+
+Compatible native tools stay native. Old existing native tools must be updated by
+their owner or explicitly removed/reselected by the operator. Unknown/shadowing
+launchers, user commands, a native package beside a managed tree, and unrelated
+directory/link ownership fail without source migration or duplicate installation.
+Arch updates retain pacman/AUR scanning; dev setup uses official Extra lazydocker
+rather than initiating an AUR install. User config conflicts fail before setup
+writes. Existing per-file repo links, identical copies, and additional user files
+are retained. Plugins and `lazy-lock.json` remain unchanged.
+
+Managed releases live at
+`USER_HOME_DIR/.local/share/dotfiles-arch/editor-tools/<command>/<version>`, with
+`.dfa-source` recording the upstream owner and `current` selecting the release.
+Commands link from `USER_HOME_DIR/.local/bin`, which must already be on PATH.
+`dfa-update-system` refreshes only recognized managed trees after native/AUR
+updates, before success stamps, including Arch's no-yay/no-foreign-packages path.
+Daily/weekly sequencing and cooldown are unchanged; `dfa-update-system --force`
+explicitly refreshes. GitHub latest-stable metadata must supply the exact official
+asset URL and SHA-256 digest. Downloads, safe archive extraction, and executable
+version checks finish in staging before `current` switches atomically. Neovim's
+binary and runtime switch together; old releases are retained. Metadata, checksum,
+archive, version, or ownership failure returns nonzero and bypasses success stamps.
+Digest verification provides integrity against official HTTPS metadata, not an
+additional publisher signature. Expected asset naming/API availability and Python
+archive data-filter support are required; failures preserve the selected source.
+
+Standalone setup links Neovim config per file and `.tmux.conf`. No preferences,
+schema versions, command names, plugin configuration, or default-harness fallback
+change. `dev --tmux` checks actual stable nvim/tree-sitter/tmux versions before
+killing its old session, quotes the socket command for Bash, and passes the session
+name as a child-shell argument in Kitty. Reveal hooks still share socket naming,
+`jq`, and `nvim --server --remote-expr`; existing Claude/Codex hook commands remain
+valid. Docker Engine/Compose/Buildx and hook installation remain separate slices.
+Dev setup also links `dev`, `nvim-reveal-edit`, `dfa-update-system`, and their
+shared `dotfiles-arch-lib.sh` into `USER_HOME_DIR/.local/bin`; it preflights all
+four for user-file/unrelated-link conflicts. This enables the launcher, existing
+hook command, and explicit refresh on a fresh Ubuntu host without full dotfile
+linking. It does not install agent CLIs or register new harness hooks.
+
+**Validation:** `python3 tests/test_editor_decisions.py` checks supplied distro,
+version, source/update-owner, release-metadata, and temporary config-tree facts.
+Forbidden command guards prevent network/package-manager/sudo/service/desktop or
+live editor/tmux calls. Bash syntax/ShellCheck and static review cover setup,
+staging, ownership, launch/socket/hooks, dispatch, and failure/stamp ordering.
+**Unverified:** native install/update behavior, real archive extraction/replacement,
+downloaded binary ABI/runtime loading, plugins/Mason/LSP/provider/parser builds,
+tmux/Kitty launch, socket/RPC/reveal hooks, clipboard/fonts, and lazydocker against
+Docker. No OS-changing workflows, networked tests, or VM provisioning were run.
 
 ### Kitty distro slice
 
@@ -184,6 +262,7 @@ Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 | AUR apps / Arch | Existing AUR recipes, including their AUR dependencies | `yay -Sua` after an IoC scan; query/scanner/metadata failures fail closed |
 | Native packages, including Kitty / Ubuntu 26.04 | Existing configured Ubuntu and vendor APT repositories | `dfa-update-system`: APT refresh and upgrade with new dependencies permitted, removals refused |
 | Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
+| Existing native Claude / either host | Official user-native launcher into `USER_HOME_DIR/.local/share/claude/versions/<version>` | `dfa-update-npm-clis` runs `claude update` as the user, independently of NVM/npm; native background updates also remain enabled according to user settings |
 | NinjaOne / Arch | Existing opt-in repackaged vendor DEB | Agent self-updater plus existing weekly health check |
 | Managed NinjaOne / Ubuntu | Existing IT-selected source | Existing vendor/IT owner; weekly Arch repair is policy-deferred until native lifecycle conversion |
 
@@ -192,8 +271,15 @@ repository, signing key, source fallback, app migration, or duplicate installati
 APT keeps existing holds/pins and source priorities; source conflicts remain for
 the source owner to resolve. Standalone DEBs/archives without a configured update
 repository are **not** made updateable by this change; their recipes/owners remain
-subsequent app slices. A shadowing or non-npm agent launcher is preserved and
-reported as a source conflict, returning nonzero without adding an npm duplicate.
+subsequent app slices. Recognized native Claude uses its own updater; other
+shadowing or non-npm agent launchers are preserved and reported as source
+conflicts, returning nonzero without adding an npm duplicate. Native Claude
+recognition requires an executable regular version file in the official user
+layout; redirected directories and unknown paths are rejected. Native-update
+failure remains a failure even if NVM/npm is unavailable. See
+[Claude's documented native layout and update owner](https://code.claude.com/docs/en/setup#update-claude-code).
+Recognition is checked with supplied temporary files; updater dispatch is
+statically inspected without executing an update workflow as a test.
 Ubuntu automatic security timers, blacklists, and service
 configuration are untouched (see [Ubuntu automatic updates](https://ubuntu.com/server/docs/how-to/software/automatic-updates/)).
 

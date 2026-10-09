@@ -771,7 +771,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
-    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-kitty.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
+    arch:*|ubuntu:setup-essentials.sh|ubuntu:setup-bash.sh|ubuntu:setup-git.sh|ubuntu:setup-github-cli.sh|ubuntu:setup-node.sh|ubuntu:setup-kitty.sh|ubuntu:setup-neovim.sh|ubuntu:setup-dev.sh|ubuntu:update-system.sh|ubuntu:dfa-remove-orphans|ubuntu:dfa-daily|ubuntu:dfa-weekly|ubuntu:migrate.sh|ubuntu:sync-skills.sh|ubuntu:sync-rules.sh|ubuntu:sync-extensions.sh|ubuntu:update-npm-clis.sh|ubuntu:setup-harness-agents.sh) return 0 ;;
     *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu full setup remains guarded" >&2; return 1 ;;
   esac
 }
@@ -855,6 +855,8 @@ ensure_multilib_enabled() {
 source "$DF_SCRIPT_DIR/aur-lib.sh"
 # shellcheck source=/dev/null
 source "$DF_SCRIPT_DIR/core-cli-lib.sh"
+# shellcheck source=/dev/null
+source "$DF_SCRIPT_DIR/editor-tools-lib.sh"
 
 # Install yay from the AUR into a temp dir if missing (mktemp; IoC-scanned before makepkg).
 ensure_yay_installed() {
@@ -941,6 +943,7 @@ safe_system_upgrade() (
       print_action_message "Upgrading via APT (holds/pins retained; no removals)"
       sudo apt-get upgrade --with-new-pkgs --no-remove "${flags[@]}" || return $?
       print_info_message "APT policy-held/deferred packages remain unchanged; automatic security updates are retained."
+      refresh_editor_tools || return $?
       print_success_message "Guarded system update complete"
       return 0
       ;;
@@ -991,6 +994,7 @@ EOF
       return 1
     fi
     print_info_message "No foreign packages installed — AUR updates not needed"
+    refresh_editor_tools || return $?
     return 0
   fi
 
@@ -1004,6 +1008,7 @@ EOF
   # Official repos were already updated; keep this transaction AUR-only.
   yay -Sua "${flags[@]}" || return $?
 
+  refresh_editor_tools || return $?
   print_success_message "Guarded system update complete"
 )
 
@@ -1126,6 +1131,15 @@ run_profile_setup_scripts() {
 # Read-only source decision from the global package directory and resolved launcher.
 npm_harness_owns_launcher() {
   [[ -n "$1" && -f "$1/package.json" && "$2" == "$1/"* ]]
+}
+
+# Official user-native Claude layout, from supplied resolved launcher facts.
+claude_native_owns_launcher() {
+  local root="$1" launcher="$2" version
+  [[ "$launcher" == "$root/versions/"* ]] || return 1
+  version="${launcher#"$root/versions/"}"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && -f "$launcher" && -x "$launcher" \
+    && ! -L "$launcher" && "$(readlink -f "$root/versions")" == "$root/versions" ]]
 }
 
 # Canonical NVM location (matches home/.bashrc).

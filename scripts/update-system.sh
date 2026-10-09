@@ -40,7 +40,7 @@ FORCE=false
 
 usage() {
   cat <<'EOF'
-Native system updater (Arch: pacman + guarded AUR; Ubuntu 26.04: APT)
+System updater (Arch: pacman + guarded AUR; Ubuntu 26.04: APT; managed editor releases)
 
 Usage:
   bash scripts/update-system.sh [options]
@@ -54,6 +54,9 @@ Options:
 Arch scans AUR PKGBUILDs and dependencies before yay upgrades. Ubuntu uses
 configured APT sources, retains holds/pins and automatic security updates,
 and refuses removals. Release upgrades are excluded. --yes is not cleanup approval.
+Managed upstream Neovim/tree-sitter/lazydocker releases refresh after native updates.
+Downloads require stable release metadata and SHA-256 verification; any failure
+retains the working release and prevents a successful-update stamp.
 
 Skips the actual upgrade (no prompts, no sudo) when the last guarded upgrade
 ran within the last 24h; pass --force to upgrade anyway.

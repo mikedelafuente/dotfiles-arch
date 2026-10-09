@@ -45,6 +45,12 @@ link_path() {
     return 0
   fi
 
+  # A directory link can already resolve a file to its source. Do not back up
+  # that source and replace it with a link to itself.
+  if [[ -e "$target" && "$source_file" -ef "$target" ]]; then
+    return 0
+  fi
+
   target_dir="$(dirname "$target")"
   mkdir -p "$target_dir" 2>/dev/null \
     || sudo mkdir -p "$target_dir"

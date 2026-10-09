@@ -4,7 +4,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI setup, and native package maintenance**
+Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux setup, and package maintenance**
 are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
@@ -42,6 +42,24 @@ APT repository, and the remaining CLI packages use native sources. Native update
 belong to `dfa-update-system`; NVM files to standalone Node setup after pin updates;
 Node LTS to `nvm install --lts` with an explicitly selected default. See the
 [full command/source/version/update matrix and unverified paths](PACKAGES.md#shared-shell-and-core-cli-distro-slice).
+
+`dfa-update-npm-clis` also recognizes official user-native Claude installations
+and runs `claude update` without NVM/npm or root ownership changes. Unknown agent
+sources still report conflicts; no duplicate npm install is added.
+
+The shared editor slice supports `bash scripts/setup-neovim.sh` and
+`bash scripts/setup-dev.sh` on both hosts. Run Node setup first, then load the shared
+shell so `USER_HOME_DIR/.local/bin` is on PATH. Neovim **0.12+**, tree-sitter CLI
+**0.26.1+**, and tmux **3.2+** are required; `dev --tmux` checks these before
+recreating a session. Compatible native tools keep their update owner; missing
+tools use verified stable upstream releases when native candidates are too old
+or absent. Existing incompatible/unknown sources and conflicting user configs
+fail with preservation diagnostics. Resolve sources explicitly before rerunning.
+`dfa-update-system` (daily/weekly, or `--force`) also refreshes managed editor
+releases. Shared plugins, socket lookup, reveal hooks, and default-harness fallback
+remain shared. Dev setup links the launcher, reveal-hook command, updater, and
+shared command library without replacing user commands. See
+[editor sources and validation limits](PACKAGES.md#neovim-and-tmux-distro-slice).
 
 ---
 

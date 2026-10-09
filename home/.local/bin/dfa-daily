@@ -6,7 +6,7 @@
 #
 # Default: dfa-update-repos, then dfa-migrate (apply any pending schema migrations the
 # pull brought in), then dfa-update-system (native Arch/APT updates), then
-# dfa-update-npm-clis (npm update -g for claude/codex/pi — opencode is pacman-managed
+# dfa-update-npm-clis (npm-owned claude/codex/pi or Claude's native updater — opencode is pacman-managed
 # and already covered by dfa-update-system), then dfa-sync-skills (relink personal
 # skills from dotfiles-arch), then dfa-sync-extensions (relink Pi extensions
 # from dotfiles-arch and configured sources), then dfa-sync-rules (relink personal
@@ -54,7 +54,7 @@ Default steps:
   dfa-update-repos    git pull under ~/repos
   dfa-migrate         run pending dotfiles-arch schema migrations
   dfa-update-system   native Arch/APT update (24h cooldown; --force overrides)
-  dfa-update-npm-clis npm update -g for claude/codex/pi
+  dfa-update-npm-clis npm-owned claude/codex/pi; native Claude uses claude update
   dfa-sync-skills     relink skills from dotfiles-arch + dfa-sync-sources extras
   dfa-sync-extensions relink Pi extensions from dotfiles-arch + dfa-sync-sources extras
   dfa-sync-rules      relink Cursor rules from dotfiles-arch + dfa-sync-sources extras

@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # --------------------------
-# Update npm-installed agent CLIs
+# Update npm-installed agent CLIs and recognized user-native Claude
 # --------------------------
 # claude, codex, and pi are installed via `npm install -g` (setup-claude.sh /
 # setup-codex.sh / setup-pi.sh), which only installs when missing — it never
 # upgrades an existing install. This script covers that gap with
 # `npm update -g` for whichever of those CLIs are actually installed.
+# Recognized native Claude uses its own updater, without NVM/npm or sudo.
 #
 # opencode is deliberately excluded — it's a pacman package
 # (setup-opencode.sh), so it's already refreshed by dfa-update-system.
@@ -30,11 +31,28 @@ declare -A NPM_HARNESS_PACKAGES=(
   [pi]="@earendil-works/pi-coding-agent"
 )
 
-print_line_break "Update npm-installed agent CLIs"
+print_line_break "Update agent CLIs (npm / native Claude)"
+
+updated=0
+failed=0
+native_claude=false
+claude_launcher="$(type -P claude || true)"
+claude_resolved="$(readlink -f "$claude_launcher" || true)"
+if claude_native_owns_launcher "$USER_HOME_DIR/.local/share/claude" "$claude_resolved"; then
+  native_claude=true
+  print_action_message "Updating native Claude through its selected owner (claude update)"
+  if "$claude_launcher" update; then
+    ((updated++)) || true
+  else
+    print_error_message "Failed to update native Claude"
+    ((failed++)) || true
+  fi
+fi
 
 if ! load_nvm || ! command -v npm &>/dev/null; then
   print_info_message "NVM/npm not available — skip npm CLI updates"
-  exit 0
+  ((failed == 0)) && exit 0
+  exit 1
 fi
 
 npm_root="$(npm root -g)" || {
@@ -42,10 +60,8 @@ npm_root="$(npm root -g)" || {
   exit 1
 }
 
-updated=0
-failed=0
-
 for harness in claude codex pi; do
+  [[ "$harness" != claude || "$native_claude" != true ]] || continue
   package="${NPM_HARNESS_PACKAGES[$harness]}"
 
   if ! command -v "$harness" &>/dev/null; then
@@ -77,6 +93,6 @@ for harness in claude codex pi; do
   fi
 done
 
-print_info_message "npm CLI updates: $updated checked, $failed failed"
+print_info_message "Agent CLI updates: $updated checked, $failed failed"
 ((failed > 0)) && exit 1
 exit 0
