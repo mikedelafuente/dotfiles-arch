@@ -58,6 +58,9 @@ work_app_apt_source() {
     spotify) pattern='(repository|download)\.spotify\.com' ;;
     mullvad) pattern='repository\.mullvad\.net' ;;
     firefox) pattern='packages\.mozilla\.org|mozillateam' ;;
+    claude) pattern='downloads\.claude\.ai/claude-code/apt' ;;
+    chatgpt) pattern='persistent\.oaistatic\.com/codex-app-prod/linux/deb' ;;
+    voxtype-cuda) pattern='developer\.download\.nvidia\.com/compute/cuda/repos' ;;
     *) return 1 ;;
   esac
   local files=("$root/sources.list")
@@ -87,6 +90,10 @@ work_app_fingerprint() {
     spotify) echo E1096BCBFF6D418796DE78515384CE82BA52C83A ;;
     mullvad) echo A1198702FC3E0A09A9AE5B75D5A1D4F266DE8DDF ;;
     firefox) echo 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3 ;;
+    firefox-release) echo 14F26682D0916CDD81E37B6D61B7B526D98F0353 ;;
+    claude) echo 31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE ;;
+    chatgpt) echo 3BFA0E4AE8B8CC16A2D9BA684A3B4A566C4660E4 ;;
+    voxtype-cuda) echo 14BAFBC7562AD710CA04E69905FBB6DA60DF8A40 ;;
     *) return 1 ;;
   esac
 }
@@ -105,6 +112,10 @@ stage_work_app_key() {
       spotify) url=https://download.spotify.com/debian/pubkey_5384CE82BA52C83A.asc ;;
       mullvad) url=https://repository.mullvad.net/deb/mullvad-keyring.asc ;;
       firefox) url=https://packages.mozilla.org/apt/repo-signing-key.gpg ;;
+      firefox-release) url=https://archive.mozilla.org/pub/firefox/releases/KEY ;;
+      claude) url=https://downloads.claude.ai/keys/claude-code.asc ;;
+      voxtype-cuda) url=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/60DF8A40.pub ;;
+      *) print_error_message "$app needs a supplied trusted key"; return 1 ;;
     esac
     input="$stage/key.download"
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$url" -o "$input" || return 1
@@ -148,6 +159,10 @@ EOF
         source=/etc/apt/sources.list.d/mullvad.list
         key=/usr/share/keyrings/mullvad-keyring.gpg
         printf 'deb [arch=amd64 signed-by=%s] https://repository.mullvad.net/deb/stable stable main\n' "$key" >"$stage/source" ;;
+      voxtype-cuda)
+        source=/etc/apt/sources.list.d/dfa-voxtype-cuda.list
+        key=/usr/share/keyrings/dfa-voxtype-cuda.gpg
+        printf 'deb [arch=amd64 signed-by=%s] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/ /\n' "$key" >"$stage/source" ;;
       tableplus|spotify)
         source="/etc/apt/sources.list.d/$app.list"
         key="/usr/share/keyrings/$app.gpg"

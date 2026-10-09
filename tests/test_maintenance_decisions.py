@@ -68,12 +68,19 @@ def main():
                            "migrate.sh", "sync-skills.sh", "sync-rules.sh", "sync-extensions.sh",
                            "update-npm-clis.sh", "setup-harness-agents.sh", "setup-ninjaone.sh", "update-ninjaone.sh", "uninstall-ninjaone.sh", "setup-zed.sh", "setup-orca.sh"):
             assert decision(home, "ubuntu", f"require_workstation_entrypoint ubuntu {entrypoint}")
-        for entrypoint in ("bootstrap.sh", "sync.sh"):
+        for entrypoint in ("bootstrap.sh", "sync.sh", "run-profile-setup.sh", "link-dotfiles.sh",
+                           "v1-to-v2-migration.sh", "v2-to-v3-migration.sh", "v3-to-v4-migration.sh"):
+            assert decision(home, "ubuntu", f"require_workstation_entrypoint ubuntu {entrypoint}")
+        for entrypoint in ("post_install.sh", "prepare-archinstall.sh", "update-yay.sh",
+                           "unknown.sh", "v99-to-v100-migration.sh"):
             assert not decision(home, "ubuntu", f"require_workstation_entrypoint ubuntu {entrypoint}")
         assert decision(home, "arch", "select_workstation_distro arch '' x86_64")
         assert decision(home, "ubuntu", "select_workstation_distro ubuntu 26.04 amd64")
         assert not decision(home, "ubuntu", "select_workstation_distro ubuntu 24.04 x86_64")
         assert not decision(home, "ubuntu", "select_workstation_distro ubuntu 26.04 aarch64")
+        assert decision(home, "ubuntu", "require_workstation_desktop ubuntu true")
+        assert not decision(home, "ubuntu", "require_workstation_desktop ubuntu false")
+        assert decision(home, "arch", "require_workstation_desktop arch false")
         package_dir = home / "npm source/node_modules/agent"
         package_dir.mkdir(parents=True)
         (package_dir / "package.json").write_text('{"name":"agent"}')

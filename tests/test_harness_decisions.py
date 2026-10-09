@@ -37,6 +37,17 @@ def main():
                 assert result.stdout.strip() == expected, result.stdout
 
         decide(["harness_update_owner", "ubuntu", "opencode", "false", "", "false", "false"], "npm")
+        decide(["harness_update_owner", "ubuntu", "claude", "false", "", "false", "false"], "claude-native")
+        decide(["harness_update_owner", "arch", "claude", "false", "", "false", "false"], "npm")
+        decide(["harness_update_owner", "ubuntu", "claude", "true", "/usr/bin/claude", "false", "false"], "native")
+        decide(["harness_update_owner", "ubuntu", "claude", "true", "/user/claude", "false", "true"], ok=False)
+        decide(["claude_release_checksum", "2.1.286", '{"version":"2.1.286","platforms":{"linux-x64":{"checksum":"' + "a" * 64 + '"}}}'], "a" * 64)
+        decide(["claude_release_checksum", "2.1.286", '{"version":"2.1.285","platforms":{"linux-x64":{"checksum":"' + "a" * 64 + '"}}}'], ok=False)
+        decide(["claude_release_checksum", "2.1.88", '{}'], ok=False)
+        decide(["claude_update_policy", "1", "{}"], "defer")
+        decide(["claude_update_policy", "", '{"env":{"DISABLE_UPDATES":"1"}}'], "defer")
+        decide(["claude_update_policy", "", '{"env":{"DISABLE_AUTOUPDATER":"1"}}'], "update")
+        decide(["claude_update_policy", "", 'invalid'], ok=False)
         for distro in ("arch", "ubuntu"):
             decide(["harness_update_owner", distro, "codex", "false", "/user/codex", "true", "false"], "npm")
             decide(["harness_update_owner", distro, "claude", "false", "/user/native", "false", "true"], "claude-native")

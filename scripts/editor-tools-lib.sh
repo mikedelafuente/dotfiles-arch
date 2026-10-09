@@ -10,6 +10,7 @@ editor_tool_recipe() {
     kubectl) echo 'kubectl 1.0.0 dl.k8s.io' ;;
     k9s) echo 'k9s 0.1.0 derailed/k9s' ;;
     ollama) echo 'ollama 0.40.0 ollama/ollama' ;;
+    voxtype) echo 'voxtype 1.1.0 peteonrails/voxtype' ;;
     *) return 1 ;;
   esac
 }
@@ -95,6 +96,7 @@ editor_release_asset() {
     minikube) asset=minikube-linux-amd64 ;;
     k9s) asset=k9s_Linux_amd64.tar.gz ;;
     ollama) asset=ollama-linux-amd64.tar.zst ;;
+    voxtype) asset="voxtype_${version}-1_amd64.deb" ;;
     *) return 1 ;;
   esac
   fields="$(jq -er --arg name "$asset" '

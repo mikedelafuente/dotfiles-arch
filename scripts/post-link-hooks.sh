@@ -16,9 +16,10 @@ else
 fi
 
 print_line_break "Post-link hooks"
+HOOK_STATUS=0
 
 # Fontconfig + packages are useful only after fonts.conf is linked
-refresh_font_cache
+refresh_font_cache || HOOK_STATUS=1
 
 # --------------------------
 # Apply pending schema migrations
@@ -26,37 +27,58 @@ refresh_font_cache
 # Renames leave dangling ~/.local/bin symlinks that the linking above cannot
 # prune. Running here means bootstrap and sync also stamp the version, matching
 # how sync-skills/sync-rules are wired into both this and dfa-daily.
-bash "$DF_SCRIPT_DIR/migrate.sh"
+bash "$DF_SCRIPT_DIR/migrate.sh" || HOOK_STATUS=1
 
 # --------------------------
 # Sync Pi extensions from all configured sources
 # --------------------------
-bash "$DF_SCRIPT_DIR/sync-extensions.sh"
+bash "$DF_SCRIPT_DIR/sync-extensions.sh" || HOOK_STATUS=1
 
 # --------------------------
 # Sync personal skills (Claude Code / Cursor / Codex / Pi)
 # --------------------------
-bash "$DF_SCRIPT_DIR/sync-skills.sh"
+bash "$DF_SCRIPT_DIR/sync-skills.sh" || HOOK_STATUS=1
 
 # --------------------------
 # Sync personal rules (Cursor / Claude / Codex / Pi)
 # --------------------------
-bash "$DF_SCRIPT_DIR/sync-rules.sh"
+bash "$DF_SCRIPT_DIR/sync-rules.sh" || HOOK_STATUS=1
 
 if native_package_installed gnome-shell; then
   print_warning_message "GNOME checklist (log out/in if anything below is missing):"
   print_info_message "  • Super+V  — clipboard history (GPaste)"
-  print_info_message "  • Super+Y  — Pop Shell auto-tiling toggle (off by default)"
-  print_info_message "  • Super+Escape — Pop Shell adjustment mode"
+  GNOME_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]+)*).*$/\1/p')" || HOOK_STATUS=1
+  if [[ -z "$GNOME_VERSION" ]]; then
+    print_error_message "Cannot determine installed GNOME version"
+    HOOK_STATUS=1
+  fi
+  GNOME_ACCEPTED_SKIPS=""
+  if ! GNOME_ACCEPTED_SKIPS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" skips "$GNOME_VERSION")"; then
+    print_error_message "Cannot determine GNOME compatibility"
+    HOOK_STATUS=1
+  fi
+  if [[ -n "$GNOME_ACCEPTED_SKIPS" ]]; then
+    print_warning_message "  • Accepted Pop Shell gap on GNOME $GNOME_VERSION; tiling shortcuts unavailable"
+  else
+    print_info_message "  • Super+Y  — auto-tiling toggle (compatible Pop Shell required; off by default)"
+    print_info_message "  • Super+Escape — adjustment mode (compatible Pop Shell required)"
+  fi
   print_info_message "  • Super+Ctrl+Arrows — push window (rebind-window-push)"
   print_info_message "  • AppIndicator tray icons for Slack/Discord/Spotify"
   print_info_message "  • Adwaita Sans UI fonts (not Courier-like fallbacks)"
 
   # Ensure window-push bindings match current tiling state after bin is linked.
   if [[ -x "$USER_HOME_DIR/.local/bin/rebind-window-push" ]]; then
-    print_info_message "Applying rebind-window-push for current tiling mode"
-    bash "$USER_HOME_DIR/.local/bin/rebind-window-push" || true
+    print_info_message "Applying rebind-window-push for compatible Pop Shell or native window moves"
+    bash "$USER_HOME_DIR/.local/bin/rebind-window-push" || HOOK_STATUS=1
+  else
+    print_error_message "Required rebind-window-push helper is missing after linking"
+    HOOK_STATUS=1
   fi
 fi
 
+if [[ "$HOOK_STATUS" -ne 0 ]]; then
+  print_error_message "Post-link hooks finished with failures"
+  exit 1
+fi
 print_success_message "Post-link hooks complete"

@@ -40,15 +40,21 @@ run_setup() {
   local script="$1"
   shift || true
   if [[ ! -f "$DF_SCRIPT_DIR/$script" ]]; then
-    print_warning_message "Missing $script — skipped"
-    return 0
+    print_error_message "Required setup file is missing: $script"
+    local rc=1
+  else
+    print_info_message "→ $script${*:+ ($*)}"
+    local rc=0
+    # A separate Bash process retains its own errexit when status is captured.
+    bash "$DF_SCRIPT_DIR/$script" "$@" || rc=$?
+    if [[ "$rc" -eq 0 && "$script" == setup-node.sh ]]; then
+      # Child NVM changes cannot alter the runner's PATH. Load the validated
+      # default here before harness/model/default-harness setup is selected.
+      if ! load_nvm || ! nvm use default >/dev/null 2>&1; then
+        rc=1
+      fi
+    fi
   fi
-  print_info_message "→ $script${*:+ ($*)}"
-  # Disable errexit around the child so we can record failures.
-  set +e
-  bash "$DF_SCRIPT_DIR/$script" "$@"
-  local rc=$?
-  set -e
   if [[ $rc -ne 0 ]]; then
     print_error_message "FAILED ($rc): $script"
     SETUP_FAILURES+=("$script")
@@ -66,7 +72,8 @@ run_setup setup-nvidia.sh --yes
 if [[ -n "${FULL_NAME:-}" && -n "${EMAIL_ADDRESS:-}" ]]; then
   run_setup setup-git.sh "$FULL_NAME" "$EMAIL_ADDRESS"
 else
-  print_warning_message "FULL_NAME/EMAIL_ADDRESS not set — skipping setup-git.sh"
+  print_error_message "FULL_NAME/EMAIL_ADDRESS not set — required Git identity setup failed"
+  SETUP_FAILURES+=(setup-git.sh)
 fi
 
 run_setup setup-github-cli.sh
@@ -124,7 +131,12 @@ if native_package_installed gnome-shell; then
   print_info_message "GNOME is installed — running GNOME setup"
   run_setup setup-gnome.sh
 else
-  print_info_message "GNOME is not installed — skipping GNOME setup"
+  if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+    print_error_message "Ubuntu workstation setup requires an installed GNOME desktop"
+    SETUP_FAILURES+=(setup-gnome.sh)
+  else
+    print_info_message "GNOME is not installed — skipping GNOME setup"
+  fi
 fi
 
 if [[ ${#SETUP_FAILURES[@]} -gt 0 ]]; then

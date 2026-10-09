@@ -11,6 +11,9 @@ APT_URLS = {
     "spotify": {"https://repository.spotify.com"},
     "mullvad": {"https://repository.mullvad.net/deb/stable"},
     "firefox": {"https://packages.mozilla.org/apt"},
+    "claude": {"https://downloads.claude.ai/claude-code/apt/stable", "https://downloads.claude.ai/claude-code/apt/latest"},
+    "chatgpt": {"https://persistent.oaistatic.com/codex-app-prod/linux/deb"},
+    "voxtype-cuda": {"https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64"},
 }
 APT_VENDORS = {
     "chrome": r"dl(-ssl)?\.google\.com/linux/chrome",
@@ -19,12 +22,15 @@ APT_VENDORS = {
     "spotify": r"(?:repository|download)\.spotify\.com",
     "mullvad": r"repository\.mullvad\.net",
     "firefox": r"packages\.mozilla\.org|mozillateam",
+    "claude": r"downloads\.claude\.ai/claude-code/apt",
+    "chatgpt": r"persistent\.oaistatic\.com/codex-app-prod/linux/deb",
+    "voxtype-cuda": r"developer\.download\.nvidia\.com/compute/cuda/repos",
 }
 
 
 def apt_key(app, text):
     urls, vendor = APT_URLS[app], APT_VENDORS[app]
-    component = "non-free" if app == "spotify" else "main"
+    component = "" if app == "voxtype-cuda" else ("non-free" if app == "spotify" else "main")
     if re.search(r"^\s*(?:#\s*)?deb(?:-src)?\s", text, re.M):
         records = [line for line in text.splitlines() if re.search(vendor, line)
                    and re.match(r"\s*(?:#\s*)?deb(?:-src)?\s", line)]
@@ -35,7 +41,8 @@ def apt_key(app, text):
     text = records[0]
     lines = [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
     if len(lines) == 1 and lines[0].startswith("deb "):
-        match = re.fullmatch(r"deb\s+\[([^]]+)\]\s+(\S+)\s+(\S+)\s+" + component, lines[0])
+        suffix = r"\s+" + component if component else ""
+        match = re.fullmatch(r"deb\s+\[([^]]+)\]\s+(\S+)\s+(\S+)" + suffix, lines[0])
         if not match:
             raise ValueError("unscoped or malformed source")
         options = dict(item.split("=", 1) for item in match[1].split())
@@ -51,10 +58,12 @@ def apt_key(app, text):
             fields[name] = value.strip()
         if set(fields) - {"Types", "URIs", "Suites", "Components", "Architectures", "Signed-By", "X-Repolib-Name"}:
             raise ValueError("unsupported source fields")
-        if fields.get("Types") != "deb" or fields.get("Components") != component or fields.get("Architectures", "amd64") != "amd64":
+        if fields.get("Types") != "deb" or fields.get("Components", "") != component or fields.get("Architectures", "amd64") != "amd64":
             raise ValueError("unsupported source layout")
         url, suite, key = fields.get("URIs", ""), fields.get("Suites", ""), fields.get("Signed-By", "")
-    suites = {"slack": "jessie", "tableplus": "tableplus", "firefox": "mozilla"}
+    suites = {"slack": "jessie", "tableplus": "tableplus", "firefox": "mozilla", "voxtype-cuda": "/"}
+    if app == "claude":
+        suites[app] = url.rstrip("/").rsplit("/", 1)[-1]
     if url.rstrip("/") not in urls or suite != suites.get(app, "stable"):
         raise ValueError("unexpected vendor source")
     if not re.fullmatch(r"/(?:etc/apt/keyrings|usr/share/keyrings)/[A-Za-z0-9_.-]+\.(?:gpg|asc)", key):
@@ -64,7 +73,7 @@ def apt_key(app, text):
 
 def package_version(app, version):
     pattern = r"[0-9]+(?:\.[0-9]+)+(?:\.g[a-f0-9]+)?(?:[-+][A-Za-z0-9.]+)?" if app == "spotify" else r"[0-9]+(?:\.[0-9]+)+(?:[-+][A-Za-z0-9.]+)?"
-    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox"} or not re.fullmatch(pattern, version):
+    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox", "claude", "chatgpt"} or not re.fullmatch(pattern, version):
         raise ValueError("missing stable package version")
     minimum = {"slack": (4, 35, 121), "zoom": (6, 7, 5)}.get(app, (0,))
     numbers = tuple(map(int, re.split(r"[-+]|\.g", version)[0].split(".")))

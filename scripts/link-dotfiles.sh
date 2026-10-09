@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # -------------------------
-# Link Dotfiles Script for Arch Linux
+# Link shared dotfiles for Arch / Ubuntu 26.04
 # This script creates symbolic links from the dotfiles repository to your home directory
 # -------------------------
 
@@ -34,41 +34,23 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOTFILES_HOME_DIR="$REPO_ROOT/home"
 DOTFILES_CONFIG_DIR="$REPO_ROOT/config"
 
-# Link source → target with backup + sudo fallback for root-owned targets.
+LINK_STATUS=0
+LINK_LIST="$(mktemp)" || exit 1
+trap 'rm -f "$LINK_LIST"' EXIT
+
+# Preserve user files and foreign links. Existing identical repo targets are
+# already linked; every other conflict fails instead of replacing a backup.
 link_path() {
-  local source_file="$1"
-  local target="$2"
-  local target_dir
-
-  if [ ! -e "$source_file" ]; then
-    print_warning_message "Missing source $source_file — skipping"
-    return 0
+  local source_file="$1" target="$2"
+  if [[ ! -e "$source_file" ]]; then
+    print_error_message "Required link source is missing: $source_file"
+    return 1
   fi
-
-  # A directory link can already resolve a file to its source. Do not back up
-  # that source and replace it with a link to itself.
   if [[ -e "$target" && "$source_file" -ef "$target" ]]; then
     return 0
   fi
-
-  target_dir="$(dirname "$target")"
-  mkdir -p "$target_dir" 2>/dev/null \
-    || sudo mkdir -p "$target_dir"
-
-  if [ -e "$target" ] && [ ! -L "$target" ]; then
-    print_warning_message "Warning: $target exists and is not a symlink."
-    print_action_message "Backing up existing $target to $target.backup"
-    mv "$target" "$target.backup" 2>/dev/null \
-      || sudo mv "$target" "$target.backup"
-  elif [ -L "$target" ]; then
-    print_info_message "Overwriting existing symlink $target"
-  fi
-
-  if ! ln -sfn "$source_file" "$target" 2>/dev/null; then
-    print_warning_message "Not writable — linking with sudo: $target"
-    print_info_message "Tip: sudo chown -R \"${SUDO_USER:-$(whoami)}\":\"${SUDO_USER:-$(whoami)}\" \"$target_dir\""
-    sudo ln -sfn "$source_file" "$target"
-  fi
+  link_core_cli_config "$source_file" "$target" || return $?
+  print_info_message "Linked: $target"
 }
 
 # --------------------------
@@ -79,11 +61,10 @@ print_info_message "Linking home directory dotfiles..."
 
 # ~/.gitconfig is machine-local, not linked; shared git settings are
 # config/git/config (linked below with the rest of config/).
-ensure_local_gitconfig
+ensure_local_gitconfig || LINK_STATUS=1
 
 for file in .bashrc .inputrc .profile .gitignore_global .nvim-cheatsheet.md .welcome.md .packages.md .tmux.conf; do
-  link_path "$DOTFILES_HOME_DIR/$file" "$USER_HOME_DIR/$file"
-  print_info_message "Linked: $file"
+  link_path "$DOTFILES_HOME_DIR/$file" "$USER_HOME_DIR/$file" || LINK_STATUS=1
 done
 
 # --------------------------
@@ -94,21 +75,16 @@ DOTFILES_BIN_DIR="$DOTFILES_HOME_DIR/.local/bin"
 BIN_TARGET_DIR="$USER_HOME_DIR/.local/bin"
 
 if [ -d "$DOTFILES_BIN_DIR" ]; then
-  mkdir -p "$BIN_TARGET_DIR" 2>/dev/null \
-    || sudo mkdir -p "$BIN_TARGET_DIR"
   print_info_message "Linking .local/bin directory files..."
 
-  if [ ! -w "$BIN_TARGET_DIR" ]; then
-    print_warning_message "$BIN_TARGET_DIR is not writable — linking with sudo"
-    print_info_message "Tip: sudo chown -R \"${SUDO_USER:-$(whoami)}\":\"${SUDO_USER:-$(whoami)}\" \"$BIN_TARGET_DIR\""
-  fi
-
+  find "$DOTFILES_BIN_DIR" -type f -print0 >"$LINK_LIST" || LINK_STATUS=1
   while IFS= read -r -d '' file; do
     filename="$(basename "$file")"
-    link_path "$file" "$BIN_TARGET_DIR/$filename"
-    # Do not chmod symlinks into the repo (avoids dirtying git file modes).
-    print_info_message "Linked: .local/bin/$filename"
-  done < <(find "$DOTFILES_BIN_DIR" -type f -print0)
+    link_path "$file" "$BIN_TARGET_DIR/$filename" || LINK_STATUS=1
+  done <"$LINK_LIST"
+else
+  print_error_message "Required helper source directory is missing: $DOTFILES_BIN_DIR"
+  LINK_STATUS=1
 fi
 
 # --------------------------
@@ -117,15 +93,15 @@ fi
 
 CONFIG_SOURCE_DIR="$DOTFILES_CONFIG_DIR"
 CONFIG_TARGET_DIR="$USER_HOME_DIR/.config"
-mkdir -p "$CONFIG_TARGET_DIR"
+[[ -d "$CONFIG_SOURCE_DIR" ]] || { print_error_message "Required config source directory is missing"; exit 1; }
 
 print_info_message "Linking .config directory files..."
 
+find "$CONFIG_SOURCE_DIR" -type f -print0 >"$LINK_LIST" || LINK_STATUS=1
 while IFS= read -r -d '' file; do
   relative_path="${file#"$CONFIG_SOURCE_DIR"/}"
-  link_path "$file" "$CONFIG_TARGET_DIR/$relative_path"
-  print_info_message "Linked: .config/$relative_path"
-done < <(find "$CONFIG_SOURCE_DIR" -type f -print0)
+  link_path "$file" "$CONFIG_TARGET_DIR/$relative_path" || LINK_STATUS=1
+done <"$LINK_LIST"
 
 # --------------------------
 # Link Pi (coding agent) config files into ~/.pi/agent
@@ -138,8 +114,6 @@ PI_SOURCE_DIR="$REPO_ROOT/pi"
 PI_TARGET_DIR="$USER_HOME_DIR/.pi/agent"
 
 if [ -d "$PI_SOURCE_DIR" ]; then
-  mkdir -p "$PI_TARGET_DIR" 2>/dev/null \
-    || sudo mkdir -p "$PI_TARGET_DIR"
   print_info_message "Linking pi config files..."
 
   # Pi updates models-store.json with provider-check timestamps. Detach an old
@@ -148,18 +122,35 @@ if [ -d "$PI_SOURCE_DIR" ]; then
   PI_MODELS_STORE_TARGET="$PI_TARGET_DIR/models-store.json"
   if [ -L "$PI_MODELS_STORE_TARGET" ] \
     && [ "$(readlink -f "$PI_MODELS_STORE_TARGET")" = "$(readlink -f "$PI_MODELS_STORE_SOURCE")" ]; then
-    cp -L "$PI_MODELS_STORE_TARGET" "$PI_MODELS_STORE_TARGET.$$" \
-      && mv "$PI_MODELS_STORE_TARGET.$$" "$PI_MODELS_STORE_TARGET"
-    print_info_message "Detached machine-local: .pi/agent/models-store.json"
+    if core_cli_parent_links_allowed "$PI_MODELS_STORE_TARGET"; then
+      PI_MODELS_TMP="$(mktemp "$PI_MODELS_STORE_TARGET.XXXXXX")" || exit 1
+      if cp -L "$PI_MODELS_STORE_TARGET" "$PI_MODELS_TMP" \
+        && mv "$PI_MODELS_TMP" "$PI_MODELS_STORE_TARGET"; then
+        print_info_message "Detached machine-local: .pi/agent/models-store.json"
+      else
+        rm -f "$PI_MODELS_TMP"
+        LINK_STATUS=1
+      fi
+    else
+      print_error_message "Pi models-store directory link conflict; preserved"
+      LINK_STATUS=1
+    fi
   fi
 
+  find "$PI_SOURCE_DIR" -type f \
+    ! -path "$PI_SOURCE_DIR/extensions/*" \
+    ! -path "$PI_SOURCE_DIR/models-store.json" -print0 >"$LINK_LIST" || LINK_STATUS=1
   while IFS= read -r -d '' file; do
     relative_path="${file#"$PI_SOURCE_DIR"/}"
-    link_path "$file" "$PI_TARGET_DIR/$relative_path"
-    print_info_message "Linked: .pi/agent/$relative_path"
-  done < <(find "$PI_SOURCE_DIR" -type f \
-    ! -path "$PI_SOURCE_DIR/extensions/*" \
-    ! -path "$PI_SOURCE_DIR/models-store.json" -print0)
+    link_path "$file" "$PI_TARGET_DIR/$relative_path" || LINK_STATUS=1
+  done <"$LINK_LIST"
+else
+  print_error_message "Required Pi source directory is missing: $PI_SOURCE_DIR"
+  LINK_STATUS=1
 fi
 
+if [[ "$LINK_STATUS" -ne 0 ]]; then
+  print_error_message "Dotfile linking finished with conflicts/failures; user files preserved"
+  exit 1
+fi
 print_tool_setup_complete "Linking dotfiles"

@@ -25,7 +25,9 @@ print_tool_setup_start "PHP"
     print_error_message 'Custom PHP configuration environment; resolve before setup (retained)'
     exit 1
 }
-ensure_language_runtime php php composer || exit 1
+COMPOSER_OWNER="$(composer_installed_owner)" || exit 1
+ensure_language_runtime php php || exit 1
+ensure_composer_cli "$COMPOSER_OWNER" || exit 1
 PHP_VERSION="$(language_installed_version php)" || exit 1
 PHP_PATHS="$(php_configuration_paths "$WORKSTATION_DISTRO" "$PHP_VERSION")" || exit 1
 read -r PHP_INI PHP_SCAN_DIR <<<"$PHP_PATHS"

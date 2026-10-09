@@ -42,6 +42,7 @@ If packages need installing, sync will ask for sudo.
 | Browser | **Super+B** |
 | App search | **Super+Space** |
 | Clipboard history | **Super+V** |
+| Dictation toggle | **Super+T** |
 | Emoji picker | **Super+.** |
 | Screenshot (region/window/screen) | **Super+Shift+S** (or Print) |
 | Minimize a window | **Super+Shift+N** |
@@ -106,6 +107,10 @@ Shell fuzzy keys: **Ctrl+R** history · **Ctrl+T** files · **Alt+C** cd into a 
 
 ### …tile windows / move to another monitor
 
+Pop Shell shortcuts below require a compatible shell (GNOME 50 target). Above
+GNOME 50, its accepted gap retains native half-snap/monitor moves; Super+Y,
+Super+G and Super+Escape are unavailable.
+
 | Shortcut | Action |
 |----------|--------|
 | **Super+Ctrl+←/→** | Floating: half-snap · Tiled: push in layout (edge → monitor) |
@@ -135,7 +140,7 @@ or `sudo snapper -c root create -d "before <change>"` ahead of a risky upgrade.
 Housekeeping: `orphans` previews native removal candidates; `dfa-remove-orphans --remove`
 requires terminal confirmation (`--yes` alone is insufficient). `dfa-daily`/`dfa-weekly`
 use guarded pacman/AUR on Arch and APT on Ubuntu 26.04; weekly cleanup only previews.
-Full Ubuntu setup remains guarded. `check` runs shellcheck over the repo scripts.
+Bootstrap/sync use the same additive profile runner on both hosts. `check` runs shellcheck over the repo scripts.
 
 ### …fix ugly Courier-like title / UI fonts
 
@@ -158,7 +163,7 @@ Or let sync pull for you:
 
 ```bash
 bash scripts/sync.sh --profile work,devcontainer   # or personal / work only
-bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
+bash scripts/sync.sh --cleanup           # preview native orphans + Arch obsolete packages
 ```
 
 ### …set up a brand-new Arch box
@@ -167,12 +172,19 @@ bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
 2. archinstall with `user_configuration.json` — see NOTES
 3. `./post_install.sh` — chains straight into bootstrap (name, email, work|personal, NVIDIA y/n, laptop|desktop); re-run `bash scripts/bootstrap.sh` on its own later if needed
 
+### …set up an installed Ubuntu 26.04 GNOME machine
+
+Run `bash scripts/bootstrap.sh` as your user with sudo and source-registration permission.
+The installed GNOME desktop is required; disk provisioning remains Arch-only.
+Sources/update owners: [PACKAGES.md](PACKAGES.md) and [audit](docs/ubuntu-source-update-audit.md).
+Runtime paths: [validation inventory](docs/ubuntu-integration-validation.md).
+
 ### …remember work vs personal
 
 | Profile | Extra | Browser |
 |---------|-------|---------|
 | **work** | Zoom, Slack, Chrome | Chrome |
-| **personal** | Steam, Discord, Firefox, Mullvad (Arch / Ubuntu 26.04) | Firefox; selected Snap/DEB launcher, work still wins |
+| **personal** | Steam, Discord, Firefox, Mullvad (Arch / Ubuntu 26.04) | Firefox; selected known-owner launcher, work still wins |
 
 Saved in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`, along with
 `MACHINE_TYPE=laptop|desktop`, which drives the power profile, lid behavior
@@ -198,6 +210,13 @@ reports service failures. NVIDIA setup requires explicit saved opt-in or
 `bash scripts/setup-nvidia.sh --install`; `--yes` does not opt in. Existing
 drivers are never replaced; reboot/MOK activation can remain pending. See
 [GPU sources and requirements](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
+Dictation: `bash scripts/setup-voxtype.sh`, then **Super+T**. dotool needs writable
+`/dev/uinput`; setup reports pending group/login/rule access as failure. User
+config/backend/models stay yours. `dfa-update-system` refreshes installers only;
+separate model download: `voxtype setup --download --model base.en --no-post-install`.
+Start a disabled service explicitly with `systemctl --user enable --now voxtype.service`.
+See [dictation sources and runtime limits](PACKAGES.md#dictation-sources-and-update-owners).
 
 Desktop utility setup also supports Ubuntu 26.04: `setup-tableplus.sh`,
 `setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh`, `setup-moonlander.sh`.

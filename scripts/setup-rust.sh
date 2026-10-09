@@ -54,9 +54,21 @@ esac
 ACTION="$(rust_toolchain_selection "$WORKSTATION_DISTRO" "$OWNER" "$DEFAULT" "$RUST_VERSION" "$CARGO_VERSION")" || exit 1
 ensure_language_packages build || exit 1
 if [[ "$OWNER" == none ]]; then
-    ensure_language_packages rust || exit 1
+    MANAGER="$(rust_manager_selection "$WORKSTATION_DISTRO" "$OWNER")" || exit 1
+    if [[ "$MANAGER" == user-rustup ]]; then
+        install_user_rustup || exit 1
+    else
+        ensure_language_packages rust || exit 1
+    fi
     hash -r
-    [[ "$(language_rust_owner)" == native-rustup ]] || { print_error_message 'Rustup installation incomplete'; exit 1; }
+    OWNER="$(language_rust_owner)" || exit 1
+    [[ "$OWNER" == "$MANAGER" ]] || { print_error_message 'Rustup installation incomplete'; exit 1; }
+    if [[ -n "${RUSTUP_TOOLCHAIN:-}" ]] || DEFAULT="$(rustup default 2>&1)"; then
+        ACTION=retain
+    elif [[ "$DEFAULT" != *'no default toolchain configured'* ]]; then
+        print_error_message "Cannot read Rust default: $DEFAULT"
+        exit 1
+    fi
 fi
 if [[ "$ACTION" == initialize ]]; then
     rustup default stable || exit 1
