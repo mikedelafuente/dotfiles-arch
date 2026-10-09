@@ -50,7 +50,9 @@ run_setup() {
     if [[ "$rc" -eq 0 && "$script" == setup-node.sh ]]; then
       # Child NVM changes cannot alter the runner's PATH. Load the validated
       # default here before harness/model/default-harness setup is selected.
-      load_nvm || rc=1
+      if ! load_nvm || ! nvm use default >/dev/null 2>&1; then
+        rc=1
+      fi
     fi
   fi
   if [[ $rc -ne 0 ]]; then
