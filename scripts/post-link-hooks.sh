@@ -46,15 +46,21 @@ bash "$DF_SCRIPT_DIR/sync-rules.sh"
 if native_package_installed gnome-shell; then
   print_warning_message "GNOME checklist (log out/in if anything below is missing):"
   print_info_message "  • Super+V  — clipboard history (GPaste)"
-  print_info_message "  • Super+Y  — Pop Shell auto-tiling toggle (off by default)"
-  print_info_message "  • Super+Escape — Pop Shell adjustment mode"
+  GNOME_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]+)*).*$/\1/p')"
+  GNOME_ACCEPTED_SKIPS="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" skips "$GNOME_VERSION")"
+  if [[ -n "$GNOME_ACCEPTED_SKIPS" ]]; then
+    print_warning_message "  • Accepted Pop Shell gap on GNOME $GNOME_VERSION; tiling shortcuts unavailable"
+  else
+    print_info_message "  • Super+Y  — auto-tiling toggle (compatible Pop Shell required; off by default)"
+    print_info_message "  • Super+Escape — adjustment mode (compatible Pop Shell required)"
+  fi
   print_info_message "  • Super+Ctrl+Arrows — push window (rebind-window-push)"
   print_info_message "  • AppIndicator tray icons for Slack/Discord/Spotify"
   print_info_message "  • Adwaita Sans UI fonts (not Courier-like fallbacks)"
 
   # Ensure window-push bindings match current tiling state after bin is linked.
   if [[ -x "$USER_HOME_DIR/.local/bin/rebind-window-push" ]]; then
-    print_info_message "Applying rebind-window-push for current tiling mode"
+    print_info_message "Applying rebind-window-push for compatible Pop Shell or native window moves"
     bash "$USER_HOME_DIR/.local/bin/rebind-window-push" || true
   fi
 fi

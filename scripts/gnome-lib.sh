@@ -90,8 +90,17 @@ install_gnome_extension_pin() (
 )
 
 ensure_gnome_extensions() {
-  local version="$1" app recipe uuid package owner target path daemon_package client installed=false
-  local -a required=()
+  local version="$1" app recipe uuid package owner target path daemon_package client skips installed=false
+  local -a required=() apps=(pop overview tray panel clipboard)
+  skips="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" skips "$version")" || return 1
+  # Consumed by setup-gnome.sh; skip only the explicitly accepted newer-shell gap.
+  # shellcheck disable=SC2034
+  GNOME_POP_SHELL_AVAILABLE=true
+  if [[ "$skips" == pop-shell@system76.com ]]; then
+    GNOME_POP_SHELL_AVAILABLE=false
+    apps=(overview tray panel clipboard)
+    print_warning_message "Accepted feature gap: Pop Shell skipped on GNOME $version (target: GNOME 50); native window moves remain available"
+  fi
   # Repair the legacy bypass even when a required extension needs a source update.
   gsettings set org.gnome.shell disable-extension-version-validation false || return 1
   daemon_package=gpaste
@@ -105,7 +114,7 @@ ensure_gnome_extensions() {
     return 1
   fi
   # Preflight every source conflict before adding packages or replacing links.
-  for app in pop overview tray panel clipboard; do
+  for app in "${apps[@]}"; do
     recipe="$(gnome_extension_recipe "$WORKSTATION_DISTRO" "$app")" || return 1
     read -r uuid package owner <<<"$recipe"
     if [[ -e "/usr/local/share/gnome-shell/extensions/$uuid" || -L "/usr/local/share/gnome-shell/extensions/$uuid" ]]; then
@@ -123,7 +132,7 @@ ensure_gnome_extensions() {
       return 1
     fi
   done
-  for app in pop overview tray panel clipboard; do
+  for app in "${apps[@]}"; do
     recipe="$(gnome_extension_recipe "$WORKSTATION_DISTRO" "$app")" || return 1
     read -r uuid package owner <<<"$recipe"
     case "$owner" in
@@ -155,7 +164,10 @@ ensure_gnome_extensions() {
   local lists enabled disabled
   enabled="$(gsettings get org.gnome.shell enabled-extensions)" || return 1
   disabled="$(gsettings get org.gnome.shell disabled-extensions)" || return 1
-  lists="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" lists "$WORKSTATION_DISTRO" "$enabled" "$disabled" "${required[@]}")" || return 1
+  lists="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" lists "$WORKSTATION_DISTRO" "$version" "$enabled" "$disabled" "${required[@]}")" || return 1
+  if [[ "$GNOME_POP_SHELL_AVAILABLE" == false ]]; then
+    gnome-extensions disable pop-shell@system76.com 2>/dev/null || true
+  fi
   if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
     local conflict
     for conflict in ubuntu-dock@ubuntu.com tiling-assistant@ubuntu.com ding@rastersoft.com appindicatorsupport@rgcjonas.gmail.com; do

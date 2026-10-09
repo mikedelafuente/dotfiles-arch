@@ -23,6 +23,12 @@ def main():
                           "pop-shell@system76.com", "50.1")
     assert not compatible({"uuid": "x", "shell-version": "50"}, "x", "50.1")
     assert not compatible({"uuid": "x", "shell-version": ["50"]}, "x", "unknown")
+    skips = api["accepted_extension_skips"]
+    assert skips("50.1") == []
+    assert skips("49") == []
+    assert skips("51.0") == ["pop-shell@system76.com"]
+    assert skips("unknown") == []
+    assert not compatible({"uuid": "x", "shell-version": ["50"]}, "x", "51")
 
     required = ["pop-shell@system76.com", "ubuntu-appindicators@ubuntu.com"]
     enabled, disabled = api["extension_lists"](
@@ -36,6 +42,13 @@ def main():
     assert api["extension_lists"](repr(enabled), repr(disabled), required, "ubuntu") == (enabled, disabled)
     assert api["extension_lists"]("['ubuntu-dock@ubuntu.com']", "[]", ["pop-shell@system76.com"], "arch")[0] == [
         "ubuntu-dock@ubuntu.com", "pop-shell@system76.com"]
+    gap_lists = api["extension_lists"](
+        "['pop-shell@system76.com', 'user-extension']", "['user-disabled']",
+        ["pop-shell@system76.com", "dash-to-panel@jderose9.github.com"], "arch", "51.0")
+    assert gap_lists == (["user-extension", "dash-to-panel@jderose9.github.com"],
+                         ["user-disabled", "pop-shell@system76.com"])
+    assert api["extension_lists"](*map(repr, gap_lists),
+                                  ["dash-to-panel@jderose9.github.com"], "arch", "51.0") == gap_lists
     assert api["merge_shortcuts"]("['/user/shortcut/']", ["/dfa/shortcut/"]) == [
         "/user/shortcut/", "/dfa/shortcut/"]
     action = api["policy_action"]

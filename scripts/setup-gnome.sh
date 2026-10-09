@@ -285,7 +285,7 @@ print_info_message "  - Supported players: Firefox, Chrome, VLC, mpv, celluloid,
 print_info_message ""
 
 # --------------------------
-# Install and Configure Pop Shell for Tiling Window Management
+# Configure Validated GNOME Extensions
 # --------------------------
 
 # Sources were preflighted, acquired, and validated against GNOME_SHELL_VERSION
@@ -350,33 +350,35 @@ gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste
 gnome_extension_setting GPaste@gnome-shell-extensions.gnome.org org.gnome.GPaste show-history ''
 
 # Configure Pop Shell settings
-print_info_message "Configuring Pop Shell tiling behavior"
+if [[ "$GNOME_POP_SHELL_AVAILABLE" == true ]]; then
+    print_info_message "Configuring Pop Shell tiling behavior"
 
-# Floating by default; Super+Y toggles auto-tiling for the workspace
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell tile-by-default false
+    # Floating by default; Super+Y toggles auto-tiling for the workspace
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell tile-by-default false
 
-# Explicitly bind Super+Y (toggle auto-tiling for the workspace)
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell toggle-tiling "['<Super>y']"
-# Float / unfloat focused window
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell toggle-floating "['<Super>g']"
+    # Explicitly bind Super+Y (toggle auto-tiling for the workspace)
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell toggle-tiling "['<Super>y']"
+    # Float / unfloat focused window
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell toggle-floating "['<Super>g']"
 
-# No gaps / no rounded active-hint when tiling is enabled
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell gap-inner 0
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell gap-outer 0
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell smart-gaps false
+    # No gaps / no rounded active-hint when tiling is enabled
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell gap-inner 0
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell gap-outer 0
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell smart-gaps false
 
-# Active hint outline (no border radius)
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell active-hint true
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell active-hint-border-radius 0
+    # Active hint outline (no border radius)
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell hint-color-rgba 'rgba(147, 153, 178, 0.5)'
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell active-hint true
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell active-hint-border-radius 0
 
-# Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher).
-# Rebind tile adjustment mode to Super+Escape instead.
-print_info_message "Clearing Pop Shell keybindings that conflict with our shortcuts"
-# The shared app launcher is GNOME's grid; do not expose Pop's optional external
-# pop-launcher dependency alongside GNOME's Super+Space app grid.
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell activate-launcher "[]"
-gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell tile-enter "['<Super>Escape']"
+    # Clear Pop Shell's Super+Return keybinding (conflicts with terminal launcher).
+    # Rebind tile adjustment mode to Super+Escape instead.
+    print_info_message "Clearing Pop Shell keybindings that conflict with our shortcuts"
+    # The shared app launcher is GNOME's grid; do not expose Pop's optional external
+    # pop-launcher dependency alongside GNOME's Super+Space app grid.
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell activate-launcher "[]"
+    gnome_extension_setting pop-shell@system76.com org.gnome.shell.extensions.pop-shell tile-enter "['<Super>Escape']"
+fi
 
 # Super+Ctrl+Up/Down must NOT switch workspaces (GNOME default steals these chords)
 gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-up "[]"
@@ -387,7 +389,7 @@ gsettings set org.gnome.desktop.wm.keybindings switch-to-workspace-down "[]"
 # - Floating: Mutter half-snap (Left/Right) + move-to-monitor (Up/Down)
 # Binding both owners to the same chords double-fires (snap-back).
 # rebind-window-push picks one based on tile-by-default; --watch tracks Super+Y.
-print_info_message "Configuring Super+Ctrl+Arrows window push (tiling-aware)"
+print_info_message "Configuring Super+Ctrl+Arrows window push"
 REBIND_WINDOW_PUSH="$DF_SCRIPT_DIR/../home/.local/bin/rebind-window-push"
 if [[ ! -f "$REBIND_WINDOW_PUSH" ]]; then
     REBIND_WINDOW_PUSH="$USER_HOME_DIR/.local/bin/rebind-window-push"
@@ -412,8 +414,10 @@ if [[ -f "$REBIND_WINDOW_PUSH" ]]; then
             kill "$pid" 2>/dev/null || true
         fi
     done < <(pgrep -u "$(id -u)" -f 'rebind-window-push' 2>/dev/null || true)
-    sleep 0.2
-    nohup bash "$REBIND_WINDOW_PUSH" --watch >/dev/null 2>&1 &
+    if [[ "$GNOME_POP_SHELL_AVAILABLE" == true ]]; then
+        sleep 0.2
+        nohup bash "$REBIND_WINDOW_PUSH" --watch >/dev/null 2>&1 &
+    fi
 else
     print_warning_message "rebind-window-push not found — link dotfiles, then re-run setup-gnome.sh"
 fi
@@ -511,7 +515,7 @@ gsettings set org.gnome.desktop.wm.keybindings move-to-workspace-right "['<Super
 # Configure application launch keybindings
 # --------------------------
 
-print_info_message "Configuring tiling / Pop Shell application launcher shortcuts"
+print_info_message "Configuring GNOME application launcher shortcuts"
 
 # Super+Return for terminal (using kitty if available, fallback to gnome-terminal)
 CUSTOM_KB_TERMINAL="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom1/"
@@ -600,11 +604,15 @@ print_info_message "  - Toggle fullscreen: Super+F"
 print_info_message "  - Toggle maximize: Super+M"
 print_info_message "  - Minimize window: Super+Shift+N"
 print_info_message "  - Push window (floating): Super+Ctrl+Left/Right half-snap; Up/Down other monitor"
-print_info_message "  - Push window (tiled): Super+Ctrl+Arrows rearrange; edge hops monitor"
-print_info_message "    (auto-rebinds on Super+Y via rebind-window-push)"
-print_info_message "  - Pop Shell toggle auto-tiling (off by default): Super+Y"
-print_info_message "  - Pop Shell float focused window: Super+G"
-print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"
+if [[ "$GNOME_POP_SHELL_AVAILABLE" == true ]]; then
+    print_info_message "  - Push window (tiled): Super+Ctrl+Arrows rearrange; edge hops monitor"
+    print_info_message "    (auto-rebinds on Super+Y via rebind-window-push)"
+    print_info_message "  - Pop Shell toggle auto-tiling (off by default): Super+Y"
+    print_info_message "  - Pop Shell float focused window: Super+G"
+    print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"
+else
+    print_warning_message "  - Accepted gap: Pop Shell tiling and Super+Y/G/Escape unavailable on GNOME $GNOME_SHELL_VERSION"
+fi
 print_info_message "  - Switch windows: Alt+Tab"
 print_info_message ""
 print_info_message "Application Launchers:"
@@ -618,8 +626,11 @@ print_info_message "  - Emoji picker: Super+."
 print_info_message "  - Voxtype dictation toggle: Super+T"
 print_info_message "  - Screenshot UI: Super+Shift+S (or Print)"
 print_info_message ""
-print_warning_message "Log out and back in so GNOME reloads extensions (Dash to Panel, GPaste, AppIndicator, Pop Shell)."
-print_warning_message "Until then the top app bar / Super+V / Super+Y / tray icons may not work."
+print_warning_message "Log out and back in so GNOME reloads validated extensions (Dash to Panel, GPaste, AppIndicator)."
+print_warning_message "Until then the top app bar / Super+V / tray icons may not work."
+if [[ "$GNOME_POP_SHELL_AVAILABLE" == true ]]; then
+    print_warning_message "Pop Shell / Super+Y also requires a log out/in."
+fi
 
 # --------------------------
 # Installation Complete
