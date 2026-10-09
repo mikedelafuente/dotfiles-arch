@@ -99,7 +99,7 @@ Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 | Native system packages, including Kitty / Arch | Existing official pacman repositories | `dfa-update-system`: pacman, then guarded AUR updates |
 | AUR apps / Arch | Existing AUR recipes, including their AUR dependencies | `yay -Sua` after an IoC scan; query/scanner/metadata failures fail closed |
 | Native packages, including Kitty / Ubuntu 26.04 | Existing configured Ubuntu and vendor APT repositories | `dfa-update-system`: APT refresh and upgrade with new dependencies permitted, removals refused |
-| Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | Existing `dfa-update-npm-clis` daily step; no root npm |
+| Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
 | NinjaOne / Arch | Existing opt-in repackaged vendor DEB | Agent self-updater plus existing weekly health check |
 | Managed NinjaOne / Ubuntu | Existing IT-selected source | Existing vendor/IT owner; weekly Arch repair is policy-deferred until native lifecycle conversion |
 
@@ -108,7 +108,9 @@ repository, signing key, source fallback, app migration, or duplicate installati
 APT keeps existing holds/pins and source priorities; source conflicts remain for
 the source owner to resolve. Standalone DEBs/archives without a configured update
 repository are **not** made updateable by this change; their recipes/owners remain
-subsequent app slices. Ubuntu automatic security timers, blacklists, and service
+subsequent app slices. A shadowing or non-npm agent launcher is preserved and
+reported as a source conflict, returning nonzero without adding an npm duplicate.
+Ubuntu automatic security timers, blacklists, and service
 configuration are untouched (see [Ubuntu automatic updates](https://ubuntu.com/server/docs/how-to/software/automatic-updates/)).
 
 `dfa-daily` keeps its step order and aggregates failures. `dfa-weekly` still runs

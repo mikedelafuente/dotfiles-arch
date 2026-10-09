@@ -1121,6 +1121,11 @@ run_profile_setup_scripts() {
 # NVM / Node
 # --------------------------
 
+# Read-only source decision from the global package directory and resolved launcher.
+npm_harness_owns_launcher() {
+  [[ -n "$1" && -f "$1/package.json" && "$2" == "$1/"* ]]
+}
+
 # Canonical NVM location (matches home/.bashrc).
 nvm_dir() {
   echo "${USER_HOME_DIR:-$HOME}/.config/nvm"

@@ -73,6 +73,8 @@ Until the first successful Arch update, all three existing `.last_pacman_update`
 or deleting them. Missing, invalid, or future stamps require a retry. Failed
 steps do not stamp success and survive daily/weekly and Arch bootstrap/sync summaries.
 Sync always upgrades; bootstrap retains its cooldown.
+The npm CLI step updates only launchers owned by the selected global npm package;
+vendor/native or shadowing launchers are preserved and reported as source conflicts.
 
 Cleanup defaults to a read-only native plan (`pacman -Qtdq` plus recursive removal
 preview on Arch; APT autoremove simulation on Ubuntu). Weekly only previews;

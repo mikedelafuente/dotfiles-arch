@@ -1,6 +1,7 @@
 """Read-only maintenance decisions; run with python3 tests/test_maintenance_decisions.py."""
 from pathlib import Path
 import os
+import shlex
 import subprocess
 import tempfile
 
@@ -72,6 +73,17 @@ def main():
         assert decision(home, "ubuntu", "select_workstation_distro ubuntu 26.04 amd64")
         assert not decision(home, "ubuntu", "select_workstation_distro ubuntu 24.04 x86_64")
         assert not decision(home, "ubuntu", "select_workstation_distro ubuntu 26.04 aarch64")
+        package_dir = home / "npm source/node_modules/agent"
+        package_dir.mkdir(parents=True)
+        (package_dir / "package.json").write_text('{"name":"agent"}')
+        for launcher, owned in ((package_dir / "bin/agent", True),
+                                (home / "vendor/agent", False),
+                                (Path(str(package_dir) + "-other/bin/agent"), False)):
+            command = f"npm_harness_owns_launcher {shlex.quote(str(package_dir))} {shlex.quote(str(launcher))}"
+            assert decision(home, "ubuntu", command) == owned
+        (package_dir / "package.json").unlink()
+        command = f"npm_harness_owns_launcher {shlex.quote(str(package_dir))} {shlex.quote(str(package_dir / 'bin/agent'))}"
+        assert not decision(home, "arch", command)
     print("Maintenance decisions passed (no update/cleanup workflows executed)")
 
 

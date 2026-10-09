@@ -37,6 +37,11 @@ if ! load_nvm || ! command -v npm &>/dev/null; then
   exit 0
 fi
 
+npm_root="$(npm root -g)" || {
+  print_error_message "Cannot determine npm's global package owner"
+  exit 1
+}
+
 updated=0
 failed=0
 
@@ -45,6 +50,14 @@ for harness in claude codex pi; do
 
   if ! command -v "$harness" &>/dev/null; then
     print_info_message "$harness not installed — skip"
+    continue
+  fi
+
+  package_dir="$(readlink -f "$npm_root/$package" || true)"
+  launcher="$(readlink -f "$(type -P "$harness")" || true)"
+  if ! npm_harness_owns_launcher "$package_dir" "$launcher"; then
+    print_error_message "Source conflict: $harness launcher is not owned by $package in this npm prefix; retained. Use its selected update owner."
+    ((failed++)) || true
     continue
   fi
 

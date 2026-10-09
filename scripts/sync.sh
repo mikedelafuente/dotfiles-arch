@@ -219,10 +219,10 @@ if [ "$ASSUME_YES" = true ]; then
 else
   safe_system_upgrade
 fi
-UPGRADE_RC=$?
+SYNC_STATUS=$?
 set -e
-if [ "$UPGRADE_RC" -eq 0 ]; then
-  record_system_upgrade_stamps || UPGRADE_RC=1
+if [ "$SYNC_STATUS" -eq 0 ]; then
+  record_system_upgrade_stamps || SYNC_STATUS=1
 else
   print_warning_message "Guarded system update failed — continuing with link/setup/cleanup."
 fi
@@ -233,7 +233,7 @@ fi
 
 if [ "$SKIP_BOOTSTRAP" = false ]; then
   print_line_break "Running setup scripts (safe to re-run)"
-  run_profile_setup_scripts "$ASSUME_YES" || UPGRADE_RC=1
+  run_profile_setup_scripts "$ASSUME_YES" || SYNC_STATUS=1
 else
   print_info_message "Skipping setup scripts (--skip-bootstrap)"
 fi
@@ -352,7 +352,7 @@ else
   print_info_message "Skipped cleanup (pass --cleanup with --yes to remove: ${OBSOLETE_PKGS_INSTALLED[*]})"
 fi
 
-if [[ "$UPGRADE_RC" -ne 0 ]]; then
+if [[ "$SYNC_STATUS" -ne 0 ]]; then
   print_error_message "Sync finished with update/setup failures (see above)"
   exit 1
 fi
