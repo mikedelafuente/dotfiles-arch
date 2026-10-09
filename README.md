@@ -4,7 +4,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
-Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, and package maintenance**
+Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, work apps, and package maintenance**
 are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
@@ -24,6 +24,15 @@ existing alternate resolver policy is preserved and reported as a gap.
 See [PACKAGES.md](PACKAGES.md#container-source-and-update-contract) for sources,
 update owners and unverified runtime behavior. No setup/service/VPN operations
 are executed as tests.
+
+Work apps: `bash scripts/setup-chrome.sh`, `bash scripts/setup-slack.sh`, and
+`bash scripts/setup-zoom.sh` support both hosts. Ubuntu selects scoped vendor APT
+for Chrome/Slack and a signature-verified official Zoom DEB. `dfa-update-system`
+maintains all three, including Zoom's standalone refresh. Existing launchers,
+sources, holds, and user settings are retained; unknown/duplicate ownership fails.
+The shared additive `work` selection and Chrome browser identity stay unchanged;
+full Ubuntu profile/GNOME orchestration remains guarded. See
+[work app sources and runtime limits](PACKAGES.md#work-app-sources-and-update-owners).
 
 All entrypoints using the common header detect `/etc/os-release` and architecture
 before mutation. Unconverted entrypoints, including bootstrap, sync (even

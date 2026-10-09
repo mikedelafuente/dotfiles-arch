@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Zoom for Arch Linux
+# Setup Zoom for Arch and Ubuntu 26.04
 # --------------------------
-# Zoom is installed from the AUR (Arch User Repository).
-# The AUR package provides the official Zoom client.
+# Arch uses the guarded AUR; Ubuntu uses a verified official DEB.
 # --------------------------
 
 # --------------------------
@@ -28,33 +27,5 @@ fi
 # --------------------------
 
 print_tool_setup_start "Zoom"
-
-# --------------------------
-# Install Zoom via AUR
-# --------------------------
-
-# Check if Zoom is already installed
-if command -v zoom &> /dev/null; then
-    print_info_message "Zoom is already installed. Skipping installation."
-    print_info_message "Installed version: $(pacman -Q zoom 2>/dev/null | awk '{print $2}')"
-else
-    print_info_message "Installing Zoom from AUR"
-
-    # Install Zoom from AUR
-    ensure_yay_pkgs zoom
-
-    if command -v zoom &> /dev/null; then
-        print_info_message "Zoom installed successfully"
-        print_info_message "You can launch Zoom from your application menu or run: zoom"
-        echo ""
-        print_info_message "To update packages safely, run:"
-        print_info_message "  dfa-update-system"
-        print_info_message "  # or: bash scripts/update-system.sh"
-    else
-        print_error_message "Zoom installation failed"
-        print_info_message "You can manually install with: yay -S zoom (review PKGBUILD first)"
-    fi
-fi
-
+ensure_work_app zoom || exit $?
 print_tool_setup_complete "Zoom"
-

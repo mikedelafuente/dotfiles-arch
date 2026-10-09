@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Slack for Arch Linux
+# Setup Slack for Arch and Ubuntu 26.04
 # --------------------------
 
 # --------------------------
@@ -23,20 +23,5 @@ fi
 # --------------------------
 
 print_tool_setup_start "Slack"
-
-if command -v slack &> /dev/null; then
-    print_info_message "Slack is already installed. Skipping installation."
-else
-    print_info_message "Installing Slack from AUR (slack-desktop)"
-    ensure_yay_pkgs slack-desktop
-
-    if command -v slack &> /dev/null; then
-        print_success_message "Slack installed successfully"
-        print_info_message "You can launch Slack from your application menu or run: slack"
-    else
-        print_error_message "Slack installation failed"
-        print_info_message "You can manually install with: yay -S slack-desktop"
-    fi
-fi
-
+ensure_work_app slack || exit $?
 print_tool_setup_complete "Slack"

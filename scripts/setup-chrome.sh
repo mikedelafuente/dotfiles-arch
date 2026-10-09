@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --------------------------
-# Setup Google Chrome for Arch Linux
+# Setup Google Chrome for Arch and Ubuntu 26.04
 # --------------------------
 
 CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &>/dev/null && pwd)"
@@ -15,19 +15,5 @@ else
 fi
 
 print_tool_setup_start "Google Chrome"
-
-if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
-  print_info_message "Google Chrome is already installed. Skipping installation."
-else
-  print_info_message "Installing Google Chrome from AUR (google-chrome)"
-  ensure_yay_pkgs google-chrome
-
-  if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
-    print_success_message "Google Chrome installed successfully"
-  else
-    print_error_message "Google Chrome installation failed"
-    print_info_message "You can manually install with: yay -S google-chrome"
-  fi
-fi
-
+ensure_work_app chrome || exit $?
 print_tool_setup_complete "Google Chrome"

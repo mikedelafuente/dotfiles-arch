@@ -54,10 +54,12 @@ Options:
 Arch scans AUR PKGBUILDs and dependencies before yay upgrades. Ubuntu uses
 configured APT sources, retains holds/pins and automatic security updates,
 and refuses removals. Release upgrades are excluded. --yes is not cleanup approval.
-Managed upstream Neovim/tree-sitter/lazydocker/minikube/kubectl/k9s and existing Ubuntu Orca DEBs refresh
+Managed upstream Neovim/tree-sitter/lazydocker/minikube/kubectl/k9s and existing Ubuntu Orca/Zoom DEBs refresh
 after native updates. Ubuntu Zed user installs and Orca AppImages use their in-app
 self-updaters (keep enabled); DEB notifications alone do not install updates.
-Downloads require stable release metadata and SHA-256 verification; any failure
+Chrome/Slack use scoped vendor APT sources; source and candidate conflicts fail.
+Zoom DEBs require a pinned vendor signature and matching archive-member hashes.
+Other downloads require stable release metadata and SHA-256 verification; any failure
 retains the working release and prevents a successful-update stamp.
 
 Skips the actual upgrade (no prompts, no sudo) when the last guarded upgrade

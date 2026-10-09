@@ -736,3 +736,80 @@ launch/login, hooks inside live agents, default-harness runtime fallback, and
 Ollama model use on either workstation remain **unverified**. Wayland behavior
 is also unverified; upstream calls native Wayland experimental. Full Ubuntu
 orchestration and optional Ollama acquisition remain separately guarded slices.
+
+
+## Work app sources and update owners
+
+Standalone `setup-chrome.sh`, `setup-slack.sh`, and `setup-zoom.sh` support rolling
+Arch and Ubuntu 26.04 amd64. The single profile runner still selects all three
+only when `work` is selected (also alongside `personal`/`devcontainer`). Full
+Ubuntu bootstrap/sync/profile/GNOME setup remains guarded pending other slices.
+
+| App / launcher / desktop | Arch source | Ubuntu source | Update owner |
+|---|---|---|---|
+| Chrome / `google-chrome-stable`, `google-chrome` / `google-chrome.desktop` | IoC-scanned `google-chrome` AUR | Google's stable APT (`google-chrome-stable`); `dl.google.com/linux/chrome-stable/deb`, stable/main | Guarded AUR or APT through `dfa-update-system`, daily/weekly |
+| Slack / `slack` / `slack.desktop` | IoC-scanned `slack-desktop` AUR | Slack's Packagecloud APT (`slack-desktop`); `packagecloud.io/slacktechnologies/slack/debian`, jessie/main | Guarded AUR or APT through common maintenance; candidate and installed package require 4.35.121+ source handling |
+| Zoom / `zoom` / `Zoom.desktop` | IoC-scanned `zoom` AUR | Official signed `zoom_amd64.deb` from `zoom.us/client/latest` | Explicit verified-DEB refresh after APT in `dfa-update-system`; no vendor APT or Linux in-app updater assumed |
+| Verification prerequisites | Existing shared tools | `curl`, `ca-certificates`, `gnupg`, `binutils` (`ar`), `python3` | Native package updater |
+
+The vendor app repositories are selected instead of Ubuntu packages because these
+three proprietary desktop applications are not native Ubuntu packages. Slack's
+`jessie` suite names the vendor's app feed; no Debian OS repository is added.
+Chrome/Slack downloads use APT's authenticated metadata and package hashes.
+Source registration is idempotent, uses a repository-scoped `Signed-By`, and
+preserves existing compatible scoped sources. New registrations use vendor
+filenames (`google-chrome.sources`, `slack.list`) and keys in
+`/usr/share/keyrings/{google-chrome,slack}.gpg` to avoid a second managed feed.
+Candidate policy must name the selected vendor, excluding local-only packages or
+third-party candidates. Disabled, malformed, global-trust-only, duplicate, or
+unknown feeds fail without silent source migration; repair them explicitly.
+Source destinations and key symlinks are not overwritten. Key rotations need a
+reviewed fingerprint update, never a signature-policy bypass.
+
+Pinned primary fingerprints (vendor metadata inspected 2026-10-09):
+
+- Google: `EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796`.
+- Slack APT metadata: `DB085A08CA13B8ACB917E0F6D938EC0D038651BD` (distinct from Slack's standalone DEB signing key).
+- Zoom 6.7.5+ signing key: `84C365D6CC9A4886CA926BCC4F2197399706AC24`.
+
+Zoom's DEB is staged in a temporary directory. GPG authenticates its embedded
+`_gpgbuilder` dpkg-sig v4 manifest using an isolated, pinned Zoom keyring; a
+read-only Python check verifies every Debian archive member against the signed
+size/MD5/SHA1 list before APT installs it. These legacy member digests are Zoom's
+signature format, not a newly invented SHA-256 guarantee. Unexpected members,
+signature changes, missing signatures, wrong package/architecture, or malformed
+versions fail while retaining the working app. The Debian package version prevents
+downgrades/reinstalling equal releases. `apt-mark` holds are policy-deferred and
+retained; dependency removals are refused. No `dpkg-sig` package availability is
+assumed on Ubuntu 26.04, and no remote installer is executed.
+
+Package-owned launchers are required; Snap/Flatpak duplicates and unknown/manual
+launchers report conflicts. Existing compatible selected packages retain their
+update owner; existing Zoom packages join the explicit signed refresh owner.
+Setup never rewrites `~/.config/google-chrome`, `~/.config/Slack`, Zoom settings,
+accounts, desktop identities, or browser preferences. The shared GNOME work
+preference still targets `google-chrome.desktop`; this slice does not run GNOME
+configuration on Ubuntu. Resolve source conflicts before rerunning setup.
+Maintenance validates installed work-app ownership/keys before APT, verifies vendor
+candidates after metadata refresh, and checks ownership again after native updates.
+A failed standalone refresh or source check returns failure and prevents a success
+stamp; already completed native updates cannot be rolled back by this check.
+
+Evidence: [Google signing key](https://www.google.com/linuxrepositories/),
+[Chrome source registration](https://chromium.googlesource.com/chromium/src/+/lkgr/chrome/installer/linux/common/apt.include),
+[Slack Linux install/update guidance](https://slack.com/help/articles/212924728-Download-Slack-for-Linux--beta-.),
+[Slack vendor repository and scoped APT key](https://packagecloud.io/app/slacktechnologies/slack/gpg),
+[Zoom Linux installation](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0063458),
+[Zoom signing-key rotation and DEB signatures](https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0063726),
+[Debian dpkg-sig format](https://manpages.debian.org/buster/dpkg-sig/dpkg-sig.1.en.html).
+
+Verified: supplied profile/source/package/candidate decisions, scoped-source and
+signed-manifest checks in temporary state (`python3 tests/test_work_app_decisions.py`),
+Bash syntax and ShellCheck, and static update-failure/stamp inspection.
+Unverified: Ubuntu 26.04 dependency resolution, APT's current cryptographic policy
+acceptance of vendor keys, vendor maintainer scripts preserving scoped feeds,
+real package installation/upgrade/holds, Zoom's current signature payload,
+GNOME launch/default-browser integration, Slack keyring/login/tray integration,
+Wayland screen sharing/audio/video, and managed-workstation policies. No package
+manager, networked test, live app, service, or desktop workflow was executed as
+verification. Vendor Linux support is feasibility evidence, not runtime parity.
