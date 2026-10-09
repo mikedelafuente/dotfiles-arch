@@ -642,6 +642,11 @@ GNOME `Super+T` (`/usr/bin/voxtype record toggle`). No X11-only typing replaceme
 | Ubuntu CUDA13 runtime | [NVIDIA ubuntu2604/x86_64](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/), repository-scoped fingerprint `14BAFBC7562AD710CA04E69905FBB6DA60DF8A40` | APT. `cuda-cudart-13-4`, `libcublas-13-4`, `libcufft-13-4`, `libcurand-13-4`, `libcudnn9-cuda-13`, and their three toolkit config dependencies only; all other vendor packages pinned negative. No `cuda`/driver metapackages or older Ubuntu repository. |
 | Existing Parakeet CPU/CUDA12 | Retain compatible selected variant/config; AVX2/AVX-512 CPU or actual existing CUDA12/cuDNN9/provider runtime | Existing owner. No CUDA12 source substitution; missing/incompatible runtime returns failure. |
 
+Recognized older Voxtype/dotool owners may refresh through their selected source.
+Standalone setup refreshes incompatible native/AUR packages without changing owners;
+setup and system updates fail if the resulting versions still miss these minimums.
+Standalone AUR refresh requires terminal review even with `--yes`.
+
 Unknown launchers, unowned source builds, duplicate sources, older/unscoped NVIDIA
 sources, pin conflicts, APT holds and driver/removal plans are retained and reported.
 Holds defer installer/build updates; they do not authorize source migration.

@@ -878,17 +878,23 @@ ensure_yay_installed() {
 }
 
 # Install missing AUR packages via yay after IoC scan (package + AUR deps).
-# Env: DOTFILES_AUR_ASSUME_YES=true → --noconfirm after scan passes (bootstrap/sync --yes).
+# --refresh also updates installed packages; terminal review is required.
+# Env: DOTFILES_AUR_ASSUME_YES=true → --noconfirm for missing packages after scan.
 ensure_yay_pkgs() {
-  local pkg
+  local pkg refresh=false
   local missing=()
   local assume_yes="${DOTFILES_AUR_ASSUME_YES:-false}"
+  if [[ "${1:-}" == --refresh ]]; then refresh=true; shift; fi
+  if [[ "$refresh" == true && ( ! -t 0 || ! -t 1 ) ]]; then
+    print_error_message 'AUR package refresh requires a terminal to review package changes'
+    return 1
+  fi
   if ! command -v yay &>/dev/null; then
     print_error_message "yay is required but not installed"
     return 1
   fi
   for pkg in "$@"; do
-    if pacman -Q "$pkg" &>/dev/null; then
+    if [[ "$refresh" == false ]] && pacman -Q "$pkg" &>/dev/null; then
       print_info_message "Already installed: $pkg"
     else
       missing+=("$pkg")
@@ -903,7 +909,7 @@ ensure_yay_pkgs() {
     aur_scan_package_tree "$pkg" || return 1
   done
 
-  if [[ "$assume_yes" == "true" || "$assume_yes" == "1" ]]; then
+  if [[ "$refresh" == false && ( "$assume_yes" == "true" || "$assume_yes" == "1" ) ]]; then
     print_warning_message "DOTFILES_AUR_ASSUME_YES set — installing with --noconfirm after clean IoC scan"
     yay -S --needed --noconfirm "${missing[@]}"
   else
