@@ -1,5 +1,21 @@
 # Packages
 
+## Installed DFA copies
+
+Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
+`~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
+obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
+live files and return failure. `dfa-deploy source` identifies the shared edit destination.
+Use `dfa-deploy capture <artifact>` for one selected source improvement,
+`dfa-deploy override <artifact> <file>` for a persistent local override,
+`dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
+for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
+
+Deployment uses existing Git (`merge-file`), Bash syntax checks and native Python 3.11+
+(`python` on Arch, `python3` on Ubuntu); no Stow/AI/model/network merge service is used.
+Native/app acquisition and update owners keep the contracts below.
+
+
 What every package this repo installs is for, and which command or shortcut it powers.
 
 Read it in a terminal with `packages` (linked to `~/.packages.md`).

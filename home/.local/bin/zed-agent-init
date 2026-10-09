@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "/proc/$$/fd/255" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
 # shellcheck source=/dev/null
 source "$SCRIPT_DIR/dotfiles-arch-lib.sh"
 

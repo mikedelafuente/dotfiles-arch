@@ -27,6 +27,14 @@ fi
 source "$DF_SCRIPT_DIR/sync-sources-lib.sh"
 
 REPO_ROOT="$(cd "$DF_SCRIPT_DIR/.." && pwd)"
+# Stable deployment owns linking once installed (and on actual source checkouts).
+# Non-git supplied fixtures retain the legacy isolated sync interfaces.
+if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
+  exec python3 "$DF_SCRIPT_DIR/deployment.py" deploy
+elif [[ -e "$REPO_ROOT/.git" ]]; then
+  exec python3 "$DF_SCRIPT_DIR/deployment.py" deploy --source "$REPO_ROOT"
+fi
+
 TARGET_DIRS=("$USER_HOME_DIR/.claude/skills" "$USER_HOME_DIR/.cursor/skills")
 if command -v codex &>/dev/null; then
   TARGET_DIRS+=("$(codex_home_dir)/skills")

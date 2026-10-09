@@ -64,6 +64,16 @@ print_line_break "Schema migrations"
 print_info_message "Machine is at v$FROM_VERSION — $VERSION_SOURCE"
 print_info_message "Repository is at v$TARGET_VERSION"
 
+# A recorded v5 requires intact deployment provenance and no interrupted activation.
+# Dry-run remains read-only and reports even an incomplete layout.
+if ((FROM_VERSION >= 5)) && [[ "$DRY_RUN" -eq 0 ]]; then
+  [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]] || {
+    print_error_message "v5 deployment missing; restore a retained generation before stamping"
+    exit 1
+  }
+  python3 "$DF_SCRIPT_DIR/deployment.py" status >/dev/null || exit 1
+fi
+
 if ((FROM_VERSION >= TARGET_VERSION)); then
   print_success_message "Already up to date — nothing to migrate"
   # An un-stamped machine that is already current still needs its first stamp.

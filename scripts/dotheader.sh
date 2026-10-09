@@ -11,6 +11,7 @@ set -euo pipefail
 _user="${SUDO_USER:-$(whoami)}"
 USER_HOME_DIR="$(eval echo "~${_user}")"
 export USER_HOME_DIR
+export PYTHONDONTWRITEBYTECODE=1
 
 # Use parameter expansion to avoid "unbound variable" with set -u
 if [ -z "${DF_SCRIPT_DIR:-}" ]; then
@@ -44,3 +45,16 @@ esac
 # Child setup processes must see newly installed user CLIs in this same run.
 # Shell startup files are linked later; never append PATH changes to them.
 export PATH="$USER_HOME_DIR/.local/bin:${CARGO_HOME:-$USER_HOME_DIR/.cargo}/bin:$PATH"
+
+# A standalone setup entered from a source checkout first deploys safely, then
+# executes its installed counterpart. One process uses one complete generation.
+case "${WORKSTATION_ENTRYPOINT##*/}" in
+  setup-*.sh)
+    _source_root="$(cd -- "$DF_SCRIPT_DIR/.." && pwd)"
+    if [[ -e "$_source_root/.git" ]]; then
+      python3 "$DF_SCRIPT_DIR/deployment.py" deploy --source "$_source_root" || exit 1
+      _installed_root="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")" || exit 1
+      unset DF_SCRIPT_DIR
+      exec bash "$_installed_root/scripts/${WORKSTATION_ENTRYPOINT##*/}" "$@"
+    fi ;;
+esac

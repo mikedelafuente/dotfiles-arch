@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "/proc/$$/fd/255" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
 # shellcheck source=/dev/null
 source "$_LIB_DIR/dotfiles-arch-lib.sh"
 
@@ -13,4 +13,13 @@ ROOT="$(resolve_dotfiles_arch)" || {
   exit 1
 }
 
+# shellcheck source=/dev/null
+source "$ROOT/scripts/dotheader.sh"
+# Acquire and deploy first; setup uses one complete installed generation.
+if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
+  python3 "$ROOT/scripts/deployment.py" update || exit 1
+else
+  python3 "$ROOT/scripts/deployment.py" update --source "$ROOT" || exit 1
+fi
+ROOT="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")" || exit 1
 exec bash "$ROOT/scripts/sync.sh" "$@"

@@ -4,28 +4,15 @@
 # Edit DAILY_STEPS below to add or reorder tasks. Each name must be on PATH
 # (~/.local/bin). Missing required repository steps fail; custom steps may skip.
 #
-# Default: dfa-update-repos, then dfa-migrate (apply any pending schema migrations the
-# pull brought in), then dfa-update-system (native Arch/APT updates), then
-# dfa-update-npm-clis (npm-owned claude/codex/pi/opencode or Claude's native updater — Arch opencode
-# is covered by dfa-update-system), then dfa-sync-skills (relink personal
-# skills from dotfiles-arch), then dfa-sync-extensions (relink Pi extensions
-# from dotfiles-arch and configured sources), then dfa-sync-rules (relink personal
-# Cursor rules from dotfiles-arch), then dfa-sync-harness-agents (sync local Ollama models into
-# Codex/opencode's model lists).
-# If dfa-update-repos pulls new dotfiles-arch commits, dfa-daily runs dfa-sync-dotfiles
-# itself (setup scripts + re-link) right away, then restarts the whole
-# routine from the top so the remaining steps run against the freshly-synced
-# scripts — capped at one restart per invocation.
-#
-# For weekly maintenance on top of this (orphan cleanup, a forced package
-# update pass), see dfa-weekly, which runs this script first.
-#
-# Usage: dfa-daily [args…]
-#   Args are forwarded to every step (e.g. dfa-daily --yes).
+# Obtain source changes, stage/merge, validate and activate a complete generation
+# before migrations and dependent maintenance. Conflicts/source failures stop here.
+# Restart into changed helpers at most once. Native/app update owners keep their
+# existing cooldown and failure rules. --dry-run performs no writes/acquisition.
+# Usage: dfa-daily [args…]; generic flags go to dependent maintenance steps.
 
 set -uo pipefail
 
-_DAILY_SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+_DAILY_SELF="$(readlink -f "/proc/$$/fd/255" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 _DAILY_LIB_DIR="$(cd -- "$(dirname -- "$_DAILY_SELF")" &>/dev/null && pwd)"
 if [[ -r "$_DAILY_LIB_DIR/dotfiles-arch-lib.sh" ]]; then
   # shellcheck source=/dev/null
@@ -60,9 +47,9 @@ Default steps:
   dfa-sync-rules      relink Cursor rules from dotfiles-arch + dfa-sync-sources extras
   dfa-sync-harness-agents  sync local Ollama models into Codex/opencode's model lists
 
-If dfa-update-repos pulls new dotfiles-arch commits, dfa-sync-dotfiles runs
-automatically and the whole routine restarts from the top (capped at one
-restart per invocation) so the remaining steps see the synced scripts.
+Repository/source acquisition and safe deployment run first. Failure blocks
+dependent steps; a changed generation restarts this routine at most once.
+--dry-run reports the source/deployment plan without acquisition or writes.
 
 For weekly maintenance on top of this (orphan cleanup, a forced package
 update pass), see dfa-weekly.
@@ -73,77 +60,77 @@ EOF
 }
 
 main() {
-  local step step_status
+  local step root before after status=0
   local -a failures=() skipped=()
-  local dotfiles_arch_root="" before_sha="" after_sha=""
-
+  root="$(resolve_dotfiles_arch)" || return 1
+  # Establish the supported host and real user home before acquisition/deployment.
+  # shellcheck source=/dev/null
+  source "$root/scripts/dotheader.sh"
+  set +e
   for arg in "$@"; do
     case "$arg" in
-      -h|--help)
-        usage
-        exit 0
-        ;;
+      -h|--help) usage; return 0 ;;
+      --dry-run)
+        root="$(resolve_dotfiles_arch)" || return 1
+        if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
+          python3 "$root/scripts/deployment.py" update --dry-run
+        else
+          python3 "$root/scripts/deployment.py" update --source "$root" --dry-run
+        fi
+        return $? ;;
     esac
   done
-
-  dotfiles_arch_root="$(resolve_dotfiles_arch)" || return 1
+  root="$(resolve_dotfiles_arch)" || return 1
+  # Refresh configured repositories first, including extra rules/skills sources.
+  if [[ "${_DAILY_RESTARTED:-0}" != 1 ]]; then
+    command -v dfa-update-repos &>/dev/null || return 1
+    dfa-update-repos || return 1
+  fi
+  # Source acquisition/deployment is a required gate before dependent steps.
+  before="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config" 2>/dev/null || true)"
+  if [[ "${_DAILY_RESTARTED:-0}" == 1 ]]; then
+    [[ "$before" == "$root" ]] || return 1
+  elif [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
+    python3 "$root/scripts/deployment.py" update || return 1
+  else
+    python3 "$root/scripts/deployment.py" update --source "$root" || return 1
+  fi
+  if [[ "${_DAILY_RESTARTED:-0}" == 1 ]]; then
+    after="$root"
+  else
+    after="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")" || return 1
+  fi
+  if [[ "$before" != "$after" && "${_DAILY_RESTARTED:-0}" != 1 ]]; then
+    export _DAILY_RESTARTED=1
+    exec "$after/home/.local/bin/dfa-daily" "$@"
+  fi
+  root="$after"
   # shellcheck source=/dev/null
-  source "$dotfiles_arch_root/scripts/dotheader.sh"
-  set +e # Each step's status is aggregated below.
-  before_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
-
+  source "$root/scripts/dotheader.sh"
+  set +e
   for step in "${DAILY_STEPS[@]}"; do
     if ! command -v "$step" &>/dev/null; then
-      if [[ -f "$dotfiles_arch_root/home/.local/bin/$step" ]]; then
-        printf 'dfa-daily: required %s missing from PATH; relink dotfiles\n' "$step" >&2
+      if [[ -f "$root/home/.local/bin/$step" ]]; then
         failures+=("$step")
       else
-        printf 'dfa-daily: skip custom %s (not on PATH)\n' "$step" >&2
         skipped+=("$step")
       fi
       continue
     fi
-
     printf '\n==> %s\n' "$step"
-    if "$step" "$@"; then
-      step_status=0
-    else
-      step_status=$?
-      printf 'dfa-daily: %s failed (exit %s)\n' "$step" "$step_status" >&2
+    [[ "$step" != dfa-update-repos ]] || continue
+    "$step" "$@"
+    status=$?
+    if ((status)); then
       failures+=("$step")
-    fi
-
-    if [[ "$step" == "dfa-update-repos" && "$step_status" -eq 0 && -n "$dotfiles_arch_root" ]]; then
-      after_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
-      if [[ -n "$before_sha" && -n "$after_sha" && "$before_sha" != "$after_sha" ]]; then
-        printf '\ndfa-daily: dotfiles-arch updated (%s..%s)\n' "${before_sha:0:7}" "${after_sha:0:7}"
-        if [[ "${_DAILY_RESTARTED:-0}" == 1 ]]; then
-          printf 'dfa-daily: already restarted once this run — continuing without another restart\n' >&2
-        elif ! command -v dfa-sync-dotfiles &>/dev/null; then
-          printf 'dfa-daily: required dfa-sync-dotfiles missing from PATH; relink dotfiles\n' >&2
-          failures+=("dfa-sync-dotfiles")
-        else
-          printf '\n==> dfa-sync-dotfiles\n'
-          if dfa-sync-dotfiles "$@"; then
-            printf 'dfa-daily: restarting to pick up synced changes\n'
-            export _DAILY_RESTARTED=1
-            exec "$_DAILY_SELF" "$@"
-          else
-            printf 'dfa-daily: dfa-sync-dotfiles failed (exit %s) — continuing with remaining steps\n' "$?" >&2
-            failures+=("dfa-sync-dotfiles")
-          fi
-        fi
-      fi
+      # A failed migration blocks all subsequent runtime mutation steps.
+      [[ "$step" != dfa-migrate ]] || break
     fi
   done
-
-  printf '\n'
-  if ((${#skipped[@]})); then
-    printf 'dfa-daily: skipped (not on PATH): %s\n' "${skipped[*]}"
-  fi
+  if ((${#skipped[@]})); then printf 'dfa-daily: skipped: %s\n' "${skipped[*]}"; fi
   if ((${#failures[@]})); then
-    printf 'dfa-daily: finished with failures: %s\n' "${failures[*]}" >&2
-    exit 1
+    printf 'dfa-daily: failures: %s\n' "${failures[*]}" >&2
+    return 1
   fi
   printf 'dfa-daily: done\n'
 }
