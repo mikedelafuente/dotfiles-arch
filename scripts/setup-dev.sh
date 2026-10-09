@@ -16,6 +16,13 @@ fi
 print_tool_setup_start "dev Command (Development Launcher)"
 
 REPO_ROOT="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
+DEV_HELPERS=(dev dotfiles-arch-lib.sh nvim-reveal-edit dfa-update-system)
+for helper in "${DEV_HELPERS[@]}"; do
+    core_cli_link_allowed "$REPO_ROOT/home/.local/bin/$helper" "$USER_HOME_DIR/.local/bin/$helper" || {
+        print_error_message "Launcher/hook conflict: $helper; preserved"
+        exit 1
+    }
+done
 editor_config_allowed "$REPO_ROOT/home/.tmux.conf" "$USER_HOME_DIR/.tmux.conf" || {
     print_error_message "tmux config conflict; preserved"
     exit 1
@@ -27,7 +34,7 @@ ensure_core_cli jq || exit 1
 case "$WORKSTATION_DISTRO" in
     arch) ensure_native_pkgs python tar gzip ca-certificates ;;
     ubuntu) ensure_native_pkgs python3 tar gzip ca-certificates ;;
-esac
+esac || exit 1
 ensure_editor_tool tmux || exit 1
 ensure_editor_tool lazydocker || exit 1
 link_editor_config "$REPO_ROOT/home/.tmux.conf" "$USER_HOME_DIR/.tmux.conf" || exit 1
@@ -38,16 +45,9 @@ else
     print_info_message "$USER_HOME_DIR/.local/bin is already in PATH"
 fi
 
-DOTFILES_DIR="$(cd "$CURRENT_FILE_DIR/.." && pwd)"
-DEV_SCRIPT="$DOTFILES_DIR/home/.local/bin/dev"
-
-if [ -f "$DEV_SCRIPT" ]; then
-    chmod +x "$DEV_SCRIPT"
-    print_success_message "Made dev script executable"
-else
-    print_error_message "dev script not found at $DEV_SCRIPT"
-    exit 1
-fi
+for helper in "${DEV_HELPERS[@]}"; do
+    link_core_cli_config "$REPO_ROOT/home/.local/bin/$helper" "$USER_HOME_DIR/.local/bin/$helper" || exit 1
+done
 
 # DEFAULT_HARNESS drives which agent harness `dev --tmux` starts in its agent
 # pane, and which one zed-agent-init execs in a Zed Terminal Thread. Runs after

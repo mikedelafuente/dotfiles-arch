@@ -70,6 +70,16 @@ def main():
                                "digest": "sha256:" + "a" * 64}]}
         decide("editor_release_asset", "nvim", json.dumps(release),
                expected="0.12.5 " + url + " " + "a" * 64)
+        for app, version, repo, asset in (
+            ("tree-sitter", "0.27.1", "tree-sitter/tree-sitter", "tree-sitter-linux-x64.gz"),
+            ("lazydocker", "0.25.2", "jesseduffield/lazydocker", "lazydocker_0.25.2_Linux_x86_64.tar.gz"),
+        ):
+            official_url = f"https://github.com/{repo}/releases/download/v{version}/{asset}"
+            official = {"tag_name": "v" + version, "prerelease": False, "draft": False,
+                        "assets": [{"name": asset, "browser_download_url": official_url,
+                                    "digest": "sha256:" + "b" * 64}]}
+            decide("editor_release_asset", app, json.dumps(official),
+                   expected=version + " " + official_url + " " + "b" * 64)
         for field, value in (("prerelease", True), ("draft", True),
                              ("tag_name", "nightly"), ("tag_name", "v0.11.6")):
             bad = dict(release, **{field: value})

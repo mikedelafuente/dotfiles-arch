@@ -53,7 +53,9 @@ or absent. Existing incompatible/unknown sources and conflicting user configs
 fail with preservation diagnostics. Resolve sources explicitly before rerunning.
 `dfa-update-system` (daily/weekly, or `--force`) also refreshes managed editor
 releases. Shared plugins, socket lookup, reveal hooks, and default-harness fallback
-remain shared. See [editor sources and validation limits](PACKAGES.md#neovim-and-tmux-distro-slice).
+remain shared. Dev setup links the launcher, reveal-hook command, updater, and
+shared command library without replacing user commands. See
+[editor sources and validation limits](PACKAGES.md#neovim-and-tmux-distro-slice).
 
 ---
 
