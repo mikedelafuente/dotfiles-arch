@@ -62,6 +62,9 @@ else
     COMPOSER_BIN_DIR="$(composer global config --global bin-dir --absolute)" || exit 1
 fi
 language_user_path_allowed "$USER_HOME_DIR" "$COMPOSER_BIN_DIR" || exit 1
+language_user_launcher_allowed "$COMPOSER_BIN_DIR/laravel" || {
+    print_error_message 'Laravel launcher is linked or not user-owned; retained'; exit 1;
+}
 LARAVEL_COMMAND="$(type -P laravel || true)"
 [[ -z "$LARAVEL_COMMAND" || "$LARAVEL_COMMAND" == "$COMPOSER_BIN_DIR/laravel" ]] || {
     print_error_message 'Laravel launcher conflicts with Composer global bin-dir; retained'; exit 1;
@@ -73,7 +76,9 @@ fi
 if ! grep -Fxq laravel/installer <<<"$GLOBAL_PACKAGES"; then
     composer global require laravel/installer || exit 1
 fi
-[[ -x "$COMPOSER_BIN_DIR/laravel" ]] || { print_error_message 'Laravel command missing after Composer install'; exit 1; }
+language_user_launcher_allowed "$COMPOSER_BIN_DIR/laravel" && [[ -x "$COMPOSER_BIN_DIR/laravel" ]] || {
+    print_error_message 'Laravel command missing or has an ownership conflict after Composer install'; exit 1;
+}
 "$COMPOSER_BIN_DIR/laravel" --version || exit 1
 print_info_message "Laravel commands: $COMPOSER_BIN_DIR; custom bin-dir must be on your PATH"
 print_info_message 'Laravel updates: composer global update laravel/installer'
