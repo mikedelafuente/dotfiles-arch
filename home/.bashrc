@@ -292,6 +292,7 @@ aliases() {
         echo '  IDEs: zed/zeditor, stably-orca/orca-ide; Ubuntu favors self-updates; existing Orca DEBs: dfa-update-system'
         echo '  Editor/container CLI updates: dfa-update-system --force (native plus verified managed upstream releases)'
         echo '  Work apps: Chrome/Slack vendor APT on Ubuntu; signed Zoom DEB; dfa-update-system maintains all three; conflicts retained'
+        echo '  Desktop utilities: TablePlus/Spotify vendor APT; Postman Snap/user updater; Obsidian installer and pinned Keymapp: dfa-update-system; ZSA first setup: logout/login + replug'
         echo '  Containers: bash scripts/setup-docker.sh; setup-minikube.sh; setup-devcontainer.sh as your user; sources/gaps: packages'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Python projects: python3 -m venv .venv; .venv/bin/python -m pip install <package>'
