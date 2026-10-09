@@ -32,7 +32,7 @@ def main():
 
         for app, arch, ubuntu in (("steam", "steam native", "steam-installer native"),
                                   ("discord", "discord native", "discord self-deb"),
-                                  ("firefox", "firefox native", "firefox snap"),
+                                  ("firefox", "firefox native", "firefox self"),
                                   ("mullvad", "mullvad-vpn-bin aur", "mullvad-vpn apt")):
             for distro, recipe in (("arch", arch), ("ubuntu", ubuntu)):
                 decide("personal_app_selection", distro, app, "none", "", "false", "", expected=recipe)
@@ -45,6 +45,14 @@ def main():
         decide("personal_app_selection", "ubuntu", "discord", "self-deb", "owned", "false", "0.0.90", ok=False)
         decide("personal_app_selection", "ubuntu", "discord", "snap", "owned", "false", "1.0.161", expected="discord snap")
         decide("personal_app_selection", "ubuntu", "firefox", "apt", "owned", "false", "157.0.1", expected="firefox apt")
+        decide("personal_app_selection", "ubuntu", "firefox", "snap", "owned", "false", "157.0.1", expected="firefox snap")
+        decide("personal_app_selection", "ubuntu", "firefox", "self", "owned", "false", "157.0.1", expected="firefox self")
+        digest = "a" * 64
+        sums = digest + "  linux-x86_64/en-US/firefox-157.0.1.tar.xz"
+        decide("firefox_release_asset", "157.0.1", sums, expected="https://archive.mozilla.org/pub/firefox/releases/157.0.1/linux-x86_64/en-US/firefox-157.0.1.tar.xz " + digest)
+        decide("firefox_release_asset", "157.0.1", sums + "\n" + sums, ok=False)
+        decide("firefox_release_asset", "157.0.1-beta", sums, ok=False)
+        decide("firefox_apparmor_profile", "/home/test*/firefox", "dfa-firefox-123456789abcdef0", ok=False)
         decide("personal_browser_selection", "work personal", "google-chrome-stable", "firefox_firefox.desktop", expected="google-chrome.desktop google-chrome-stable")
         decide("personal_browser_selection", "personal", "google-chrome", "firefox_firefox.desktop", expected="firefox_firefox.desktop firefox")
         decide("personal_browser_selection", "personal", "google-chrome", "firefox.desktop", expected="firefox.desktop firefox")

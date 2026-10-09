@@ -18,7 +18,8 @@ personal_app_selection() {
     ubuntu:discord:none|ubuntu:discord:self-deb)
       [[ "$source" == none ]] || core_cli_version_at_least "$version" 1.0.0 || return 1
       package=discord; owner=self-deb ;;
-    ubuntu:discord:snap|ubuntu:firefox:none|ubuntu:firefox:snap) package="$app"; owner=snap ;;
+    ubuntu:discord:snap|ubuntu:firefox:snap) package="$app"; owner=snap ;;
+    ubuntu:firefox:none|ubuntu:firefox:self) package=firefox; owner=self ;;
     ubuntu:firefox:apt) package=firefox; owner=apt ;;
     ubuntu:mullvad:none|ubuntu:mullvad:apt) package=mullvad-vpn; owner=apt ;;
     *) print_error_message "Required $app source/update-owner conflict; existing app preserved" >&2; return 1 ;;
@@ -53,8 +54,8 @@ personal_app_installed_selection() {
       version="$(dpkg-query -W -f='${Version}' "$package")" || return 1
       # Ubuntu's Firefox DEB is a Snap bootstrap, not a second browser.
       if [[ "$app" == firefox && "$version" == *snap* ]]; then
-        source=none
-        [[ "$path" != /usr/bin/firefox ]] || launcher=''
+        source=snap
+        [[ "$path" != /usr/bin/firefox ]] || launcher=owned
       else
         [[ "$app" != firefox ]] || source=apt
         if [[ -n "$path" ]] && dpkg-query -L "$package" | grep -Fx "$resolved" >/dev/null; then launcher=owned; fi
@@ -64,7 +65,7 @@ personal_app_installed_selection() {
   if command -v snap &>/dev/null; then
     snaps="$(snap list --unicode=never 2>/dev/null)" || return 1
     if awk '{print $1}' <<<"$snaps" | grep -Fxq "$app"; then
-      [[ "$source" == none ]] || alternate=true
+      [[ "$source" == none || ( "$app" == firefox && "$source" == snap && "$version" == *snap* ) ]] || alternate=true
       [[ "$WORKSTATION_DISTRO" == ubuntu && ( "$app" == discord || "$app" == firefox ) ]] || return 1
       id="$(desktop_utility_snap_id "$app")" || return 1
       info="$(snap info --unicode=never "$app")" || return 1
@@ -107,7 +108,14 @@ personal_app_installed_selection() {
         [[ ! -e "$root" && ! -L "$root" ]] || alternate=true
       done
       [[ "$source" != none || ! -e /usr/share/discord ]] || alternate=true ;;
-      firefox) for root in /opt/firefox "$USER_HOME_DIR/firefox" "$USER_HOME_DIR/.local/firefox"; do
+      firefox)
+      root="$USER_HOME_DIR/.local/share/dotfiles-arch/firefox"
+      if [[ -e "$root" || -L "$root" ]]; then
+        if [[ "$source" == none ]] && firefox_self_owned "$root" && [[ -z "$path" || "$resolved" == "$root/firefox" ]]; then
+          source=self; launcher=owned
+        else alternate=true; fi
+      fi
+      for root in /opt/firefox "$USER_HOME_DIR/firefox" "$USER_HOME_DIR/.local/firefox"; do
         [[ ! -e "$root" && ! -L "$root" ]] || alternate=true
       done ;;
     esac
@@ -141,7 +149,7 @@ ensure_personal_app() {
   read -r package owner <<<"$recipe"
   case "$app" in steam) desktop=steam.desktop ;; discord) desktop=discord.desktop ;;
     firefox) desktop=firefox.desktop ;; mullvad) desktop=mullvad-vpn.desktop ;; esac
-  if [[ -e "$USER_HOME_DIR/.local/share/applications/$desktop" || -L "$USER_HOME_DIR/.local/share/applications/$desktop" ]]; then
+  if [[ "$owner" != self && ( -e "$USER_HOME_DIR/.local/share/applications/$desktop" || -L "$USER_HOME_DIR/.local/share/applications/$desktop" ) ]]; then
     print_error_message "$app user desktop override preserved; resolve launcher conflict"; return 1
   fi
   if [[ "$owner" == snap && ( -e "$USER_HOME_DIR/.local/share/applications/${app}_${app}.desktop" || -L "$USER_HOME_DIR/.local/share/applications/${app}_${app}.desktop" ) ]]; then return 1; fi
@@ -179,6 +187,8 @@ ensure_personal_app() {
       sudo apt-get update --error-on=any || return 1
       work_app_apt_candidate "$app" "$(apt-cache policy "$package")" >/dev/null || return 1
       ensure_native_pkgs "$package" || return 1 ;;
+    ubuntu:self)
+      install_firefox_self || return 1 ;;
     ubuntu:self-deb)
       if ! native_package_installed discord; then install_discord_bootstrap || return 1; fi ;;
     ubuntu:snap)
@@ -188,6 +198,9 @@ ensure_personal_app() {
   esac
   personal_app_installed_selection "$app" >/dev/null || return 1
   desktop="$(personal_app_desktop "$app")" || return 1
+  if [[ "$owner" == self ]]; then
+    print_info_message 'Firefox in-app updater owns future releases; disabled updates remain user/IT-deferred'
+  fi
   print_info_message "$app desktop: $desktop; update owner: $owner (Steam/Discord runtime also update in-app); runtime unverified"
   if [[ "$app" == discord && "$owner" == self-deb ]]; then
     print_info_message 'Discord bootstrap retained; its Rust updater owns app releases on launch; updater policy/settings unchanged'
@@ -217,7 +230,11 @@ personal_app_desktop() {
   read -r package owner <<<"$recipe"
   case "$app" in steam) file=steam.desktop ;; discord) file=discord.desktop ;;
     firefox) file=firefox.desktop ;; mullvad) file=mullvad-vpn.desktop ;; esac
-  if [[ "$owner" == snap ]]; then
+  if [[ "$owner" == self ]]; then
+    firefox_self_desktop | cmp -s - "$USER_HOME_DIR/.local/share/applications/firefox.desktop" || return 1
+    printf '%s\n' firefox.desktop
+    return 0
+  elif [[ "$owner" == snap ]]; then
     file="${app}_${app}.desktop"
     [[ -r "/var/lib/snapd/desktop/applications/$file" ]] || return 1
   else
@@ -250,9 +267,15 @@ check_personal_app_owners() {
     recipe="$(personal_app_selection ubuntu "$app" none '' false '')" || return 1
     read -r package _ <<<"$recipe"
     path="$(type -P "$app" || true)"
-    if native_package_installed "$package" || [[ -n "$path" ]] || awk '{print $1}' <<<"$snaps" | grep -Fxq "$app"; then
+    if native_package_installed "$package" || [[ -n "$path" \
+      || ( "$app" == firefox && -e "$USER_HOME_DIR/.local/share/dotfiles-arch/firefox" ) ]] \
+      || awk '{print $1}' <<<"$snaps" | grep -Fxq "$app"; then
       recipe="$(personal_app_installed_selection "$app")" || return 1
       read -r _ owner <<<"$recipe"
+      if [[ "$owner" == self ]]; then
+        firefox_self_profile_valid || return 1
+        print_info_message 'Firefox updates belong to its in-app updater; app/user/IT disabled updates remain deferred'
+      fi
       if [[ "$owner" == apt ]]; then
         sources="$(work_app_apt_source "$app")" || return 1
         read -r _ key <<<"$sources"
@@ -281,4 +304,150 @@ check_personal_app_candidates() {
     [[ "$app" != firefox || "$version" != *snap* ]] || continue
     work_app_apt_candidate "$app" "$(apt-cache policy "$package")" >/dev/null || return 1
   done
+}
+
+# Pure release metadata decision: stable en-US amd64 archive only, signed sums supplied.
+firefox_release_asset() {
+  local version="$1" sums="$2" relative digest
+  [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || return 1
+  relative="linux-x86_64/en-US/firefox-$version.tar.xz"
+  digest="$(awk -v path="$relative" '$2 == path {n++; sha=$1} END {if (n == 1) print sha}' <<<"$sums")"
+  [[ "$digest" =~ ^[a-f0-9]{64}$ ]] || return 1
+  printf '%s %s\n' "https://archive.mozilla.org/pub/firefox/releases/$version/$relative" "$digest"
+}
+
+firefox_self_owned() {
+  local root="$1"
+  core_cli_parent_links_allowed "$root/firefox" || return 1
+  [[ -d "$root" && ! -L "$root" && -w "$root" \
+    && -f "$root/.dfa-source" && ! -L "$root/.dfa-source" \
+    && "$(cat "$root/.dfa-source")" == mozilla-self \
+    && -f "$root/firefox" && ! -L "$root/firefox" && -x "$root/firefox" \
+    && -f "$root/updater" && ! -L "$root/updater" && -x "$root/updater" ]]
+}
+
+firefox_self_desktop() {
+  local root="$USER_HOME_DIR/.local/share/dotfiles-arch/firefox"
+  [[ "$root" =~ ^/[A-Za-z0-9_./-]+$ ]] || return 1
+  cat <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Firefox
+Exec="$root/firefox" %u
+Icon=$root/browser/chrome/icons/default/default128.png
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;
+DESKTOP
+}
+
+# Mozilla's profile grants user namespaces to these exact executables, without
+# changing global restrictions or existing vendor/IT profiles. Reject AARE syntax.
+firefox_apparmor_profile() {
+  local root="$1" name="$2"
+  [[ "$root" =~ ^/[A-Za-z0-9_./-]+$ && "$name" =~ ^dfa-firefox-[a-f0-9]{16}$ ]] || return 1
+  cat <<PROFILE
+# managed-by: dotfiles-arch; Mozilla user Firefox sandbox attachment
+abi <abi/4.0>,
+include <tunables/global>
+profile $name "$root/{firefox,firefox-bin,updater}" flags=(unconfined) {
+  userns,
+  include if exists <local/$name>
+}
+PROFILE
+}
+
+install_firefox_self() (
+  local root="$USER_HOME_DIR/.local/share/dotfiles-arch/firefox" stage version release url digest profile name restricted=false
+  local desktop="$USER_HOME_DIR/.local/share/applications/firefox.desktop" launcher="$USER_HOME_DIR/.local/bin/firefox"
+  [[ "$EUID" != 0 && ":$PATH:" == *":$USER_HOME_DIR/.local/bin:"* ]] || return 1
+  core_cli_parent_links_allowed "$root/firefox" && core_cli_link_allowed "$root/firefox" "$launcher" || return 1
+  stage="$(mktemp -d)" || return 1
+  trap 'rm -rf "$stage"' EXIT
+  firefox_self_desktop >"$stage/firefox.desktop" || return 1
+  if [[ -e "$desktop" || -L "$desktop" ]]; then
+    [[ -f "$desktop" && ! -L "$desktop" ]] && cmp -s "$desktop" "$stage/firefox.desktop" || return 1
+  fi
+  core_cli_parent_links_allowed "$desktop" || return 1
+  name="dfa-firefox-$(printf '%s' "$root" | sha256sum | cut -c1-16)"
+  profile="/etc/apparmor.d/$name"
+  firefox_apparmor_profile "$root" "$name" >"$stage/profile" || return 1
+  if [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns \
+    && "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" == 1 ]]; then
+    restricted=true
+    command -v apparmor_parser &>/dev/null || { print_error_message 'Firefox sandbox needs AppArmor; keep source policy and resolve prerequisites'; return 1; }
+    core_cli_parent_links_allowed "$profile" || return 1
+    if [[ -e "$profile" || -L "$profile" ]]; then
+      if [[ ! -f "$profile" || -L "$profile" ]] || ! cmp -s "$profile" "$stage/profile"; then
+        print_error_message 'Firefox AppArmor profile conflict; managed policy retained'; return 1
+      fi
+    fi
+  fi
+  if [[ -e "$root" || -L "$root" ]]; then
+    firefox_self_owned "$root" || return 1
+    if [[ "$restricted" == true ]]; then
+      [[ -e "$profile" ]] || sudo install -m 644 "$stage/profile" "$profile" || return 1
+      sudo apparmor_parser -r "$profile" || return 1
+    fi
+  else
+    # Native GNOME libraries, not a bundled sandbox bypass.
+    ensure_native_pkgs curl ca-certificates gnupg jq python3 xz-utils libgtk-3-0t64 libdbus-1-3 libasound2t64 libstdc++6 || return 1
+    version="$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL https://product-details.mozilla.org/1.0/firefox_versions.json | jq -er .LATEST_FIREFOX_VERSION)" || return 1
+    [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || return 1
+    stage_work_app_key firefox-release "$stage" '' || return 1
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "https://archive.mozilla.org/pub/firefox/releases/$version/SHA256SUMS" -o "$stage/sums" || return 1
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "https://archive.mozilla.org/pub/firefox/releases/$version/SHA256SUMS.asc" -o "$stage/sums.asc" || return 1
+    gpg --homedir "$stage/gnupg" --batch --verify "$stage/sums.asc" "$stage/sums" || return 1
+    release="$(firefox_release_asset "$version" "$(cat "$stage/sums")")" || return 1
+    read -r url digest <<<"$release"
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$url" -o "$stage/firefox.tar.xz" || return 1
+    printf '%s  %s\n' "$digest" "$stage/firefox.tar.xz" | sha256sum -c - || return 1
+    python3 - "$stage/firefox.tar.xz" "$stage/extracted" "$version" <<'PY' || return 1
+import configparser
+from pathlib import Path, PurePosixPath
+import sys
+import tarfile
+archive, destination, version = sys.argv[1:]
+with tarfile.open(archive) as source:
+    for member in source.getmembers():
+        path = PurePosixPath(member.name)
+        if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] != 'firefox':
+            raise ValueError('unexpected Firefox archive path')
+    source.extractall(destination, filter='data')
+root = Path(destination) / 'firefox'
+for name in ('firefox', 'firefox-bin', 'updater', 'application.ini'):
+    if not (root / name).is_file() or (root / name).is_symlink():
+        raise ValueError('missing regular Firefox runtime file')
+config = configparser.ConfigParser()
+config.read(root / 'application.ini')
+if config['App']['Version'] != version:
+    raise ValueError('Firefox manifest/runtime version mismatch')
+PY
+    printf '%s\n' mozilla-self >"$stage/extracted/firefox/.dfa-source" || return 1
+    # Apply only the required attachment, never reload unrelated profiles/services.
+    if [[ "$restricted" == true ]]; then
+      [[ -e "$profile" ]] || sudo install -m 644 "$stage/profile" "$profile" || return 1
+      sudo apparmor_parser -r "$profile" || return 1
+    fi
+    mkdir -p "$(dirname "$root")" || return 1
+    mv -T "$stage/extracted/firefox" "$root" || return 1
+  fi
+  firefox_self_owned "$root" || return 1
+  link_core_cli_config "$root/firefox" "$launcher" || return 1
+  mkdir -p "$(dirname "$desktop")" || return 1
+  [[ -e "$desktop" ]] || install -m 644 "$stage/firefox.desktop" "$desktop" || return 1
+  hash -r
+)
+
+# Maintenance checks the attachment without loading it or reinstalling Firefox.
+firefox_self_profile_valid() {
+  local root="$USER_HOME_DIR/.local/share/dotfiles-arch/firefox" name profile
+  [[ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns \
+    && "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" == 1 ]] || return 0
+  name="dfa-firefox-$(printf '%s' "$root" | sha256sum | cut -c1-16)"
+  profile="/etc/apparmor.d/$name"
+  if [[ ! -r "$profile" || ! -f "$profile" || -L "$profile" ]] \
+    || ! cmp -s <(firefox_apparmor_profile "$root" "$name") "$profile"; then
+    print_error_message 'Firefox sandbox profile missing/conflicting; owner retained, rerun setup after resolving policy'; return 1
+  fi
 }
