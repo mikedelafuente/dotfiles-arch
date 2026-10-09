@@ -297,6 +297,7 @@ aliases() {
         echo '  Audio: dfa-refresh-audio requires active PipeWire/WirePlumber services; --status only prints wpctl status'
         echo '  GPU: setup-nvidia.sh --install explicitly opts in; existing stacks retained; activation/MOK can be pending'
         echo '  Ollama: working CUDA/hardware Vulkan only; native or verified archive updated by dfa-update-system; Ubuntu archive: systemctl --user status ollama'
+        echo '  Dictation: Super+T; bash scripts/setup-voxtype.sh; dfa-update-system refreshes Voxtype/dotool installers only; models/config remain user-owned'
         echo '  Desktop utilities: TablePlus/Spotify vendor APT; Postman Snap/user updater; Obsidian installer and pinned Keymapp: dfa-update-system; ZSA first setup: logout/login + replug'
         echo '  Containers: bash scripts/setup-docker.sh; setup-minikube.sh; setup-devcontainer.sh as your user; sources/gaps: packages'
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'

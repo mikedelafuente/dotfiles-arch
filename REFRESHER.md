@@ -42,6 +42,7 @@ If packages need installing, sync will ask for sudo.
 | Browser | **Super+B** |
 | App search | **Super+Space** |
 | Clipboard history | **Super+V** |
+| Dictation toggle | **Super+T** |
 | Emoji picker | **Super+.** |
 | Screenshot (region/window/screen) | **Super+Shift+S** (or Print) |
 | Minimize a window | **Super+Shift+N** |
@@ -202,6 +203,13 @@ reports service failures. NVIDIA setup requires explicit saved opt-in or
 `bash scripts/setup-nvidia.sh --install`; `--yes` does not opt in. Existing
 drivers are never replaced; reboot/MOK activation can remain pending. See
 [GPU sources and requirements](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
+Dictation: `bash scripts/setup-voxtype.sh`, then **Super+T**. dotool needs writable
+`/dev/uinput`; setup reports pending group/login/rule access as failure. User
+config/backend/models stay yours. `dfa-update-system` refreshes installers only;
+separate model download: `voxtype setup --download --model base.en --no-post-install`.
+Start a disabled service explicitly with `systemctl --user enable --now voxtype.service`.
+See [dictation sources and runtime limits](PACKAGES.md#dictation-sources-and-update-owners).
 
 Desktop utility setup also supports Ubuntu 26.04: `setup-tableplus.sh`,
 `setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh`, `setup-moonlander.sh`.

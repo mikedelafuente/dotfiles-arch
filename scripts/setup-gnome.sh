@@ -546,14 +546,14 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CU
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI command 'gnome-characters'
 gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_EMOJI binding '<Super>period'
 
-# Super+T toggles Voxtype dictation (voxtype-bin, see setup-voxtype.sh).
+# Super+T toggles Voxtype dictation (native Arch/Ubuntu launcher).
 # GNOME/Wayland has no key-release shortcut event, so this drives voxtype's
 # toggle mode rather than true push-to-talk; voxtype's own hotkey is
 # disabled in its config so the two don't fight over the same key.
 CUSTOM_KB_VOXTYPE="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
 if command -v voxtype &> /dev/null; then
     gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE name 'Voxtype Toggle Dictation'
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE command 'voxtype record toggle'
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE command '/usr/bin/voxtype record toggle'
     gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KB_VOXTYPE binding '<Super>t'
     VOXTYPE_CUSTOM_KEYBINDINGS=", '$CUSTOM_KB_VOXTYPE'"
 else
