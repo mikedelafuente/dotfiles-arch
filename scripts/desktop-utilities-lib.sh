@@ -51,6 +51,8 @@ desktop_utility_snap_id() {
   case "$1" in
     postman) echo fFcOtEEF4EdyYb95IUE5Isy28tICYMLf ;;
     spotify) echo pOBIoZ2LrCB3rDohMxoYGnbN14EHOgD7 ;;
+    firefox) echo 3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk ;;
+    discord) echo qHVefGEBezeuCeSfTND40uoUD6GRw8BO ;;
     *) return 1 ;;
   esac
 }
