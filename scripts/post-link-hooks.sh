@@ -43,7 +43,7 @@ bash "$DF_SCRIPT_DIR/sync-skills.sh"
 # --------------------------
 bash "$DF_SCRIPT_DIR/sync-rules.sh"
 
-if pacman -Q gnome-shell &>/dev/null; then
+if native_package_installed gnome-shell; then
   print_warning_message "GNOME checklist (log out/in if anything below is missing):"
   print_info_message "  • Super+V  — clipboard history (GPaste)"
   print_info_message "  • Super+Y  — Pop Shell auto-tiling toggle (off by default)"

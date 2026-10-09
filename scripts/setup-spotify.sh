@@ -1,24 +1,6 @@
-#!/bin/bash
-
-# --------------------------
-# Setup Spotify for Arch Linux
-# --------------------------
-# Spotify is installed from the AUR (Arch User Repository).
-# The AUR package provides:
-# - Easy updates through yay or other AUR helpers
-# - Native integration with the system
-# - Better performance without containerization overhead
-# - Standard Arch package management
-# --------------------------
-
-# --------------------------
-# Import Common Header 
-# --------------------------
-
-# add header file
-CURRENT_FILE_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
-
-# source header (uses SCRIPT_DIR and loads lib.sh)
+#!/usr/bin/env bash
+# Shared Spotify acquisition; settings remain user-owned.
+CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 if [ -r "$CURRENT_FILE_DIR/dotheader.sh" ]; then
   # shellcheck source=/dev/null
   source "$CURRENT_FILE_DIR/dotheader.sh"
@@ -27,38 +9,6 @@ else
   exit 1
 fi
 
-# --------------------------
-# End Import Common Header 
-# --------------------------
-
 print_tool_setup_start "Spotify"
-
-# --------------------------
-# Install Spotify via AUR
-# --------------------------
-
-# Check if Spotify is already installed
-if command -v spotify &> /dev/null; then
-    print_info_message "Spotify is already installed. Skipping installation."
-    print_info_message "Installed version: $(pacman -Q spotify 2>/dev/null | awk '{print $2}')"
-else
-    print_info_message "Installing Spotify from AUR"
-
-    # Install Spotify from AUR
-    ensure_yay_pkgs spotify
-
-    if command -v spotify &> /dev/null; then
-        print_info_message "Spotify installed successfully"
-        print_info_message "You can launch Spotify from your application menu or run: spotify"
-        echo ""
-        print_info_message "To update packages safely, run:"
-        print_info_message "  dfa-update-system"
-        print_info_message "  # or: bash scripts/update-system.sh"
-    else
-        print_error_message "Spotify installation failed"
-        print_info_message "You can manually install with: yay -S spotify (review PKGBUILD first)"
-    fi
-fi
-
+ensure_desktop_utility spotify || exit 1
 print_tool_setup_complete "Spotify"
-

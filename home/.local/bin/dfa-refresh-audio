@@ -18,13 +18,16 @@ Usage: dfa-refresh-audio [--status]
 Restart wireplumber, pipewire, and pipewire-pulse (user services) to clear
 duplicate sink/source entries left behind after docking, undocking, or
 resuming from suspend.
+Requires all three user services to be loaded and active. Missing, masked,
+or inactive services are reported before any restart; other audio stacks stay intact.
 
   --status   only print `wpctl status`, don't restart anything
 EOF
 }
 
 main() {
-  local status_only=0
+  local status_only=0 unit load active
+  local -a services=(wireplumber.service pipewire.service pipewire-pulse.service)
 
   for arg in "$@"; do
     case "$arg" in
@@ -50,11 +53,21 @@ main() {
 
   if ((status_only)); then
     wpctl status
-    return 0
+    return $?
   fi
 
+  # GNOME alone does not imply this audio stack. Do not activate a second stack
+  # on a PulseAudio/other session, or turn a masked service back on.
+  for unit in "${services[@]}"; do
+    load="$(systemctl --user show "$unit" -p LoadState --value)" || return 1
+    active="$(systemctl --user show "$unit" -p ActiveState --value)" || return 1
+    if [[ "$load" != loaded || "$active" != active ]]; then
+      printf 'dfa-refresh-audio: %s unavailable/inactive (%s/%s); audio stack preserved\n' "$unit" "$load" "$active" >&2
+      return 1
+    fi
+  done
   printf '==> Restarting wireplumber, pipewire, pipewire-pulse\n'
-  if ! systemctl --user restart wireplumber.service pipewire.service pipewire-pulse.service; then
+  if ! systemctl --user restart "${services[@]}"; then
     printf 'dfa-refresh-audio: failed to restart one or more services\n' >&2
     exit 1
   fi
@@ -63,7 +76,7 @@ main() {
   sleep 1
 
   printf '\n==> Current audio devices\n'
-  wpctl status
+  wpctl status || return $?
 
   printf '\ndfa-refresh-audio: done — reload any open browser/Meet/Zoom tab so it re-enumerates devices\n'
 }

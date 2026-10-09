@@ -264,7 +264,7 @@ Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 | Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
 | Existing native Claude / either host | Official user-native launcher into `USER_HOME_DIR/.local/share/claude/versions/<version>` | `dfa-update-npm-clis` runs `claude update` as the user, independently of NVM/npm; native background updates also remain enabled according to user settings |
 | NinjaOne / Arch | Existing opt-in repackaged vendor DEB | Agent self-updater plus existing weekly health check |
-| Managed NinjaOne / Ubuntu | Existing IT-selected source | Existing vendor/IT owner; weekly Arch repair is policy-deferred until native lifecycle conversion |
+| NinjaOne / Ubuntu | Opt-in vendor native DEB; existing IT-selected installations retained | Agent/patcher self-updater; weekly owned-agent repair or read-only IT-managed health check |
 
 No package or software source is installed by this slice. It adds no vendor
 repository, signing key, source fallback, app migration, or duplicate installation.
@@ -285,7 +285,7 @@ configuration are untouched (see [Ubuntu automatic updates](https://ubuntu.com/s
 
 `dfa-daily` keeps its step order and aggregates failures. `dfa-weekly` still runs
 daily first, forces the native update, previews orphan/removal candidates, then
-handles NinjaOne (policy-deferred on Ubuntu). User-only sync steps are allowed on
+handles NinjaOne (IT-managed installations receive read-only health checks). User-only sync steps are allowed on
 Ubuntu; full bootstrap/sync and historical Arch setup migrations remain guarded.
 If daily auto-resync requests full Ubuntu setup, that failure stays in its summary.
 Arch bootstrap/sync now preserve shared update/setup failures in their exit status.
@@ -326,6 +326,73 @@ are run for validation.
 | `ttf-jetbrains-mono-nerd` | Kitty / Neovim terminal font with icons |
 | `ttf-meslo-nerd`, `ttf-ubuntu-nerd`, `ttf-firacode-nerd`, `ttf-hack-nerd` | Alternate Nerd Fonts |
 
+### Shared appearance sources and update owners
+
+Implemented for [#150](https://github.com/mikedelafuente/dotfiles-arch/issues/150).
+`setup-fonts.sh` supports rolling Arch and Ubuntu 26.04; GNOME's appearance
+acquisition uses `ensure_gnome_appearance` from `scripts/appearance-lib.sh`.
+Desktop settings/extension compatibility remains a separate slice.
+
+| Asset / required name | Arch source | Ubuntu 26.04 source | Update owner |
+|-----------------------|-------------|--------------------|--------------|
+| `Adwaita Sans` | `adwaita-fonts` | [fonts-adwaita-sans](https://packages.ubuntu.com/resolute/fonts-adwaita-sans) | pacman / APT |
+| `Adwaita Mono` | `adwaita-fonts` | [GNOME Adwaita Fonts 49.0](https://download.gnome.org/sources/adwaita-fonts/49/) verified archive, only unpatched Mono TTFs | pacman / maintainer pin + font setup/sync |
+| `Noto Sans`, `Noto Serif`, `Noto Sans Mono` | `noto-fonts` | [fonts-noto-core](https://packages.ubuntu.com/resolute/fonts-noto-core), `fonts-noto-mono` | pacman / APT |
+| `Noto Color Emoji` | `noto-fonts-emoji` | `fonts-noto-color-emoji` | pacman / APT |
+| `Liberation Sans`, `Liberation Serif`, `Liberation Mono` | `ttf-liberation` | [fonts-liberation](https://packages.ubuntu.com/resolute/fonts-liberation) | pacman / APT |
+| `JetBrainsMono Nerd Font`, `MesloLGS Nerd Font`, `Ubuntu Nerd Font`, `FiraCode Nerd Font`, `Hack Nerd Font` | Existing `ttf-*-nerd` rows above | [Nerd Fonts v3.5.1](https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.5.1): JetBrainsMono, Meslo, Ubuntu, FiraCode, Hack archives | pacman / maintainer pin + font setup/sync |
+| `catppuccin-mocha-lavender-standard+default` | Scanned `catppuccin-gtk-theme-mocha` AUR | [Catppuccin GTK v1.0.3](https://github.com/catppuccin/gtk/releases/tag/v1.0.3) exact Mocha/Lavender/Standard/default ZIP | guarded AUR / maintainer pin + GNOME setup/sync |
+| `Papirus-Dark`, `cat-mocha-lavender` folders | `papirus-icon-theme` + scanned `papirus-folders-catppuccin-git` | [papirus-icon-theme](https://packages.ubuntu.com/resolute/papirus-icon-theme) + [Catppuccin folder assets](https://github.com/catppuccin/papirus-folders/tree/f83671d17ea67e335b34f8028a7e6d78bca735d7), private user copy of native Papirus/Papirus-Dark | pacman + guarded AUR / APT for base, maintainer pin + GNOME setup/sync for overlay |
+| `Catppuccin Mocha` for bat | Prefer built-in theme | Prefer built-in theme; otherwise [pinned upstream tmTheme](https://github.com/catppuccin/bat/blob/6810349b28055dce54076712fc05fc68da4b8ec0/themes/Catppuccin%20Mocha.tmTheme) on either distro | native package, or maintainer pin + essentials setup/sync |
+| Font/data staging prerequisites | `fontconfig`, `curl`, `ca-certificates`, `python` | `fontconfig`, `curl`, `ca-certificates`, `python3`, `xz-utils` | native package owner |
+
+Ubuntu's `fonts-adwaita` metapackage contains documentation and depends on Sans;
+it does **not** ship the unpatched Mono font. Regular `fonts-jetbrains-mono` is
+also insufficient: shared Kitty/GNOME configuration requires the Nerd Font family.
+All downloaded artifacts have fixed SHA-256 values in `appearance-lib.sh`.
+Nerd Font hashes come from the official release asset metadata; GNOME publishes
+its archive checksum. Catppuccin ZIP/archive/tmTheme hashes were recorded from
+HTTPS upstream artifacts on 2026-10-09, providing a reviewed pin rather than a
+publisher signature. Archive contents are data only, staged with traversal/special
+file rejection; no upstream installer or build script executes.
+
+Downloads live in immutable, marked directories under
+`~/.local/share/dotfiles-arch/appearance/`; only recipe-owned public symlinks can
+be repointed. Fonts link from `~/.local/share/fonts/dfa-*`, GTK from `~/.themes`,
+and bat from `~/.config/bat/themes`. Ubuntu's Papirus overlay links from
+`~/.local/share/icons/Papirus{,-Dark}`; its base is recopied when the native package
+version changes on the next GNOME setup/sync. APT-owned `/usr/share/icons` is
+never recolored on Ubuntu. Existing real files, unrelated links, linked ancestor
+directories, and unmarked recipe destinations fail and remain preserved.
+Fonts already supplied by another source fail before duplicate downloaded families
+are installed; retain that owner or explicitly migrate. A compatible existing bat
+theme is retained; a user-provided theme keeps its manual user update owner.
+Old marked versions remain available; no automatic asset cleanup is introduced.
+
+`dfa-daily`/`dfa-weekly` update native/AUR assets through `dfa-update-system`.
+They do not independently refresh pinned downloads or regenerate the Ubuntu
+Papirus overlay. The maintainer reviews new artifact versions and hashes together;
+`dfa-sync-dotfiles` (or the respective font/essentials/GNOME setup) applies pins.
+A daily pull that invokes full sync inherits that behavior when the full distro
+setup is enabled. There is no claim that APT updates downloaded fonts/themes.
+
+**Maintenance limit:** [Catppuccin GTK is archived](https://github.com/catppuccin/gtk)
+since June 2024. The existing selected theme remains frozen at v1.0.3; future GTK
+compatibility repairs require an explicit maintainer decision. Setup does not
+inject GTK4/libadwaita CSS or alter GDM. These applications can retain their own
+appearance despite the GTK theme preference.
+
+**Validation:** the supplied-fact regression check
+`tests/test_appearance_decisions.py` covers package selection, exact family names,
+and owned/unowned links plus safe data-only archive extraction; it was written
+but **not run**, per the execution limit.
+Bash syntax/ShellCheck were run directly on changed shell files. Upstream artifact
+layouts and distro metadata were inspected read-only. Font rendering, fontconfig
+resolution, bat cache loading, GTK/Libadwaita behavior, GNOME theme discovery,
+Papirus inheritance/recoloring, downloads and installation on real machines remain
+**unverified**. Post-link `refresh_font_cache` remains in its existing position;
+font setup also refreshes before checking exact installed family names.
+
 ## Desktop / GNOME — `setup-gnome.sh`
 
 | Package | Purpose | Related commands |
@@ -344,6 +411,66 @@ are run for validation.
 | `papirus-folders-catppuccin-git` (AUR) | Catppuccin folder colors | `papirus-folders` |
 | `catppuccin-gtk-theme-mocha` (AUR) | GTK theme | — |
 
+### Shared GNOME sources and update owners
+
+`setup-gnome.sh` detects GNOME with the native package backend and validates every
+required extension's installed `metadata.json` against the actual shell major.
+Unsupported metadata or missing required schemas/keys fails setup; no feature
+exception is assumed. The old global version-validation bypass is reset on both
+distros. User extensions shadowing native recipes, unowned upstream targets, and
+duplicate sources are preserved and reported as conflicts requiring explicit migration.
+
+**Current Arch feature gap:** the [official Arch shell is GNOME 51](https://archlinux.org/packages/extra/x86_64/gnome-shell/),
+while [Pop Shell's selected upstream branch](https://github.com/pop-os/shell/blob/7898b65c20735057faf0797f8ed056704ca55f0d/metadata.json)
+declares only 45–50. The [AUR recipe](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=gnome-shell-extension-pop-shell-git)
+uses that branch and supplies no GNOME 51 compatibility patch; inspected upstream
+testing branches also stop at 50 or earlier. GNOME 51 tiling parity remains
+unavailable pending a supported upstream release or an explicit feature exception.
+Setup reports this required feature and returns nonzero; it does not force-load it.
+
+| Feature | Arch source | Ubuntu 26.04 source | Update owner |
+|---|---|---|---|
+| Tweaks, base extensions, dconf inspector, emoji picker | `gnome-tweaks`, `gnome-shell-extensions`, `dconf-editor`, `gnome-characters` | Same native package names | pacman / APT |
+| Pop Shell tiling | Scanned `gnome-shell-extension-pop-shell-git` AUR | [System76 source commit `7898b65`](https://github.com/pop-os/shell/tree/7898b65c20735057faf0797f8ed056704ca55f0d), declares GNOME 45–50; verified SHA-256 archive, compiled with native `node-typescript` and `libglib2.0-bin` | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
+| No Overview at login | Scanned `gnome-shell-extension-no-overview` AUR | [Upstream commit `9246cc6`](https://github.com/fthx/no-overview/tree/9246cc6efba01729a3e19ca898018ab5e98a26b9), declares GNOME 48–51; verified SHA-256 archive | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
+| AppIndicator tray | `gnome-shell-extension-appindicator`, UUID `appindicatorsupport@rgcjonas.gmail.com` | [`gnome-shell-ubuntu-extensions`](https://packages.ubuntu.com/resolute/gnome-shell-ubuntu-extensions), UUID `ubuntu-appindicators@ubuntu.com` | pacman / APT |
+| Dash to Panel | `gnome-shell-extension-dash-to-panel` | [Upstream v74](https://github.com/home-sweet-gnome/dash-to-panel/releases/tag/v74), declares GNOME 46–51; ZIP checked against GitHub's SHA-256 release digest; absent from the resolute native catalog | pacman / maintainer-reviewed pin, applied by setup/sync |
+| GPaste clipboard/history | `gpaste` | [`gpaste-2`](https://packages.ubuntu.com/resolute/gpaste-2), [`gnome-shell-extension-gpaste`](https://packages.ubuntu.com/resolute/gnome-shell-extension-gpaste), `gir1.2-gpaste-2`; native 45.3-5 includes GNOME 50 support patch | pacman / APT |
+| Balanced/performance profile provider | `power-profiles-daemon` | Same native package; preserve installed TLP, tuned/tuned-ppd or System76 providers and masked/inactive services | pacman / APT; external policies retain their owner |
+| Theme/icons/fonts | See shared appearance recipes above | Same shared appearance recipes | Native package manager / maintainer pins as documented above |
+
+Ubuntu extension archives live under `~/.local/share/dotfiles-arch/gnome/` with
+marked version directories and protected links into the standard per-user
+GNOME extension directory. Pin changes require a reviewed source/checksum change;
+repo updates followed by setup/sync apply them. Native extensions and the GPaste
+daemon follow ordinary `dfa-update-system` updates. No downloaded installer,
+Pop `local-install`/shortcut-reset script, forced compatibility patch, or PPA is used.
+Pop's separate launcher is disabled: Super+Space retains GNOME's app grid.
+
+On Ubuntu, setup disables the conflicting Ubuntu Dock, Tiling Assistant and
+Desktop Icons NG, plus the alternate upstream AppIndicator UUID. It retains
+unrelated extensions including Canonical security/prompting extensions.
+Extension schemas are read from their installed local or system directories;
+`rebind-window-push` also supports the local Pop schema.
+GPaste 51 removes the cosmetic `max-displayed-history-size` key; setup reports
+and skips that optional setting, retaining the required 100-item history and Super+V.
+
+Audio/lid/USB policy files keep the existing paths and mark ownership. Foreign
+local or runtime overrides and symlinks defer the relevant policy with a warning.
+The legacy exact audio-disable file is recognized as ours; laptops restore
+`power_save=1`, desktops request `0`. Lid/USB changes apply on reboot/device
+add/change; setup does not restart logind or trigger all USB devices.
+`dfa-refresh-audio` requires active, loaded WirePlumber, PipeWire and
+PipeWire Pulse user services; missing/masked/inactive services fail before any
+restart. `--status` only queries `wpctl` and propagates its failure.
+
+Read-only vendor/package metadata establishes source feasibility. Installation,
+TypeScript compilation, extension loading, GSettings, panel/clipboard/tiling,
+services, audio, lid, USB wake and hardware behavior remain unverified.
+`tests/test_gnome_decisions.py` supplies version, extension-list, policy/service
+and archive facts in temporary state; it was written and left unrun under the
+validation restriction. Only direct Bash syntax/ShellCheck checks were executed.
+
 ## Languages and runtimes
 
 | Package | Script | Purpose | Related commands |
@@ -359,7 +486,7 @@ are run for validation.
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
 | `chatgpt-desktop` (AUR) | `setup-codex.sh` | ChatGPT desktop app (repackaged official binary) | `chatgpt` |
 | `opencode` | `setup-opencode.sh` | AI coding agent CLI | `opencode` |
-| `ollama-cuda` / `ollama-vulkan` (GPU-gated) | `setup-ollama.sh` | Local model server — `ollama-cuda` on a working NVIDIA driver, else `ollama-vulkan` on a detected Vulkan ICD; skipped entirely (no CPU-only install) if neither is present | `ollama` |
+| Arch `ollama-cuda` / `ollama-vulkan`; Ubuntu compatible native `ollama` or verified upstream archive (GPU-gated) | `setup-ollama.sh` | Local model server; working CUDA preferred, otherwise a physical Vulkan 1.2+ GPU. No CPU-only installation; existing flavors preserved. Sources/services/update owners below | `ollama` |
 
 ### Shared language sources and update owners
 
@@ -480,15 +607,99 @@ No setup/update/service workflows, networked tests or VM provisioning are run.
 
 | Package | Script | Purpose |
 |---------|--------|---------|
-| `tableplus` (AUR) | `setup-tableplus.sh` | Database GUI |
-| `postman-bin` (AUR) | `setup-postman.sh` | API client |
-| `spotify` (AUR) | `setup-spotify.sh` | Music |
-| `obsidian` (AUR) | `setup-obsidian.sh` | Notes |
+| Arch `tableplus` (AUR), Ubuntu vendor `tableplus` | `setup-tableplus.sh` | Database GUI |
+| Arch `postman-bin` (AUR), Ubuntu official Postman Snap or existing user archive | `setup-postman.sh` | API client |
+| Arch `spotify` (AUR), Ubuntu vendor `spotify-client` or existing official Snap | `setup-spotify.sh` | Music |
+| Arch native `obsidian` (retain existing `obsidian-bin` AUR), Ubuntu official `obsidian` DEB | `setup-obsidian.sh` | Notes; installer refresh includes Electron |
 | `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
 | `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
 | `zed` | `setup-zed.sh` | Code editor |
 | `stably-orca-bin` (AUR) | `setup-orca.sh` | [Orca](https://www.onorca.dev/), an IDE for parallel coding agents; launch with `stably-orca` (the `orca` package is the GNOME screen reader) |
-| `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
+| Arch `zsa-keymapp-bin` (AUR), Ubuntu verified pinned Keymapp archive | `setup-moonlander.sh` | ZSA keyboard live layout/firmware flashing; GTK3, WebKitGTK 4.1 and libusb |
+
+### Desktop utility sources and update owners
+
+Implemented for [#152](https://github.com/mikedelafuente/dotfiles-arch/issues/152).
+The existing shared profile runner selects all five apps on both hosts; standalone
+setup paths are enabled on Ubuntu 26.04 amd64. User preferences, Obsidian vaults,
+database credentials, Postman collections and login state remain user-owned.
+
+| App / command | Arch source / update owner | Ubuntu source / update owner |
+|---------------|----------------------------|-------------------------------|
+| TablePlus / `tableplus` | Scanned AUR `tableplus` / guarded yay | [Official Ubuntu 26 APT repository](https://tableplus.com/download/linux) / APT |
+| Postman / `postman` | Scanned AUR `postman-bin` / guarded yay | [Verified official Postman Snap](https://snapcraft.io/postman) / Snap automatic refresh; preserve known writable user archives 9.13+ / genuine in-app updater |
+| Spotify / `spotify` | Scanned AUR `spotify` / guarded yay | [Official vendor APT](https://www.spotify.com/us/download/linux/) / APT; preserve an existing official Spotify Snap / Snap automatic refresh |
+| Obsidian / `obsidian` | [Native Extra](https://archlinux.org/packages/extra/x86_64/obsidian/) / pacman; preserve existing `obsidian-bin` / guarded yay | [Official stable amd64 DEB](https://github.com/obsidianmd/obsidian-releases/releases) with GitHub SHA-256 / common maintenance installer refresh |
+| Keymapp / `keymapp` | Scanned AUR `zsa-keymapp-bin` and dependencies / guarded yay | [Official ZSA archive](https://www.zsa.io/keymapp) / reviewed version/checksum pin and common maintenance verification/refresh |
+
+Ubuntu's native catalog does not supply these five apps with the required vendor
+workflows. TablePlus uses `https://deb.tableplus.com/debian/26 tableplus main`;
+Spotify uses `https://repository.spotify.com stable non-free`. Each APT source uses
+`arch=amd64`, a repository-specific `signed-by=/usr/share/keyrings/<app>.gpg`,
+one pinned primary signing key, and a candidate-origin check. Existing compatible
+scoped sources retain their paths. Duplicate, disabled, wrong-release, globally
+trusted or unofficial sources fail without automatic migration. Vendor examples
+using `trusted.gpg.d` are deliberately narrowed to repository-scoped trust here.
+
+Primary-key fingerprints inspected on 2026-10-09:
+
+- TablePlus: `211438D2880D8D98E100B1412A17818B38772786`.
+- Spotify: `E1096BCBFF6D418796DE78515384CE82BA52C83A` (vendor key URL ends `5384CE82BA52C83A.asc`). Rotation requires reviewed pin changes.
+
+Postman's Snap is the vendor-recommended bundled-library exception; the official
+Snap ID is `fFcOtEEF4EdyYb95IUE5Isy28tICYMLf` (publisher `postman-inc`).
+Spotify's existing official Snap ID is `pOBIoZ2LrCB3rDohMxoYGnbN14EHOgD7`.
+Setup checks those asserted identities and retains existing stable channels;
+maintenance leaves Snap automatic updates and holds in control rather than using
+an explicit refresh that could override a hold. Fresh Postman installs use
+`latest/stable`. Recognized writable user Postman archives retain their
+[in-app updater](https://learning.postman.com/docs/getting-started/installation/update);
+keep updates enabled and restart to apply downloads. Disabled in-app updates
+require user action; common maintenance never rewrites app settings or claims to
+have applied an in-app update. New archive installation is not selected because
+the download lacks independently published integrity metadata; no silent fallback
+from failed Snap acquisition occurs.
+
+[Obsidian's automatic updater](https://obsidian.md/help/updates) updates the app,
+but cannot update the Electron installer runtime. `dfa-update-system` separately
+checks official stable DEB metadata, stages a SHA-256 verified amd64 artifact,
+checks package name/version/architecture, and installs only a newer installer.
+APT holds defer this refresh without overriding policy. Obsidian can show a newer
+app version than its installed package; compare **Settings → General → installer
+version** when diagnosing runtime requirements. Existing AppImages/tar archives
+with unknown installer ownership are preserved and reported as required source
+gaps, not marked current merely because in-app updates work. There is no official
+Obsidian APT repository; a standalone DEB does not update through APT alone.
+
+Keymapp's vendor publishes a mutable `keymapp-latest.tar.gz` without a published
+signature/checksum. The reviewed 1.3.7 pin
+`a87bc7083cd6461ba10e0da4b94f249a29100d712542d54498f01e947cf868fa`
+matches the [IoC-inspected AUR packaging source](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zsa-keymapp-bin)
+and the official downloaded archive. Only regular `keymapp`/`icon.png` members
+are extracted; the binary must identify as x86_64 ELF. The user-owned release lives
+under `USER_HOME_DIR/.local/share/dotfiles-arch/keymapp/1.3.7`, with a stable
+`current` link, executable link and separate `dfa-keymapp.desktop` launcher.
+Reviewed pin changes publish a new version and atomically switch `current`,
+retaining the previous release. Common maintenance verifies
+the vendor archive against the pin before changing a working installation. If
+the vendor changes bytes, refresh fails clearly and requires a reviewed
+version/checksum update in the recipe; no unverified "latest" replacement occurs.
+No genuine installer updater is documented, so the repository pin owns archive
+refreshes. Ubuntu dependencies are native `libusb-1.0-0`, `libgtk-3-0t64` and
+`libwebkit2gtk-4.1-0` (verified in the official Resolute catalog).
+
+`setup-moonlander.sh` installs the shared [ZSA udev permissions](https://github.com/zsa/wally/wiki/Linux-install)
+from `scripts/zsa-udev.rules`, creates/adds the real user to `plugdev`, and reloads
+rules only when first installing them. Existing files containing all required
+rules retain user additions/comments; different rules or symlinks fail for manual
+review. The vendor's device-ID-scoped flashing permissions are retained, including
+its `0666` bootloader rules. There is no global `udevadm trigger`: log out/back in
+for group changes, then replug the keyboard. Keymapp 1.2+ requires WebKitGTK 4.1.
+Wayland launch, sandbox behavior, firmware/live training, group activation and
+keyboard access remain unverified; no installer, updater, service or device action
+was executed for validation. The offline selection/source regression check is
+`tests/test_desktop_utility_decisions.py`, deliberately left unrun; validation was
+direct Bash syntax/ShellCheck and source/acquisition/udev inspection only.
 
 ## Profile extras
 
@@ -502,16 +713,16 @@ Profiles are **additive multi-select** — enable any combination on one machine
 | `zoom` (AUR) | Meetings | — |
 | `slack-desktop` (AUR) | Team chat | — |
 | `google-chrome` (AUR) | Work browser (Super+B when work is selected) | — |
-| `ninjaone-agent` (local, repackaged vendor `.deb`) | NinjaOne MDM/endpoint agent; installed once with `dfa-install-ninjaone` (not part of `sync.sh`), health-checked by `dfa-weekly` | `dfa-install-ninjaone`, `dfa-update-ninjaone` |
+| NinjaOne (Arch: local `ninjaone-agent`; Ubuntu: vendor native DEB) | Opt-in endpoint agent; vendor/IT self-updates, `dfa-weekly` checks health; never enrolled by bootstrap/sync | `dfa-install-ninjaone`, `dfa-update-ninjaone`, `dfa-uninstall-ninjaone` |
 
 ### personal — `setup-steam.sh`, `setup-discord.sh`, `setup-firefox.sh`, `setup-mullvad.sh`
 
 | Package | Purpose | Related commands |
 |---------|---------|------------------|
-| `steam` (multilib) | Games | — |
-| `discord` (AUR) | Chat | — |
-| `firefox` | Personal browser (Super+B when personal is selected and work is not) | — |
-| `mullvad-vpn-bin` (AUR) | VPN | `mvup`, `mvdown`, `mvst` |
+| `steam` (Arch multilib) / `steam-installer` + `steam-libs-i386:i386` (Ubuntu multiverse/universe) | Games; native launcher plus Valve client updater | `steam` |
+| `discord` (Arch native; Ubuntu official DEB bootstrap) | Chat; Linux app updater retains user settings | `discord` |
+| `firefox` (Arch native; Ubuntu Mozilla Snap or retained Mozilla APT) | Personal browser (Super+B when personal is selected and work is not) | `firefox` |
+| `mullvad-vpn-bin` (Arch AUR) / `mullvad-vpn` (Ubuntu vendor APT) | VPN; account, connection and other VPNs unchanged | `mvup`, `mvdown`, `mvst` |
 
 ### devcontainer — `setup-devcontainer.sh`
 
@@ -561,6 +772,59 @@ These gaps or failed writes return nonzero instead of a completed host setup.
 | Package | Script | Purpose |
 |---------|--------|---------|
 | `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` | `setup-nvidia.sh` | NVIDIA drivers, installed only when `INSTALL_NVIDIA=true` |
+
+### GPU sources, capability gates and update owners
+
+| Component | Arch source | Ubuntu 26.04 source | Update owner / requirements |
+| --- | --- | --- | --- |
+| Optional NVIDIA | Native `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` for a new Turing+ installation | Native `ubuntu-drivers-common` hardware recommendation; signed `linux-modules-nvidia-<branch>-<running-kernel>` preferred, Ubuntu DKMS otherwise | Native pacman/APT; saved explicit `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`. `--yes`, PCI detection and an unset preference do not opt in. All existing flavors, utility-only stacks, manual and work-managed installations remain untouched; no CUDA repository, purge or module loading |
+| CUDA Ollama | Native `ollama-cuda` and its `cuda` dependency | Official stable amd64 archive bundles CUDA runtime libraries; only the existing host driver is used | Ollama 0.40.0+ for the current runtime layout; native owner or verified archive refresh by `dfa-update-system` |
+| Vulkan Ollama | Native `ollama-vulkan` and `vulkan-icd-loader`; existing hardware ICD retained | Official archive bundles the Vulkan backend; host Vulkan loader/ICD remain native/vendor-owned | Same owner; Vulkan 1.2+ on a successfully enumerated discrete/integrated GPU. CPU software ICDs do not qualify |
+| GPU probes | Native `python`, `vulkan-tools` | Native `python3`, `vulkan-tools` | Native updater. NVIDIA readiness needs a supported compute capability/driver and successful CUDA initialization/device enumeration with the current user's permissions. Vulkan readiness uses `vulkaninfo --summary`, not executable or ICD presence |
+| Archive prerequisites | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python` if a managed archive already exists | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python3` | Native updater; SHA256 verified before archive extraction or switching a working installation |
+
+[Ollama's Linux instructions](https://docs.ollama.com/linux) offer archives rather
+than an official vendor APT repository. A compatible native Ubuntu candidate is
+preferred if available; a local DEB without a repository candidate is a source
+conflict. The [official stable v0.40.2 release](https://github.com/ollama/ollama/releases/tag/v0.40.2)
+was inspected on 2026-10-09: `ollama-linux-amd64.tar.zst` has a GitHub SHA256
+digest and the [pinned release build](https://github.com/ollama/ollama/blob/v0.40.2/.github/workflows/release.yaml)
+bundles CUDA v12/v13 and Vulkan. Setup resolves current stable metadata each time,
+requires a digest and the expected GPU libraries, and does not silently fall back.
+
+Archives reuse the managed release layout at
+`~/.local/share/dotfiles-arch/editor-tools/ollama/<version>` with `current` and
+`~/.local/bin/ollama`. Ubuntu archive installs use the current user's
+`~/.config/systemd/user/ollama.service`, loopback port 11434, Vulkan enabled,
+and the default user model store. The service starts with the user session;
+setup does not enable lingering, create service accounts, download models or
+grant extra device groups/capabilities. Native installs retain their
+package-owned system service. Source/launcher/unit/drop-in conflicts are reported
+before replacement; arbitrary upstream/manual installs are not adopted.
+
+[Current upstream NVIDIA requirements](https://docs.ollama.com/gpu) are compute
+capability 5.0+ and driver 550+, with driver 570+ for compute capabilities
+5.0–6.2. Existing CPU-only/ROCm Ollama flavors are preserved and report a pending
+GPU capability rather than being replaced. Missing CUDA/Vulkan capability skips
+a new installation; a previously installed app with missing capability fails
+with a diagnostic. Native service-user GPU access can differ from the interactive
+user and still requires runtime verification. Vulkan VRAM measurements can be
+approximate without additional capabilities; setup does not grant those capabilities.
+
+`dfa-update-system` refreshes recognized archives and verifies services before a
+success stamp. Archive upgrades restart the active user service; updates do not
+enable a disabled service. Acquisition, service and local-model-list failures
+return nonzero and retain harness configuration. NVIDIA installation/activation,
+Secure Boot/MOK enrollment, device permissions, archive compatibility, service
+startup, actual GPU inference, model loading and upgrades remain unverified.
+New Arch open-driver installs require recognized Turing+ PCI chipset names;
+legacy or unknown chipsets defer manual driver selection. Package installation
+does not prove GPU readiness; reboot/MOK steps are reported
+as pending, following [Ubuntu's driver guidance](https://ubuntu.com/desktop/docs/en/latest/how-to/graphics/install-nvidia-drivers/).
+
+`tests/test_gpu_decisions.py` contains isolated supplied-fact checks with blocked
+OS/network/GPU commands. It was left unrun under the implementation constraint;
+only Bash syntax, direct ShellCheck and static operation inspection were used.
 
 ## Build / AUR plumbing
 
@@ -813,3 +1077,158 @@ GNOME launch/default-browser integration, Slack keyring/login/tray integration,
 Wayland screen sharing/audio/video, and managed-workstation policies. No package
 manager, networked test, live app, service, or desktop workflow was executed as
 verification. Vendor Linux support is feasibility evidence, not runtime parity.
+
+### NinjaOne standalone lifecycle — Arch / Ubuntu 26.04
+
+Implemented for [#156](https://github.com/mikedelafuente/dotfiles-arch/issues/156).
+`dfa-install-ninjaone` remains standalone and work-profile gated (`--force` overrides
+that profile check). Bootstrap/profile setup never enrolls security agents.
+
+| Host / app | Source | Update owner and conflicts |
+|------------|--------|----------------------------|
+| Arch NinjaOne | Console-issued vendor enrollment DEB, repackaged locally as `ninjaone-agent` | Vendor `ninjarmm-patcher.timer`; weekly health/repair retains the existing Arch runtime dependencies. Arch remains vendor-unsupported. |
+| Ubuntu NinjaOne | Console-issued native amd64 DEB installed with APT, retaining vendor maintainer scripts | Vendor agent/patcher, without adding an APT repository. `dfa-update-ninjaone --url <newer URL>` only upgrades our recorded package and enrollment. Existing IT installations are retained. |
+| Ubuntu SentinelOne | Existing vendor/IT native `sentinelagent`; never installed directly by these commands | SentinelOne console/vendor owns updates and uninstall authorization. Presence alone does not prove NinjaOne enrollment; removal requires a separate explicit request. |
+
+Download trust: generated `https://*.ninjarmm.com` or `*.rmmservice.com` enrollment
+URLs only, without redirects; safe archive paths and regular-file/directory types,
+matching URL/DEB version, native agent package identity, and amd64 architecture.
+Changed layouts/links/identity fail closed. No generic token installer or source
+fallback is added. The enrollment DEB is private temporary data; installer output
+is withheld because vendor scripts can print enrollment secrets. No vendor digest
+is supplied by these tenant-specific URLs: trust is pinned HTTPS plus archive and
+identity checks, not independent signature verification.
+
+Credentials stay in `~/.config/dotfiles-arch/ninjaone.env`, atomically saved as a
+user-owned mode-600 regular file. Use the hidden prompt instead of `--url` to avoid
+shell history. Ubuntu installs record the exact native package plus a one-way
+enrollment digest in root-owned `/var/lib/dotfiles-arch/ninjaone-package` (644);
+a saved URL alone never adopts an existing IT-managed agent. Another enrollment,
+unknown package ownership, or redirected ownership state is preserved and reported.
+The existing bootstrap preferences and schema version do not change.
+
+`dfa-weekly` now calls native health handling on both hosts. Agent and patcher
+activity/enabled state are checked. Our recorded installs retain missing-binary
+reinstall and service repair; IT-managed/unrecognized installations get read-only
+checks and return failure when unhealthy, with no dependency installs, repair,
+replacement or URL-driven upgrades. No agent uses the general app-source updater.
+
+`dfa-uninstall-ninjaone [--keep-url]` requires a terminal and typing `remove`;
+`--yes` alone cannot authorize removal. On Ubuntu it runs our package's vendor
+`ninja-deb-uninstall.sh`, checks for remnants, and retains SentinelOne by default.
+`--remove-sentinelone` additionally requires typing `remove SentinelOne` and a
+hidden console-issued uninstall passphrase; it invokes the package-owned vendor
+`sentinelctl control uninstall` without forced cleanup. The passphrase is neither
+saved nor printed and is passed through stdin to avoid sudo command logging;
+SentinelOne's documented CLI itself receives it as an argument. Anti-tamper or
+uninstall failures remain failures for IT/vendor assistance. Successfully removed
+NinjaOne ownership state is cleared immediately, even if SentinelOne later fails,
+so weekly health cannot silently reinstall an intentionally removed agent.
+Ubuntu never applies Arch's forced dpkg cleanup, account/file deletion, or database
+record removal. Arch's existing repackaged-agent/SentinelOne workaround stays
+confined to Arch, subject to the same explicit removal confirmation. Unknown
+NinjaOne installations must be removed through their IT/vendor owner.
+
+Primary sources: [NinjaOne Linux installation](https://www.ninjaone.com/docs/new-to-ninjaone/agent-installation/linux-device-agent-installation/),
+[NinjaOne native removal](https://www.ninjaone.com/es/docs/administracion/agente-ninjaone-guia-de-eliminacion-de-agentes/),
+[SentinelOne's vendor uninstall command](https://github.com/Sentinel-One/ansible_collection_s1agents/blob/main/roles/s1_agent_uninstall/tasks/linux.yml),
+and [NinjaOne SentinelOne prerequisites](https://www.ninjaone.com/docs/integrations/vulnerability-management/uninstalling-sentinelone-agent/).
+These document the Linux/native lifecycle, not certification of Ubuntu 26.04.
+
+Validation: direct Bash syntax and ShellCheck only; archive/native dispatch and
+managed-agent boundaries statically inspected. `tests/test_ninjaone_decisions.py`
+provides pure supplied URL/version/enrollment/ownership/path checks with forbidden
+command guards and temporary state; it is deliberately **unrun**, along with the
+updated maintenance check. No installer, uninstaller, service/system mutation,
+networked test, test script or VM was executed. Vendor DEB layout/identity,
+Ubuntu 26.04 compatibility, enrollment, self-update, native uninstaller behavior
+and SentinelOne passphrase/anti-tamper behavior remain **unverified** on hardware.
+
+### Personal apps on Ubuntu 26.04 (amd64)
+
+The additive `personal` profile selects all four existing setup scripts. Individual
+`scripts/setup-{steam,discord,firefox,mullvad}.sh` entrypoints support both distros.
+No package setup connects a VPN, starts a game, logs in, changes a browser profile,
+or replaces unrelated VPN/browser installations. No new command or config key is added.
+
+| App / normalized desktop | Ubuntu selected source | Update owner |
+|---|---|---|
+| Steam / `steam.desktop` | Native `steam-installer` (multiverse) and `steam-libs-i386:i386` (universe); amd64 host plus i386 foreign architecture | APT owns installer/dependencies via common maintenance; Valve owns client/game updates in user state |
+| Discord / `discord.desktop` | Official stable 1.0.161 DEB bootstrap, pinned SHA-256; compatible existing stable DEBs require package-owned executable and Rust updater bootstrap | Genuine Discord Linux updater installs/updates the app in the user's configuration directory on launch; APT owns bootstrap dependencies, no periodic DEB reinstall |
+| Firefox / `firefox_firefox.desktop` (Snap) or `firefox.desktop` (DEB) | Mozilla's stable Snap (Ubuntu's default) for new/stock installations; retain an existing scoped Mozilla APT installation | Snap automatic refresh or existing Mozilla APT through common maintenance; no Snap-to-DEB migration or new APT pin |
+| Mullvad VPN / `mullvad-vpn.desktop` | Vendor stable APT `repository.mullvad.net/deb/stable`, stable/main; `mullvad-vpn` | APT via `dfa-update-system`, daily/weekly; no direct service/VPN commands in setup |
+| Source prerequisites | `software-properties-common` for Steam components, `curl`, `ca-certificates`, `gnupg` for pinned/scoped sources | Native updater |
+
+Steam setup adds i386 if missing and enables Ubuntu multiverse idempotently with
+`add-apt-repository`; universe and native amd64/i386 indexes must be available.
+Candidate metadata is cross-checked against Ubuntu `resolute` release indexes,
+including official update/security/backport pockets and local Ubuntu mirrors.
+Unexpected pinned candidates or source architecture restrictions fail with a
+source diagnostic; source architecture restrictions, GPU drivers and package
+holds are not rewritten. `steam-launcher`/Valve APT, Steam Snap/Flatpak, manual
+launchers, and old standalone `steam:i386` without the native installer report
+conflicts; they are never removed or migrated. Existing Steam libraries/client
+state are not touched. A missing `/usr/games` PATH entry gains only an owned
+`~/.local/bin/steam` symlink, with user-file conflicts rejected. Arch retains
+multilib and native Steam; enabling multilib refreshes through the full guarded
+upgrade, avoiding a partial Arch upgrade.
+
+Discord published its full Linux Rust updater on 2026-05-04. Read-only inspection
+of the official stable DEB confirms `/usr/bin/discord` launches a writable app
+in `$XDG_CONFIG_HOME/discord` (otherwise `~/.config/discord`), bootstrapping it
+from `updates.discord.com` with `/usr/share/discord/updater_bootstrap` when needed.
+The reviewed bootstrap URL is
+`https://stable.dl2.discordapp.net/apps/linux/1.0.161/discord-1.0.161.deb`, SHA-256
+`1a486a0cd0dc0e79b952b14dd5e361a8614dc28d1d371cd00ebf37a2ad0ce63d`.
+This local pin was calculated from official HTTPS bytes; it is not a vendor
+signature or independently published checksum. Setup verifies it and DEB
+package/version/architecture before installing. Missing or changed pinned bytes
+fail without falling back to an unverified download. An alternate Discord APT candidate fails before native upgrade. Existing stable updater
+DEBs are preserved; pre-updater DEBs and manual archives report a conflict,
+requiring an explicit source repair. Arch uses native `discord`, correcting the
+old AUR description. A sole existing stable Snapcrafters Discord Snap retains
+its asserted Snap owner instead of changing source; it is a community exception,
+not endorsed vendor packaging. Snap confinement/voice/screen sharing remain
+unverified. No updater setting, account, or `SKIP_HOST_UPDATE` policy is changed.
+
+Mozilla Snap ID: `3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk` (Mozilla publisher).
+Retained Discord Snap ID: `qHVefGEBezeuCeSfTND40uoUD6GRw8BO` (Snapcrafters).
+Both require `latest/stable`, asserted identity and owned command/desktop exports;
+other channels/Flatpaks/unknown publishers are preserved and reported as conflicts.
+Ubuntu's Firefox `*snap*` DEB is recognized as the Snap bootstrap, not a duplicate
+browser. An existing Mozilla APT feed without its selected DEB is a conflict,
+not permission to install a second Snap. Retained Mozilla DEBs need a scoped
+`Signed-By`, stable vendor candidate and pinned primary fingerprint
+`35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3`; no preferences/pins are written.
+GNOME consumes the selected desktop ID and retains Chrome's work-over-personal
+preference. User desktop overrides are preserved and cause a launcher conflict.
+
+Mullvad's scoped key primary fingerprint is
+`A1198702FC3E0A09A9AE5B75D5A1D4F266DE8DDF` (official key inspected 2026-10-09).
+New source/key destinations are `/etc/apt/sources.list.d/mullvad.list` and
+`/usr/share/keyrings/mullvad-keyring.gpg`; existing compatible scoped sources/keys
+are retained. Disabled/beta/duplicate/malformed/unscoped feeds, unrelated source
+owners, or changed keys fail without replacement. APT candidate/owner checks run
+before upgrades; failures propagate and cannot advance the system-update stamp.
+APT/Snap holds and automatic security updates remain in force. App-owned updates
+happen when launched; common maintenance verifies ownership without claiming an
+in-app update completed or launching an application.
+
+Evidence checked 2026-10-09: [Ubuntu Steam installer](https://packages.ubuntu.com/resolute/steam-installer),
+[32-bit Steam dependency package](https://packages.ubuntu.com/resolute/steam-libs-i386),
+[Discord Linux updater announcement](https://discord.com/blog/discord-patch-notes-may-4-2026),
+[official Discord download](https://discord.com/download),
+[Mozilla's Linux source guidance](https://support.mozilla.org/en-US/kb/install-firefox-linux),
+[Mozilla Snap](https://snapcraft.io/firefox), [Snapcrafters Discord exception](https://snapcraft.io/discord),
+[Mullvad Linux repository support](https://mullvad.net/en/help/install-mullvad-app-linux).
+
+Validation: direct Bash syntax/ShellCheck plus static inspection only. The pure
+supplied-fact checks in `tests/test_personal_app_decisions.py` are left unrun per
+user instruction. No setup/update script, test, app, package manager, VPN, GNOME
+setting, service, VM, or networked validation workflow was executed. Vendor/source
+metadata and archive contents were read without execution as feasibility research.
+Unverified: Ubuntu dependency resolution (including Discord's legacy dependency
+names), native installation/upgrades and maintainer-script effects, APT signing
+policy, Snap refresh/holds and desktop exports, Discord bootstrap/client updates,
+Steam client/Proton/games/32-bit GPU libraries, Firefox profiles/default-browser
+runtime, and Mullvad daemon/account/VPN/DNS/kill-switch behavior.

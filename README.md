@@ -5,7 +5,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
 Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, work apps, and package maintenance**
-are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
+and shared desktop utilities are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
 entries cause a failure before installation; resolve them explicitly and rerun.
@@ -34,6 +34,17 @@ The shared additive `work` selection and Chrome browser identity stay unchanged;
 full Ubuntu profile/GNOME orchestration remains guarded. See
 [work app sources and runtime limits](PACKAGES.md#work-app-sources-and-update-owners).
 
+Shared desktop utilities: run the existing `scripts/setup-tableplus.sh`,
+`setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh` or `setup-moonlander.sh`.
+Ubuntu uses scoped vendor APT for TablePlus/Spotify, an official Postman Snap,
+a verified Obsidian installer DEB and a reviewed Keymapp archive pin. Existing
+official Snaps and writable user Postman archives retain their update owners.
+`dfa-update-system` covers the installer/archive owners; Obsidian's in-app updater
+cannot refresh Electron. Changed Keymapp bytes require a reviewed pin update.
+ZSA permissions require logout/login and keyboard replug after first setup;
+conflicting user udev files are preserved. See
+[desktop utility sources, update owners and unverified runtime](PACKAGES.md#desktop-utility-sources-and-update-owners).
+
 All entrypoints using the common header detect `/etc/os-release` and architecture
 before mutation. Unconverted entrypoints, including bootstrap, sync (even
 `--skip-bootstrap`), and the profile runner reject Ubuntu. User-only daily sync
@@ -42,8 +53,10 @@ Other distros/releases/architectures are unsupported; Arch remains rolling-only.
 Ubuntu Kitty updates belong to APT through `dfa-update-system`, using existing
 configured sources. Daily/weekly sequencing is shared. If a repo pull triggers
 full resync on Ubuntu, that guarded step reports failure and remaining daily
-steps continue; full orchestration is a subsequent slice. Weekly NinjaOne repair
-is explicitly policy-deferred on Ubuntu, preserving the managed installation.
+steps continue; full orchestration is a subsequent slice. Weekly NinjaOne health
+checks run on both hosts; IT-managed installations are
+checked read-only. Standalone opt-in native Ubuntu installation/removal is described
+in [NinjaOne lifecycle and validation limits](PACKAGES.md#ninjaone-standalone-lifecycle--arch--ubuntu-2604).
 See [Kitty sources and validation limits](PACKAGES.md#kitty-distro-slice).
 
 The shared shell/core CLI slice also supports these standalone commands:
@@ -109,8 +122,10 @@ Paths use `$HOME` — different usernames on other machines are fine.
 ```bash
 dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-extensions + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
                               # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
-dfa-weekly                        # dfa-daily + forced updates + orphan preview + Arch NinjaOne health check
-dfa-install-ninjaone --url <URL>  # once, work machines: NinjaOne agent from the console's installer .deb URL (saved to ~/.config/dotfiles-arch/ninjaone.env)
+dfa-weekly                        # dfa-daily + forced updates + orphan preview + native NinjaOne health check
+dfa-install-ninjaone             # standalone, work machines: hidden vendor URL prompt (native Ubuntu DEB / Arch repackaging)
+dfa-update-ninjaone              # weekly health/repair for owned installs; IT-managed agents checked read-only
+dfa-uninstall-ninjaone           # terminal + type remove; Ubuntu retains SentinelOne unless --remove-sentinelone is separately confirmed
 dfa-sync-sources add /path/to/repo # optional: extra rules/skills/extensions repo; then dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
@@ -254,7 +269,7 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
 | **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
-| **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
+| **personal** | Steam, Discord, Firefox, Mullvad VPN (Arch / Ubuntu 26.04 sources in `PACKAGES.md`) | Firefox (when personal is selected and work is not; selected Snap/DEB desktop identity) |
 | **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches | — (no browser change) |
 
 Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup, and all three agent CLIs — Claude Code, Codex, and opencode).
@@ -299,6 +314,17 @@ and update behavior has only read-only/static validation.
 - Tap-to-click **off**
 - Emoji picker (`gnome-characters`) and the screenshot UI on Super shortcuts
 
+The setup path covers Arch and Ubuntu 26.04. Current Arch GNOME 51 has a required
+Pop Shell compatibility gap and fails setup until upstream support or an explicit
+feature exception is available. Required extension metadata must support the
+installed GNOME shell; missing required settings fail setup. Ubuntu uses native
+GPaste/AppIndicator and verified pinned Pop Shell, No Overview and Dash to Panel
+sources. See [GNOME sources/update owners](PACKAGES.md#shared-gnome-sources-and-update-owners).
+Ubuntu Dock, Tiling Assistant and Desktop Icons NG are disabled to avoid panel
+and Pop Shell conflicts; unrelated extensions and custom shortcut-list entries
+are retained. Log out/in after extension installation. Desktop runtime behavior
+has not been verified; validation is limited to read-only metadata/static checks.
+
 ### Power policy (`MACHINE_TYPE`)
 
 `setup-gnome.sh` applies the saved machine type:
@@ -315,10 +341,29 @@ and update behavior has only read-only/static validation.
 
 Lid drop-in: `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` (re-login or reboot to apply).
 On AC with the lid closed, the laptop stays awake; keyboard/mouse on a KVM can also wake from suspend.
+Foreign policy files/overrides, alternate power providers and masked/inactive
+power services are preserved with a deferred-policy warning. Owned lid/USB changes
+apply after reboot/device add/change. `dfa-refresh-audio` restarts audio only when
+all three PipeWire/WirePlumber user services are loaded and active; `--status`
+prints `wpctl status`. Audio/suspend/wake behavior remains unverified.
 
 ### NVIDIA
 
-Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap an already-installed driver flavor. See [NOTES.md](NOTES.md).
+Only an explicit saved `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`
+permits a new installation. `--yes` keeps the saved choice; hardware detection
+does not opt in. Existing native, manual and work-managed stacks are retained.
+New Arch installs use `nvidia-open-dkms` (Turing+); Ubuntu 26.04 uses its native
+hardware recommendation and prefers signed modules for the running kernel.
+Reboot/Secure Boot/MOK activation can remain pending; setup does not replace,
+unload or force-load drivers. See [GPU sources and update owners](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
+`bash scripts/setup-ollama.sh` requires working CUDA or a physical Vulkan 1.2+
+GPU. Arch uses native GPU packages. Ubuntu prefers a compatible native package
+if available, otherwise a verified official archive with a user service;
+`dfa-update-system` owns archive refreshes. Existing source/service conflicts
+remain untouched. No models are downloaded by setup, and GPU inference/runtime
+is unverified. Archive service status/logs: `systemctl --user status ollama` /
+`journalctl --user -u ollama`; native installs use the system service.
 
 ---
 
@@ -534,3 +579,9 @@ because their in-app update messages only notify. See [PACKAGES.md](PACKAGES.md#
 for sources, conflicts and unverified runtime paths. Zed needs Vulkan and 1.18+;
 setup preserves unrelated desktop/MIME defaults and reports source/config conflicts.
 Full Ubuntu bootstrap/sync remains guarded while remaining slices are converted.
+
+Shared appearance: `bash scripts/setup-fonts.sh` installs required font families
+on Arch and Ubuntu 26.04. Native fonts/themes use normal distro updates; pinned
+font/GTK/Papirus/bat data uses maintainer-reviewed versions applied by setup/full
+sync. User assets are preserved on conflicts. See [PACKAGES.md](PACKAGES.md#shared-appearance-sources-and-update-owners)
+for sources, ownership, and unverified desktop behavior.
