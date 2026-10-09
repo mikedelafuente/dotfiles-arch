@@ -44,7 +44,7 @@ Steps:
                              cooldown so a real upgrade attempt happens at
                              least once a week
   dfa-remove-orphans        preview native orphan/removal candidates
-  dfa-update-ninjaone       Arch agent health check; policy-deferred on Ubuntu
+  dfa-update-ninjaone       NinjaOne health check; IT-managed agents are read-only
 
 Example:
   dfa-weekly --yes   non-interactive (forwarded to dfa-daily and dfa-update-system)
@@ -80,11 +80,6 @@ main() {
   fi
 
   for step in "${WEEKLY_STEPS[@]}"; do
-    if [[ "$WORKSTATION_DISTRO" == ubuntu && "$step" == dfa-update-ninjaone ]]; then
-      printf 'dfa-weekly: defer %s on Ubuntu (native managed-agent lifecycle not converted; retained)\n' "$step" >&2
-      skipped+=("$step")
-      continue
-    fi
     if ! command -v "$step" &>/dev/null; then
       printf 'dfa-weekly: skip %s (not on PATH)\n' "$step" >&2
       skipped+=("$step")
@@ -114,7 +109,7 @@ main() {
 
   printf '\n'
   if ((${#skipped[@]})); then
-    printf 'dfa-weekly: skipped (not on PATH or policy-deferred): %s\n' "${skipped[*]}"
+    printf 'dfa-weekly: skipped (not on PATH): %s\n' "${skipped[*]}"
   fi
   if ((${#failures[@]})); then
     printf 'dfa-weekly: finished with failures: %s\n' "${failures[*]}" >&2
