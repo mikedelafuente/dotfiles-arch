@@ -287,6 +287,7 @@ aliases() {
         echo "  Skill source: dfa-sync-sources option 5 toggles overwrite permissions"
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
+        echo '  Kitty: bash <dotfiles-checkout>/scripts/setup-kitty.sh (Arch / Ubuntu 26.04; other Ubuntu setup is guarded)'
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"
         

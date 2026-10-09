@@ -722,6 +722,68 @@ ensure_json_hook_registered() {
 # Package helpers
 # --------------------------
 
+# Read-only host decision; arguments are os-release ID, VERSION_ID, and uname -m.
+select_workstation_distro() {
+  local distro="$1" release="$2" arch="$3"
+  case "$arch" in
+    x86_64|amd64) ;;
+    *) print_error_message "Unsupported architecture: $arch (requires x86_64/amd64)" >&2; return 1 ;;
+  esac
+  case "$distro:$release" in
+    arch:) printf '%s\n' arch ;;
+    ubuntu:26.04) printf '%s\n' ubuntu ;;
+    *) print_error_message "Unsupported host: $distro $release (requires rolling Arch or Ubuntu 26.04)" >&2; return 1 ;;
+  esac
+}
+
+detect_workstation_distro() {
+  local ID="" VERSION_ID=""
+  if [[ ! -r /etc/os-release ]]; then
+    print_error_message "Cannot detect host: /etc/os-release is missing" >&2
+    return 1
+  fi
+  # Trusted OS metadata, not a saved user preference.
+  # shellcheck source=/dev/null
+  source /etc/os-release
+  select_workstation_distro "$ID" "$VERSION_ID" "$(uname -m)"
+}
+
+# Ubuntu conversion is incremental: only the standalone Kitty path is ready.
+require_workstation_entrypoint() {
+  local distro="$1" entrypoint="${2##*/}"
+  case "$distro:$entrypoint" in
+    arch:*|ubuntu:setup-kitty.sh) return 0 ;;
+    *) print_error_message "$entrypoint is not yet supported on $distro; Ubuntu supports standalone scripts/setup-kitty.sh only" >&2; return 1 ;;
+  esac
+}
+
+# Native package status must not be inferred from an executable on PATH.
+native_package_installed() {
+  case "$WORKSTATION_DISTRO" in
+    arch) pacman -Q "$1" &>/dev/null ;;
+    ubuntu) [[ "$(dpkg-query -W -f='${db:Status-Eflag} ${db:Status-Status}' "$1" 2>/dev/null)" == "ok installed" ]] ;;
+    *) return 1 ;;
+  esac
+}
+
+ensure_native_pkgs() {
+  local pkg
+  local missing=()
+  case "$WORKSTATION_DISTRO" in
+    arch) ensure_pacman_pkgs "$@"; return $? ;;
+    ubuntu) ;;
+    *) print_error_message "Unsupported native package backend" >&2; return 1 ;;
+  esac
+  for pkg in "$@"; do
+    native_package_installed "$pkg" || missing+=("$pkg")
+  done
+  [[ ${#missing[@]} -gt 0 ]] || return 0
+  print_action_message "Installing via APT: ${missing[*]}"
+  sudo apt-get update --error-on=any || return $?
+  # Fail on removals/holds; never release-upgrade or silently change sources.
+  sudo apt-get install --yes --no-remove "${missing[@]}" || return $?
+}
+
 # Install missing pacman packages (idempotent). Usage: ensure_pacman_pkgs pkg1 pkg2 ...
 ensure_pacman_pkgs() {
   local pkg

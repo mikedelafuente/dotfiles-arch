@@ -57,6 +57,39 @@ directly-installed packages are listed; transitive dependencies are not.
 | `lazygit` | `setup-git.sh` | Git TUI | `lzg` |
 | `lazydocker` (AUR) | `setup-docker.sh` / `setup-dev.sh` | Docker TUI | `lzd` |
 
+### Kitty distro slice
+
+| Host | App source / package | Update owner |
+|------|----------------------|--------------|
+| Rolling Arch, x86_64/amd64 | [Arch Extra](https://archlinux.org/packages/extra/x86_64/kitty/), `kitty` | pacman, through the existing guarded system updater |
+| Ubuntu 26.04, x86_64/amd64 | [Ubuntu Universe](https://packages.ubuntu.com/resolute/kitty), `kitty` | APT through existing configured sources; repository maintenance integration is pending |
+
+`bash scripts/setup-kitty.sh` is the sole converted Ubuntu setup path. No vendor
+repository, archive, AUR-to-APT translation, or fallback source is added. Missing
+Universe/package candidates and APT errors fail setup. Package status uses
+`pacman -Q` or dpkg's actual `installed` status with an `ok` error flag (including
+held packages, without changing their selection). A native installation
+must select `/usr/bin/kitty` (including `/bin` or symlink aliases resolving there)
+on PATH. Unmanaged/shadowing launchers are preserved and reported as conflicts;
+setup never installs a second copy to fix them.
+
+The recipe supports Kitty **0.26+** with the existing shared settings (see the
+[upstream 0.26 config definitions](https://github.com/kovidgoyal/kitty/blob/v0.26.0/kitty/options/definition.py)).
+Older/broken installations fail with an update-owner diagnostic and are retained.
+Setup links `kitty.conf` and `themes/mocha.conf` under `USER_HOME_DIR/.config/kitty`.
+Existing links to these repo files and identical legacy regular copies are kept;
+other files, directories, and unrelated/broken symlinks at those targets are
+preserved and reported before package installation. No bootstrap preferences,
+schema state, or command names change. Font setup remains a separate Arch-only
+entrypoint; absent Nerd Fonts use Kitty's normal font fallback.
+
+Validation for this slice is limited to supplied-data host decisions, Bash
+syntax, ShellCheck, and static review. At the maintainer's request, no app tests
+or setup/update/cleanup/service/desktop/driver workflows are executed. Native
+package installation/failure behavior, Kitty config loading/rendering, fonts,
+and KDE/GNOME terminal preference changes on either distro remain **unverified**.
+Full Ubuntu orchestration and the remaining app matrix are subsequent slices.
+
 ## Fonts — `setup-fonts.sh`
 
 | Package | Purpose |
