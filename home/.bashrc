@@ -288,6 +288,9 @@ aliases() {
         echo "  Skill source: dfa-sync-sources add <path> --overwritable true (allow duplicate replacement)"
         echo '  Cloud agents: bash <dotfiles-checkout>/scripts/install-cloud-agent-config.sh --home "$HOME"'
         echo '  Kitty: bash <dotfiles-checkout>/scripts/setup-kitty.sh (Arch / Ubuntu 26.04; other Ubuntu setup is guarded)'
+        echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
+        echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'
+        echo '  npm CLI updates: only npm-owned launchers; other sources are retained and reported'
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"
         

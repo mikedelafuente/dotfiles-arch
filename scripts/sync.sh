@@ -219,10 +219,10 @@ if [ "$ASSUME_YES" = true ]; then
 else
   safe_system_upgrade
 fi
-UPGRADE_RC=$?
+SYNC_STATUS=$?
 set -e
-if [ "$UPGRADE_RC" -eq 0 ]; then
-  record_system_upgrade_stamps
+if [ "$SYNC_STATUS" -eq 0 ]; then
+  record_system_upgrade_stamps || SYNC_STATUS=1
 else
   print_warning_message "Guarded system update failed — continuing with link/setup/cleanup."
 fi
@@ -233,7 +233,7 @@ fi
 
 if [ "$SKIP_BOOTSTRAP" = false ]; then
   print_line_break "Running setup scripts (safe to re-run)"
-  run_profile_setup_scripts "$ASSUME_YES" || true
+  run_profile_setup_scripts "$ASSUME_YES" || SYNC_STATUS=1
 else
   print_info_message "Skipping setup scripts (--skip-bootstrap)"
 fi
@@ -331,13 +331,7 @@ cleanup_obsolete() {
     fi
   done
 
-  local orphans
-  orphans="$(pacman -Qtdq 2>/dev/null || true)"
-  if [ -n "$orphans" ]; then
-    print_info_message "Removing orphaned packages..."
-    # shellcheck disable=SC2086
-    sudo pacman -Rns --noconfirm $orphans || true
-  fi
+  remove_orphaned_packages
 }
 
 collect_obsolete_pkgs
@@ -358,6 +352,10 @@ else
   print_info_message "Skipped cleanup (pass --cleanup with --yes to remove: ${OBSOLETE_PKGS_INSTALLED[*]})"
 fi
 
+if [[ "$SYNC_STATUS" -ne 0 ]]; then
+  print_error_message "Sync finished with update/setup failures (see above)"
+  exit 1
+fi
 print_line_break "Sync complete"
 print_success_message "Profiles: $(format_setup_profiles)"
 print_info_message "Commands on PATH (via ~/.local/bin): dfa-sync-dotfiles, dfa-update-system"

@@ -5,7 +5,7 @@
 # (~/.local/bin). Missing commands are skipped with a message.
 #
 # Default: dfa-update-repos, then dfa-migrate (apply any pending schema migrations the
-# pull brought in), then dfa-update-system (day-to-day pacman + yay), then
+# pull brought in), then dfa-update-system (native Arch/APT updates), then
 # dfa-update-npm-clis (npm update -g for claude/codex/pi — opencode is pacman-managed
 # and already covered by dfa-update-system), then dfa-sync-skills (relink personal
 # skills from dotfiles-arch), then dfa-sync-extensions (relink Pi extensions
@@ -53,8 +53,8 @@ customize. Steps not on PATH are skipped.
 Default steps:
   dfa-update-repos    git pull under ~/repos
   dfa-migrate         run pending dotfiles-arch schema migrations
-  dfa-update-system   guarded pacman + yay update
-  dfa-update-npm-clis npm update -g for claude/codex/pi (opencode is pacman-managed)
+  dfa-update-system   native Arch/APT update (24h cooldown; --force overrides)
+  dfa-update-npm-clis npm update -g for claude/codex/pi
   dfa-sync-skills     relink skills from dotfiles-arch + dfa-sync-sources extras
   dfa-sync-extensions relink Pi extensions from dotfiles-arch + dfa-sync-sources extras
   dfa-sync-rules      relink Cursor rules from dotfiles-arch + dfa-sync-sources extras
@@ -86,12 +86,11 @@ main() {
     esac
   done
 
-  if command -v resolve_dotfiles_arch &>/dev/null; then
-    dotfiles_arch_root="$(resolve_dotfiles_arch 2>/dev/null || true)"
-    if [[ -n "$dotfiles_arch_root" ]]; then
-      before_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
-    fi
-  fi
+  dotfiles_arch_root="$(resolve_dotfiles_arch)" || return 1
+  # shellcheck source=/dev/null
+  source "$dotfiles_arch_root/scripts/dotheader.sh"
+  set +e # Each step's status is aggregated below.
+  before_sha="$(git -C "$dotfiles_arch_root" rev-parse HEAD 2>/dev/null || true)"
 
   for step in "${DAILY_STEPS[@]}"; do
     if ! command -v "$step" &>/dev/null; then

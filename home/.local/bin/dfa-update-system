@@ -1,5 +1,5 @@
 #!/bin/bash
-# Day-to-day guarded pacman + yay updater (AUR IoC scan).
+# Day-to-day native updater (Arch: guarded pacman/AUR; Ubuntu: APT).
 # Usage: dfa-update-system [--yes|-y] [--scan-only] [--force] [-h]
 
 set -euo pipefail

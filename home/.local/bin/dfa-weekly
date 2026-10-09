@@ -1,7 +1,7 @@
 #!/bin/bash
 # Weekly routine — dfa-daily, plus heavier maintenance that doesn't need to
 # run every day: a forced package-update pass (bypasses dfa-update-system's
-# 24h cooldown) and orphaned-package cleanup (needs sudo).
+# 24h cooldown) and native orphan/removal preview (cleanup is separately confirmed).
 #
 # Edit WEEKLY_STEPS below to add or reorder the maintenance-only tasks. Each
 # name must be on PATH (~/.local/bin). Missing commands are skipped with a
@@ -20,6 +20,11 @@ if [[ -r "$_WEEKLY_LIB_DIR/dotfiles-arch-lib.sh" ]]; then
   source "$_WEEKLY_LIB_DIR/dotfiles-arch-lib.sh"
 fi
 
+ROOT="$(resolve_dotfiles_arch)" || exit 1
+# shellcheck source=/dev/null
+source "$ROOT/scripts/dotheader.sh"
+set +e # Keep failures from independent steps in the final summary.
+
 WEEKLY_STEPS=(
   dfa-update-system
   dfa-remove-orphans
@@ -35,14 +40,15 @@ this script to customize. Steps not on PATH are skipped.
 
 Steps:
   dfa-daily                 the full daily routine (see dfa-daily --help)
-  dfa-update-system --force guarded pacman + yay update, bypassing the 24h
+  dfa-update-system --force native Arch/APT update, bypassing the 24h
                              cooldown so a real upgrade attempt happens at
                              least once a week
-  dfa-remove-orphans        remove orphaned pacman packages (needs sudo)
-  dfa-update-ninjaone       NinjaOne agent health check (no-op unless installed)
+  dfa-remove-orphans        preview native orphan/removal candidates
+  dfa-update-ninjaone       Arch agent health check; policy-deferred on Ubuntu
 
 Example:
   dfa-weekly --yes   non-interactive (forwarded to dfa-daily and dfa-update-system)
+Cleanup: run dfa-remove-orphans --remove separately in a terminal; --yes is insufficient.
 EOF
 }
 
@@ -74,6 +80,11 @@ main() {
   fi
 
   for step in "${WEEKLY_STEPS[@]}"; do
+    if [[ "$WORKSTATION_DISTRO" == ubuntu && "$step" == dfa-update-ninjaone ]]; then
+      printf 'dfa-weekly: defer %s on Ubuntu (native managed-agent lifecycle not converted; retained)\n' "$step" >&2
+      skipped+=("$step")
+      continue
+    fi
     if ! command -v "$step" &>/dev/null; then
       printf 'dfa-weekly: skip %s (not on PATH)\n' "$step" >&2
       skipped+=("$step")
@@ -103,7 +114,7 @@ main() {
 
   printf '\n'
   if ((${#skipped[@]})); then
-    printf 'dfa-weekly: skipped (not on PATH): %s\n' "${skipped[*]}"
+    printf 'dfa-weekly: skipped (not on PATH or policy-deferred): %s\n' "${skipped[*]}"
   fi
   if ((${#failures[@]})); then
     printf 'dfa-weekly: finished with failures: %s\n' "${failures[*]}" >&2

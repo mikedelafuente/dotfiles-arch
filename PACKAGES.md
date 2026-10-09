@@ -62,7 +62,7 @@ directly-installed packages are listed; transitive dependencies are not.
 | Host | App source / package | Update owner |
 |------|----------------------|--------------|
 | Rolling Arch, x86_64/amd64 | [Arch Extra](https://archlinux.org/packages/extra/x86_64/kitty/), `kitty` | pacman, through the existing guarded system updater |
-| Ubuntu 26.04, x86_64/amd64 | [Ubuntu Universe](https://packages.ubuntu.com/resolute/kitty), `kitty` | APT through existing configured sources; repository maintenance integration is pending |
+| Ubuntu 26.04, x86_64/amd64 | [Ubuntu Universe](https://packages.ubuntu.com/resolute/kitty), `kitty` | APT through existing configured sources, via `dfa-update-system` / daily / weekly |
 
 `bash scripts/setup-kitty.sh` is the sole converted Ubuntu setup path. No vendor
 repository, archive, AUR-to-APT translation, or fallback source is added. Missing
@@ -89,6 +89,61 @@ or setup/update/cleanup/service/desktop/driver workflows are executed. Native
 package installation/failure behavior, Kitty config loading/rendering, fonts,
 and KDE/GNOME terminal preference changes on either distro remain **unverified**.
 Full Ubuntu orchestration and the remaining app matrix are subsequent slices.
+
+### Maintenance distro slice
+
+Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/142).
+
+| Installed apps / host | App source | Update owner |
+|-----------------------|------------|--------------|
+| Native system packages, including Kitty / Arch | Existing official pacman repositories | `dfa-update-system`: pacman, then guarded AUR updates |
+| AUR apps / Arch | Existing AUR recipes, including their AUR dependencies | `yay -Sua` after an IoC scan; query/scanner/metadata failures fail closed |
+| Native packages, including Kitty / Ubuntu 26.04 | Existing configured Ubuntu and vendor APT repositories | `dfa-update-system`: APT refresh and upgrade with new dependencies permitted, removals refused |
+| Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
+| NinjaOne / Arch | Existing opt-in repackaged vendor DEB | Agent self-updater plus existing weekly health check |
+| Managed NinjaOne / Ubuntu | Existing IT-selected source | Existing vendor/IT owner; weekly Arch repair is policy-deferred until native lifecycle conversion |
+
+No package or software source is installed by this slice. It adds no vendor
+repository, signing key, source fallback, app migration, or duplicate installation.
+APT keeps existing holds/pins and source priorities; source conflicts remain for
+the source owner to resolve. Standalone DEBs/archives without a configured update
+repository are **not** made updateable by this change; their recipes/owners remain
+subsequent app slices. A shadowing or non-npm agent launcher is preserved and
+reported as a source conflict, returning nonzero without adding an npm duplicate.
+Ubuntu automatic security timers, blacklists, and service
+configuration are untouched (see [Ubuntu automatic updates](https://ubuntu.com/server/docs/how-to/software/automatic-updates/)).
+
+`dfa-daily` keeps its step order and aggregates failures. `dfa-weekly` still runs
+daily first, forces the native update, previews orphan/removal candidates, then
+handles NinjaOne (policy-deferred on Ubuntu). User-only sync steps are allowed on
+Ubuntu; full bootstrap/sync and historical Arch setup migrations remain guarded.
+If daily auto-resync requests full Ubuntu setup, that failure stays in its summary.
+Arch bootstrap/sync now preserve shared update/setup failures in their exit status.
+
+Commands/config: `dfa-remove-orphans`/`orphans` now preview; `--remove` requires
+a terminal and typing `remove`, followed by the native transaction prompt.
+`--yes`/`--force` alone cannot remove packages; `--dry-run` always previews.
+Arch uses native recursive removal planning; Ubuntu uses APT autoremove simulation
+and retains config files during cleanup. Review managed packages before approval.
+The [APT manual](https://manpages.ubuntu.com/manpages/resolute/man8/apt-get.8.html)
+documents holds, `--no-remove`, and simulation; the [Arch hooks manual](https://man.archlinux.org/man/alpm-hooks.5.en)
+documents the temporary removal-blocking hook used for unattended updates.
+
+Successful system updates atomically stamp `.last_system_upgrade_arch` or
+`.last_system_upgrade_ubuntu` under `~/.config/dotfiles-arch`. Existing Arch stamps
+are read in place until first success and retained afterward; no schema bump,
+command rename, or bootstrap preference change is required. Each manager/query/scan
+failure returns nonzero before stamping; policy deferrals remain visible.
+
+Validation: `python3 tests/test_maintenance_decisions.py` checks supplied distro,
+timestamp, and removal-approval facts with temporary state and forbidden-command
+guards. It executes only read-only library decisions. Bash syntax/ShellCheck and
+static inspection cover dispatch, update failures/stamps, AUR dependencies, and
+daily/weekly aggregate status. Actual pacman/yay/APT queries, transactions,
+hook forwarding/execution, sudo, removals, held/deferred updates, concurrency with
+security timers, NinjaOne, and full workstation behavior remain **unverified**.
+No OS-changing workflows, networked tests, services, GNOME/driver changes, or VMs
+are run for validation.
 
 ## Fonts — `setup-fonts.sh`
 

@@ -38,7 +38,7 @@ aur_fetch_pkgbuild() {
 aur_scan_dir() {
   local dir="$1"
   local label="${2:-$dir}"
-  local hits=""
+  local hits="" rc
   local files=()
 
   if [[ ! -d "$dir" ]]; then
@@ -52,18 +52,32 @@ aur_scan_dir() {
     \) -print0 2>/dev/null
   )
 
-  # No scannable files — nothing to match (fetch already succeeded).
+  # A successful fetch must leave scannable sources.
   if [[ ${#files[@]} -eq 0 ]]; then
-    return 0
+    print_error_message "AUR scan: no scannable sources in $label (fail closed)"
+    return 1
   fi
 
   if command -v rg &>/dev/null; then
     # rg exits 1 when no matches; that is clean, not a scanner failure.
-    hits="$(rg -n -i -e "$(aur_ioc_regex)" -- "${files[@]}" 2>/dev/null || true)"
+    if hits="$(rg -n -i -e "$(aur_ioc_regex)" -- "${files[@]}")"; then
+      rc=0
+    else
+      rc=$?
+    fi
   elif command -v grep &>/dev/null; then
-    hits="$(grep -n -i -E "$(aur_ioc_regex)" -- "${files[@]}" 2>/dev/null || true)"
+    if hits="$(grep -n -i -E "$(aur_ioc_regex)" -- "${files[@]}")"; then
+      rc=0
+    else
+      rc=$?
+    fi
   else
     print_error_message "AUR scan: need rg or grep to scan $label (fail closed)"
+    return 1
+  fi
+
+  if [[ "$rc" -gt 1 ]]; then
+    print_error_message "AUR scanner failed for $label (exit $rc; fail closed)"
     return 1
   fi
 
@@ -97,7 +111,10 @@ aur_scan_package() {
 aur_srcinfo_deps() {
   local dir="$1"
   local srcinfo="$dir/.SRCINFO"
-  [[ -f "$srcinfo" ]] || return 0
+  [[ -r "$srcinfo" ]] || {
+    print_error_message "AUR dependency metadata missing: $srcinfo" >&2
+    return 1
+  }
   # Matches: depends = foo, depends = foo>=1, etc.
   awk '
     /^[[:space:]]*(depends|makedepends|checkdepends)[[:space:]]*=/ {
@@ -128,7 +145,7 @@ aur_scan_package_tree() {
   _aur_scan_tree_rec() {
     local pkg="$1"
     local depth="$2"
-    local tmp dep deps
+    local tmp dep deps dependency_names
 
     if [[ -n "${visited[$pkg]:-}" ]]; then
       return 0
@@ -156,7 +173,11 @@ aur_scan_package_tree() {
       return 1
     fi
 
-    mapfile -t deps < <(aur_srcinfo_deps "$tmp")
+    if ! dependency_names="$(aur_srcinfo_deps "$tmp")"; then
+      rm -rf "$tmp"
+      return 1
+    fi
+    mapfile -t deps <<<"$dependency_names"
     rm -rf "$tmp"
 
     for dep in "${deps[@]}"; do
@@ -175,12 +196,19 @@ aur_scan_package_tree() {
 
 # Scan every package that yay would upgrade from the AUR (yay -Qua), including AUR deps.
 aur_scan_pending_upgrades() {
-  local pkg
+  local pkg output rc
   local pending=()
   if ! command -v yay &>/dev/null; then
-    return 0
+    print_error_message "AUR scan requires yay"
+    return 1
   fi
-  mapfile -t pending < <(yay -Qua 2>/dev/null | awk '{print $1}' || true)
+  if output="$(yay -Qua)"; then
+    mapfile -t pending < <(printf '%s\n' "$output" | awk 'NF {print $1}')
+  else
+    rc=$?
+    print_error_message "Cannot query pending AUR upgrades (yay exit $rc)"
+    return "$rc"
+  fi
   if [[ ${#pending[@]} -eq 0 ]]; then
     print_info_message "No pending AUR upgrades to scan"
     return 0
