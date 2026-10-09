@@ -3,7 +3,9 @@ name: dark-factory-supervisor
 description: Reconcile a bounded dark-factory wake and coordinate eligible authorized executor work through an accepted runner, preserving approval and user-trial pauses.
 ---
 
-Read installed `dark-factory` references or
+Find `dark-factory` by its catalog path or `<skills-root>/dark-factory/SKILL.md`
+in the flat installed skill root. Read that leaf folder's references; verified
+source-checkout fallbacks are
 [contracts](../dark-factory/references/contracts.md) and
 [adapters](../dark-factory/references/adapters.md). Use its control CLI for the same
 admission/ownership/budget rules as direct execution; do not duplicate that logic.

@@ -3,8 +3,9 @@ name: setup-dark-factory
 description: Establish or reconcile a project's dark-factory council, guidance, tracker convention, and proposed authority. Use when configuring a project for bounded autonomous delivery.
 ---
 
-Read the installed `dark-factory` skill's `references/contracts.md` and
-`references/adapters.md`; source fallbacks are
+Find `dark-factory` by its catalog path or `<skills-root>/dark-factory/SKILL.md`
+in the flat installed skill root. Read that leaf folder's `references/contracts.md`
+and `references/adapters.md`; verified source-checkout fallbacks are
 [contracts](../dark-factory/references/contracts.md) and
 [adapters](../dark-factory/references/adapters.md). Resolve dependencies as specified
 there. Missing records or capabilities remain explicit gaps.

@@ -3,7 +3,9 @@ name: dark-factory-retro
 description: Analyze a specified dark-factory run and propose evidence-backed improvements, with private drafts and separately authorized source-scoped publication.
 ---
 
-Load installed `dark-factory` references or
+Find `dark-factory` by its catalog path or `<skills-root>/dark-factory/SKILL.md`
+in the flat installed skill root. Load that leaf folder's references; verified
+source-checkout fallbacks are
 [contracts](../dark-factory/references/contracts.md) and
 [privacy/publication](../dark-factory/references/retro.md). Resolve installed `retro`
 and `writing-for-agents` through the adapter contract. Compose their analysis

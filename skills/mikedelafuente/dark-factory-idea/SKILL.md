@@ -3,7 +3,9 @@ name: dark-factory-idea
 description: Refine an idea or prototype change into a bounded versioned spec and ticket graph, then await human idea approval. Use within an accepted dark-factory project.
 ---
 
-Load installed `dark-factory`'s references, or
+Find `dark-factory` by its catalog path or `<skills-root>/dark-factory/SKILL.md`
+in the flat installed skill root. Load that leaf folder's references; verified
+source-checkout fallbacks are
 [contracts](../dark-factory/references/contracts.md) and
 [adapters](../dark-factory/references/adapters.md). Read accepted charter, council,
 guidance, ADRs and authority; validate their identities. Missing, conflicting or

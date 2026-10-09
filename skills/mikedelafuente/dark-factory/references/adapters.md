@@ -2,17 +2,29 @@
 
 ## Skill resolution and composition
 
-Resolve an exposed installed name first with the harness skill tool. If absent,
-look for exact `SKILL.md` in project `.agents/skills`, configured harness skill paths
-and the source fallback below. Follow supporting resources relative to the resolved
-skill. Missing dependencies/capabilities become scoped gaps, never invented tools.
+Installed skills are flat: `<skills-root>/<name>/SKILL.md`. Author/category folders
+exist only in the source repository. Resolve an exposed skill name with the harness
+skill tool, or read its catalog-provided `SKILL.md` path when no tool exists.
+For an incomplete catalog, check project `.agents/skills` and configured harness
+roots by basename. Codex's DFA target is `${CODEX_HOME:-$HOME/.codex}/skills`;
+honor any other root reported by the catalog instead of assuming this default.
 
-| Installed name | Relative source fallback from dark-factory |
-|---|---|
-| setup-dark-factory, dark-factory-idea, dark-factory-retro, dark-factory-supervisor | `../<name>/SKILL.md` |
-| agent-council, council-handoff, advising, advise-me, review-changes, adversarial-code-review | `../<name>/SKILL.md` |
-| implement-spec, implement, tdd, research, to-spec, to-tickets, retro | `../../mattpocock/engineering/<name>/SKILL.md` |
-| grill-me, grilling, writing-for-agents | `../../mattpocock/productivity/<name>/SKILL.md` |
+Open supporting resources inside the selected leaf folder: for example,
+`<skills-root>/dark-factory/references/contracts.md`. Keep that installed root when
+looking up sibling skills; resolving a leaf symlink does not make its source author
+directory the installed root. Both flat copies and flat symlinks are supported.
+
+Use grouped source fallbacks only after identifying the actual source checkout
+from the selected skill's provenance or resolved marker. The paths below are
+relative to that checkout, never to an installed skill folder. Missing dependencies
+or unverifiable source remain scoped gaps; do not invent another repository path.
+
+| Skill name | Flat installed path | Verified source fallback |
+|---|---|---|
+| setup-dark-factory, dark-factory-idea, dark-factory, dark-factory-retro, dark-factory-supervisor | `<name>/SKILL.md` | `skills/mikedelafuente/<name>/SKILL.md` |
+| agent-council, council-handoff, advising, advise-me, review-changes, adversarial-code-review | `<name>/SKILL.md` | `skills/mikedelafuente/<name>/SKILL.md` |
+| implement-spec, implement, tdd, research, to-spec, to-tickets, retro | `<name>/SKILL.md` | `skills/mattpocock/engineering/<name>/SKILL.md` |
+| grill-me, grilling, writing-for-agents | `<name>/SKILL.md` | `skills/mattpocock/productivity/<name>/SKILL.md` |
 
 Load only the current phase's dependencies. Keep pinned imports unchanged.
 Interactive/direct upstream invocation retains its own gates. In an explicitly
