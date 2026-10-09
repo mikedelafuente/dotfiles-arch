@@ -279,6 +279,7 @@ aliases() {
         echo "╚══════════════════════════════════════════════════════════════════════════════╝"
         echo ""
         echo "  dfa: grouped command picker (Routine, AI, Projects, Dotfiles, System)"
+        echo "  dfa deploy: update/deploy/source/capture/override/rebind/rollback/recover installed copies"
         echo "  dfa sync-sources: add/remove AI sources, reorder priority, apply changes"
         echo "  Agent skills: /grill-me, /grill-with-docs (interview without council)"
         echo "  Agent skills: /advise-me, /advise-with-docs (automatic agent-council recommendations)"

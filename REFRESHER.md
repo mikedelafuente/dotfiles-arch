@@ -1,5 +1,17 @@
 # Refresher
 
+## Installed DFA copies
+
+Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
+`~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
+obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
+live files and return failure. `dfa-deploy source` identifies the shared edit destination.
+Use `dfa-deploy capture <artifact>` for one selected source improvement,
+`dfa-deploy override <artifact> <file>` for a persistent local override,
+`dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
+for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
+
+
 You have been away. This is the short version. Full detail: [README.md](README.md) · install deep dive: [NOTES.md](NOTES.md).
 
 Arch / Ubuntu 26.04 editor setup: `bash scripts/setup-node.sh`, then

@@ -17,7 +17,7 @@ Codex. Profiles are **additive multi-select** (`work`, `personal`, `devcontainer
 - Use `native_package_installed` / `ensure_native_pkgs` for native packages and explicit app recipes for exceptions. Sources/update owners: [PACKAGES.md](../../PACKAGES.md).
 - Required failures reach final status; successful update stamps follow all requested update owners. Cleanup previews until separately authorized with a terminal and typing `remove`; `--yes` is insufficient.
 - Preserve foreign config files/links, driver flavor, managed agents, holds/pins and automatic security updates.
-- Dotfiles are symlinks: `home/` → `$HOME`, `config/` → `$HOME/.config`.
+- Dotfiles link through installed `~/.local/share/workstation/config` generations. Source edits use verified `dfa-deploy source`; deployment/migration/recovery policy: [docs/deployment.md](../../docs/deployment.md).
 
 ## Paths and config
 

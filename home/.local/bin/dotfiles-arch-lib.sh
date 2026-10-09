@@ -2,32 +2,29 @@
 # Shared helpers for ~/.local/bin wrappers (dfa-sync-dotfiles, dfa-update-system, dev, zed-agent-init).
 # Sourced by those scripts — not meant to be executed directly.
 
-# Resolve the dotfiles-arch repo root. Prefers symlink walk-up, then DOTFILES_ARCH, then candidates.
+# Resolve installed runtime dependencies first; pin a running helper to its generation.
+# Source acquisition/editing uses dfa-deploy source and recorded provenance instead.
+export PYTHONDONTWRITEBYTECODE=1
 resolve_dotfiles_arch() {
-  local d candidates=() self
-
-  # If this file (or the caller) is a symlink into the repo, walk up from the real path first
-  self="$(readlink -f "${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}" 2>/dev/null || realpath "${BASH_SOURCE[1]:-${BASH_SOURCE[0]}}" 2>/dev/null || echo "")"
+  local self runtime
+  self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
   if [[ -n "$self" ]]; then
-    candidates+=("$(cd "$(dirname "$self")/../../.." && pwd)")
-  fi
-
-  if [[ -n "${DOTFILES_ARCH:-}" ]]; then
-    candidates+=("$DOTFILES_ARCH")
-  fi
-  candidates+=(
-    "$HOME/repos/dotfiles-arch"
-    "$HOME/repos/mikedelafuente/dotfiles-arch"
-    "$HOME/dotfiles-arch"
-    "$HOME/src/dotfiles-arch"
-  )
-
-  for d in "${candidates[@]}"; do
-    if [[ -f "$d/scripts/sync.sh" ]]; then
-      echo "$d"
+    runtime="$(cd -- "$(dirname -- "$self")/../../.." && pwd)"
+    if [[ -f "$runtime/scripts/sync.sh" ]]; then
+      printf '%s\n' "$runtime"
       return 0
     fi
-  done
+  fi
+  runtime="${USER_HOME_DIR:-$HOME}/.local/share/workstation/config"
+  if [[ -f "$runtime/scripts/sync.sh" ]]; then
+    readlink -f "$runtime"
+    return 0
+  fi
+  if [[ -n "${DOTFILES_ARCH:-}" && -f "$DOTFILES_ARCH/scripts/sync.sh" ]]; then
+    printf '%s\n' "$DOTFILES_ARCH"
+    return 0
+  fi
+  printf 'DFA runtime unavailable; deploy from an explicit source checkout with scripts/link-dotfiles.sh\n' >&2
   return 1
 }
 

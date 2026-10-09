@@ -14,7 +14,7 @@
 
 set -uo pipefail
 
-_WEEKLY_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+_WEEKLY_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "/proc/$$/fd/255" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
 if [[ -r "$_WEEKLY_LIB_DIR/dotfiles-arch-lib.sh" ]]; then
   # shellcheck source=/dev/null
   source "$_WEEKLY_LIB_DIR/dotfiles-arch-lib.sh"
@@ -62,6 +62,9 @@ main() {
         usage
         exit 0
         ;;
+      --dry-run)
+        exec dfa-daily --dry-run
+        ;;
     esac
   done
 
@@ -75,8 +78,8 @@ main() {
     daily_status=0
   else
     daily_status=$?
-    printf 'dfa-weekly: dfa-daily failed (exit %s) — continuing with weekly-only steps\n' "$daily_status" >&2
-    failures+=("dfa-daily")
+    printf 'dfa-weekly: dfa-daily failed (exit %s); dependent weekly steps blocked\n' "$daily_status" >&2
+    return "$daily_status"
   fi
 
   for step in "${WEEKLY_STEPS[@]}"; do

@@ -150,6 +150,10 @@ cmd_remove() {
   done
 
   if remove_sync_source_repo "$raw" "$type"; then
+    if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
+      print_info_message "$SYNC_SOURCES_HINT"
+      return 0
+    fi
     local t
     for t in "${removed_types[@]}"; do
       prune_sync_source_repo_symlinks "$normalized" "$t" \

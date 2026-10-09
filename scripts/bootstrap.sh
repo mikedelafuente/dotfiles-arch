@@ -220,6 +220,16 @@ fi
 
 print_info_message "Running bootstrap with profiles: $(format_setup_profiles)"
 
+# Deployment needs the existing native Python interpreter before setup ordering.
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then
+  ensure_native_pkgs python || exit 1
+else
+  ensure_native_pkgs python3 || exit 1
+fi
+# Preserve/migrate configuration before setup scripts can create checkout links.
+bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)" || exit 1
+DF_SCRIPT_DIR="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")/scripts"
+export DF_SCRIPT_DIR
 run_profile_setup_scripts "true" || BOOTSTRAP_STATUS=1
 
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)" || BOOTSTRAP_STATUS=1

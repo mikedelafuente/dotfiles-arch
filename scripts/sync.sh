@@ -208,14 +208,10 @@ print_info_message "Repo: $REPO_ROOT"
 # Ensure we're up to date
 # --------------------------
 
-if [ -d "$REPO_ROOT/.git" ]; then
-  print_info_message "Fetching latest from git (fast-forward only)..."
-  if git -C "$REPO_ROOT" pull --ff-only; then
-    print_success_message "Repo updated"
-  else
-    SYNC_STATUS=1
-    print_warning_message "git pull --ff-only failed (local commits/diverged?). Continuing with current tree."
-  fi
+# Source acquisition is explicit and checked before package/setup mutations.
+if [[ -e "$REPO_ROOT/.git" ]]; then
+  python3 "$DF_SCRIPT_DIR/deployment.py" update --source "$REPO_ROOT" || exit 1
+  exec bash "$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")/scripts/sync.sh" "$@"
 fi
 
 # --------------------------

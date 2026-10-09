@@ -400,10 +400,10 @@ if [[ -f "$REBIND_WINDOW_PUSH" ]]; then
         exit 1
     }
     mkdir -p "$USER_HOME_DIR/.local/bin"
-    ln -sfnT "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-window-push"
+    link_core_cli_config "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-window-push" || exit 1
     # Compat name from earlier revisions, only when absent or already ours.
     if core_cli_link_allowed "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves"; then
-        ln -sfnT "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves"
+        link_core_cli_config "$REBIND_WINDOW_PUSH" "$USER_HOME_DIR/.local/bin/rebind-monitor-moves" || exit 1
     fi
     bash "$REBIND_WINDOW_PUSH"
     # Restart watcher so sync always picks up script changes (avoid stale --watch).

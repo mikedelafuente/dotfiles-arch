@@ -34,8 +34,9 @@ fi
 
 ## Helpers in `home/.local/bin/`
 
-Resolve the repo through `dotfiles-arch-lib.sh` (`resolve_dotfiles_arch`) before sourcing
+Resolve the installed generation through `dotfiles-arch-lib.sh` (`resolve_dotfiles_arch`) before sourcing
 anything from `scripts/` — `dotheader.sh` is not next to the installed symlink.
+Source-only operations use deployment provenance; never search clone basenames or edit installed copies as source.
 
 ## Before finishing
 

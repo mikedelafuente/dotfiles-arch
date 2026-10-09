@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
+_LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "/proc/$$/fd/255" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" &>/dev/null && pwd)"
 # shellcheck source=/dev/null
 source "$_LIB_DIR/dotfiles-arch-lib.sh"
 

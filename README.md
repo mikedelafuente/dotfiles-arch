@@ -1,5 +1,17 @@
 # dotfiles-arch
 
+## Installed DFA copies
+
+Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
+`~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
+obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
+live files and return failure. `dfa-deploy source` identifies the shared edit destination.
+Use `dfa-deploy capture <artifact>` for one selected source improvement,
+`dfa-deploy override <artifact> <file>` for a persistent local override,
+`dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
+for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
+
+
 Rolling Arch Linux and Ubuntu 26.04 LTS workstation setup for **GNOME (Wayland)**: shared additive profiles, dotfiles, bootstrap/sync, and daily/weekly maintenance on x86_64/amd64.
 
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).

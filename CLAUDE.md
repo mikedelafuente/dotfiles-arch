@@ -4,6 +4,19 @@ This file provides guidance to AI agents working with code in this repository. `
 is a symlink to this file so Claude Code, Codex, Pi, Cursor, and other agents share one
 source of truth.
 
+## Installed deployment boundary (schema v5)
+
+For deployment, migration, source moves, local overrides, capture, rollback or daily
+ordering, read [docs/deployment.md](docs/deployment.md). Managed runtime links target
+`~/.local/share/workstation/config`, backed by complete installed generations. Use
+`dfa-deploy source` to locate and verify the actual shared edit checkout before
+editing shared configuration. If source/provenance is unavailable, stop shared
+source edits and restore/rebind the checkout. Intentional local differences use
+`dfa-deploy override`; selected source improvements use `dfa-deploy capture`.
+Normal deployment preserves local edits with deterministic script-only merges and
+blocks the entire generation on conflict. Run verification with temporary fixtures;
+implementation does not authorize current-workstation migration/deployment.
+
 ## Before you change anything
 
 - Architecture and script behavior: this file
@@ -216,7 +229,7 @@ Shared: Kitty, tmux, Claude Code, Codex, opencode, pi, Ollama, Neovim, languages
 ## Key design decisions
 
 1. Modular setup scripts for independent re-runs
-2. Symlink-based dotfiles (edit in repo, re-link / sync)
+2. Stable installed generations (shared edits in the verified source; local edits/overrides preserved)
 3. Rate-limited native/app updates on bootstrap (1-day cooldown); sync always upgrades
 4. Portable `$HOME` / `$USER_HOME_DIR` paths for multi-username machines
 5. GNOME-first Wayland; compatible Pop Shell, accepted Pop-only gap above GNOME 50
