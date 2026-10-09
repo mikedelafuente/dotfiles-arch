@@ -9,6 +9,7 @@ editor_tool_recipe() {
     minikube) echo 'minikube 1.0.0 kubernetes/minikube' ;;
     kubectl) echo 'kubectl 1.0.0 dl.k8s.io' ;;
     k9s) echo 'k9s 0.1.0 derailed/k9s' ;;
+    ollama) echo 'ollama 0.40.0 ollama/ollama' ;;
     *) return 1 ;;
   esac
 }
@@ -50,6 +51,8 @@ editor_tool_version() {
     lazydocker) pattern='^Version: ([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
     minikube) pattern='^v([0-9]+\.[0-9]+\.[0-9]+)$' ;;
     k9s) pattern='^Version[[:space:]]+v?([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])' ;;
+    ollama) pattern='^Warning: client version is ([0-9]+\.[0-9]+\.[0-9]+)($|[[:space:]])'
+      output="$(sed -n '/^Warning: client version is /p' <<<"$output")" ;;
     kubectl)
       output="$(jq -er '.clientVersion.gitVersion' <<<"$output")" || return 1
       pattern='^v([0-9]+\.[0-9]+\.[0-9]+)$' ;;
@@ -69,6 +72,8 @@ editor_installed_version() {
     tmux) output="$("$binary" -V)" || return 1 ;;
     minikube|k9s) output="$("$binary" version --short)" || return 1 ;;
     kubectl) output="$("$binary" version --client --output=json)" || return 1 ;;
+    # Never validate the running server version instead of the staged client.
+    ollama) output="$(OLLAMA_HOST=http://127.0.0.1:0 "$binary" --version)" || return 1 ;;
     *) output="$("$binary" --version)" || return 1 ;;
   esac
   editor_tool_version "$app" "$output"
@@ -89,6 +94,7 @@ editor_release_asset() {
     lazydocker) asset="lazydocker_${version}_Linux_x86_64.tar.gz" ;;
     minikube) asset=minikube-linux-amd64 ;;
     k9s) asset=k9s_Linux_amd64.tar.gz ;;
+    ollama) asset=ollama-linux-amd64.tar.zst ;;
     *) return 1 ;;
   esac
   fields="$(jq -er --arg name "$asset" '
@@ -269,6 +275,10 @@ install_editor_release() (
   trap 'rm -rf "$stage"' EXIT
   curl --proto '=https' --tlsv1.2 -fsSL "$url" -o "$stage/artifact" || return 1
   printf '%s  %s\n' "$digest" "$stage/artifact" | sha256sum -c - || return 1
+  if [[ "$app" == ollama ]]; then
+    zstd -d "$stage/artifact" -o "$stage/ollama.tar" || return 1
+    mv "$stage/ollama.tar" "$stage/artifact" || return 1
+  fi
   mkdir -p "$stage/install/$version/bin" || return 1
   # Python's data filter rejects archive traversal and escaping links. Extract only
   # the named Neovim runtime tree, or the one regular lazydocker binary.
@@ -287,8 +297,20 @@ elif app == "tree-sitter":
     with gzip.open(artifact, "rb") as source, (dest / "bin/tree-sitter").open("wb") as out:
         shutil.copyfileobj(source, out)
 else:
-    with tarfile.open(artifact, "r:gz") as archive:
-        if app == "nvim":
+    with tarfile.open(artifact, "r:" if app == "ollama" else "r:gz") as archive:
+        if app == "ollama":
+            members = archive.getmembers()
+            for member in members:
+                name = member.name.removeprefix("./").rstrip("/")
+                if ".." in member.name.split("/") or (name not in ("bin", "bin/ollama", "lib", "lib/ollama") and not name.startswith("lib/ollama/")):
+                    raise ValueError("Unexpected Ollama archive path")
+            archive.extractall(dest, members=members, filter="data")
+            if not (dest / "bin/ollama").is_file() or (dest / "bin/ollama").is_symlink():
+                raise ValueError("Expected regular Ollama client")
+            for backend in ("cuda", "vulkan"):
+                if not any(path.is_file() for path in (dest / "lib/ollama").rglob(f"libggml-{backend}.so*")):
+                    raise ValueError(f"Missing bundled Ollama {backend} runtime")
+        elif app == "nvim":
             members = archive.getmembers()
             if any(m.name.split("/")[0] != "nvim-linux-x86_64" for m in members):
                 raise ValueError("Unexpected Neovim archive layout")

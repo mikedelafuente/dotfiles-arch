@@ -159,25 +159,21 @@ if ! load_bootstrap_config; then
 fi
 MACHINE_TYPE="$GNOME_MACHINE_TYPE"
 
-DEFAULT_BROWSER_DESKTOP="firefox.desktop"
-BROWSER_COMMAND="firefox"
-if has_setup_profile work || [[ "${SETUP_PROFILE:-}" == "work" ]]; then
-  DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
-  if command -v google-chrome-stable &>/dev/null; then
-    BROWSER_COMMAND="google-chrome-stable"
-  else
-    BROWSER_COMMAND="google-chrome"
-  fi
-elif has_setup_profile personal || [[ "${SETUP_PROFILE:-}" == "personal" ]]; then
-  DEFAULT_BROWSER_DESKTOP="firefox.desktop"
-  BROWSER_COMMAND="firefox"
-else
-  # Fallback when no browser profile: prefer whatever is installed
-  if command -v google-chrome-stable &>/dev/null || command -v google-chrome &>/dev/null; then
-    DEFAULT_BROWSER_DESKTOP="google-chrome.desktop"
-    BROWSER_COMMAND="$(command -v google-chrome-stable 2>/dev/null || command -v google-chrome)"
-  fi
+CHROME_COMMAND=''
+if command -v google-chrome-stable &>/dev/null; then CHROME_COMMAND=google-chrome-stable
+elif command -v google-chrome &>/dev/null; then CHROME_COMMAND=google-chrome; fi
+FIREFOX_DESKTOP=''
+if ! has_setup_profile work && { has_setup_profile personal || [[ -z "$CHROME_COMMAND" ]]; }; then
+    FIREFOX_DESKTOP="$(personal_app_desktop firefox)" || {
+        print_error_message "Selected Firefox source/desktop unavailable or conflicting; preserved"
+        exit 1
+    }
 fi
+BROWSER_SELECTION="$(personal_browser_selection "${SETUP_PROFILES:-${SETUP_PROFILE:-}}" "$CHROME_COMMAND" "$FIREFOX_DESKTOP")" || {
+    print_error_message "Selected browser launcher is unavailable; GNOME browser shortcut cannot be configured"
+    exit 1
+}
+read -r DEFAULT_BROWSER_DESKTOP BROWSER_COMMAND <<<"$BROWSER_SELECTION"
 
 print_info_message "Setting default browser to $DEFAULT_BROWSER_DESKTOP ($BROWSER_COMMAND)"
 xdg-settings set default-web-browser "$DEFAULT_BROWSER_DESKTOP" 2>/dev/null \

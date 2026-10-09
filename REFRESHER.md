@@ -172,7 +172,7 @@ bash scripts/sync.sh --cleanup           # drop old herdr/hypr/ghostty junk
 | Profile | Extra | Browser |
 |---------|-------|---------|
 | **work** | Zoom, Slack, Chrome | Chrome |
-| **personal** | Steam, Discord, Firefox, Mullvad | Firefox |
+| **personal** | Steam, Discord, Firefox, Mullvad (Arch / Ubuntu 26.04) | Firefox; selected Snap/DEB launcher, work still wins |
 
 Saved in `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`, along with
 `MACHINE_TYPE=laptop|desktop`, which drives the power profile, lid behavior
@@ -189,6 +189,23 @@ command -v tmux kitty nvim claude codex ollama
 ```
 
 Shared highlights: Kitty, tmux, Neovim, Claude Code, Codex, Ollama, Docker, lazygit, Node (nvm), Rust, Go, PHP, Ruby, Spotify, Obsidian, TablePlus, Postman.
+
+GPU-only Ollama: `bash scripts/setup-ollama.sh` on Arch / Ubuntu 26.04; working
+CUDA or hardware Vulkan 1.2+ required. Ubuntu archives use a user service
+(`systemctl --user status ollama`, `journalctl --user -u ollama`); native packages
+retain their system service. `dfa-update-system` refreshes managed archives and
+reports service failures. NVIDIA setup requires explicit saved opt-in or
+`bash scripts/setup-nvidia.sh --install`; `--yes` does not opt in. Existing
+drivers are never replaced; reboot/MOK activation can remain pending. See
+[GPU sources and requirements](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
+Desktop utility setup also supports Ubuntu 26.04: `setup-tableplus.sh`,
+`setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh`, `setup-moonlander.sh`.
+`dfa-update-system` maintains vendor APT, Obsidian's separate Electron installer,
+and the verified Keymapp pin; Snap and writable Postman archive self-updates retain
+their owners/settings. A changed Keymapp archive requires a reviewed pin update.
+After first ZSA setup, log out/in and replug the keyboard. Runtime remains unverified;
+see [sources and limits](PACKAGES.md#desktop-utility-sources-and-update-owners).
 
 Language-only setup on Arch / Ubuntu 26.04: choose from
 `scripts/setup-{python,rust,golang,php,ruby}.sh` and run with Bash

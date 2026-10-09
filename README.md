@@ -5,7 +5,7 @@ Arch Linux workstation setup for a **GNOME (Wayland)** development machine: Kitt
 This README is the starting point. Detailed install notes live in [NOTES.md](NOTES.md). After a long break, use [REFRESHER.md](REFRESHER.md).
 
 Ubuntu support is incremental: **standalone Kitty, shared shell/core CLI, Neovim/tmux, agent harness setup, containers/devcontainer host prerequisites, work apps, and package maintenance**
-are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
+and shared desktop utilities are available on Ubuntu 26.04, on x86_64/amd64. From the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config
 entries cause a failure before installation; resolve them explicitly and rerun.
@@ -33,6 +33,17 @@ sources, holds, and user settings are retained; unknown/duplicate ownership fail
 The shared additive `work` selection and Chrome browser identity stay unchanged;
 full Ubuntu profile/GNOME orchestration remains guarded. See
 [work app sources and runtime limits](PACKAGES.md#work-app-sources-and-update-owners).
+
+Shared desktop utilities: run the existing `scripts/setup-tableplus.sh`,
+`setup-postman.sh`, `setup-spotify.sh`, `setup-obsidian.sh` or `setup-moonlander.sh`.
+Ubuntu uses scoped vendor APT for TablePlus/Spotify, an official Postman Snap,
+a verified Obsidian installer DEB and a reviewed Keymapp archive pin. Existing
+official Snaps and writable user Postman archives retain their update owners.
+`dfa-update-system` covers the installer/archive owners; Obsidian's in-app updater
+cannot refresh Electron. Changed Keymapp bytes require a reviewed pin update.
+ZSA permissions require logout/login and keyboard replug after first setup;
+conflicting user udev files are preserved. See
+[desktop utility sources, update owners and unverified runtime](PACKAGES.md#desktop-utility-sources-and-update-owners).
 
 All entrypoints using the common header detect `/etc/os-release` and architecture
 before mutation. Unconverted entrypoints, including bootstrap, sync (even
@@ -254,7 +265,7 @@ Profiles are **additive** — select any combination on one machine (e.g. work +
 | Profile | Extra setup | Default browser (Super+B) |
 |---------|-------------|---------------------------|
 | **work** | Zoom, Slack, Chrome | Chrome (when work is selected) |
-| **personal** | Steam, Discord, Firefox, Mullvad VPN | Firefox (when personal is selected and work is not) |
+| **personal** | Steam, Discord, Firefox, Mullvad VPN (Arch / Ubuntu 26.04 sources in `PACKAGES.md`) | Firefox (when personal is selected and work is not; selected Snap/DEB desktop identity) |
 | **devcontainer** | just, mkcert, OpenVPN 3, DNS for `~test`, inotify watches | — (no browser change) |
 
 Everything else in the stack is shared (including Docker and `gh` used by the devcontainer host setup, and all three agent CLIs — Claude Code, Codex, and opencode).
@@ -332,7 +343,21 @@ prints `wpctl status`. Audio/suspend/wake behavior remains unverified.
 
 ### NVIDIA
 
-Only when `INSTALL_NVIDIA=true`. Prefers **`nvidia-open-dkms`**; does not swap an already-installed driver flavor. See [NOTES.md](NOTES.md).
+Only an explicit saved `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`
+permits a new installation. `--yes` keeps the saved choice; hardware detection
+does not opt in. Existing native, manual and work-managed stacks are retained.
+New Arch installs use `nvidia-open-dkms` (Turing+); Ubuntu 26.04 uses its native
+hardware recommendation and prefers signed modules for the running kernel.
+Reboot/Secure Boot/MOK activation can remain pending; setup does not replace,
+unload or force-load drivers. See [GPU sources and update owners](PACKAGES.md#gpu-sources-capability-gates-and-update-owners).
+
+`bash scripts/setup-ollama.sh` requires working CUDA or a physical Vulkan 1.2+
+GPU. Arch uses native GPU packages. Ubuntu prefers a compatible native package
+if available, otherwise a verified official archive with a user service;
+`dfa-update-system` owns archive refreshes. Existing source/service conflicts
+remain untouched. No models are downloaded by setup, and GPU inference/runtime
+is unverified. Archive service status/logs: `systemctl --user status ollama` /
+`journalctl --user -u ollama`; native installs use the system service.
 
 ---
 

@@ -476,7 +476,7 @@ validation restriction. Only direct Bash syntax/ShellCheck checks were executed.
 | Codex CLI (user-level npm, `@openai/codex`) | `setup-codex.sh` | OpenAI Codex CLI | `codex` |
 | `chatgpt-desktop` (AUR) | `setup-codex.sh` | ChatGPT desktop app (repackaged official binary) | `chatgpt` |
 | `opencode` | `setup-opencode.sh` | AI coding agent CLI | `opencode` |
-| `ollama-cuda` / `ollama-vulkan` (GPU-gated) | `setup-ollama.sh` | Local model server — `ollama-cuda` on a working NVIDIA driver, else `ollama-vulkan` on a detected Vulkan ICD; skipped entirely (no CPU-only install) if neither is present | `ollama` |
+| Arch `ollama-cuda` / `ollama-vulkan`; Ubuntu compatible native `ollama` or verified upstream archive (GPU-gated) | `setup-ollama.sh` | Local model server; working CUDA preferred, otherwise a physical Vulkan 1.2+ GPU. No CPU-only installation; existing flavors preserved. Sources/services/update owners below | `ollama` |
 
 ### Shared language sources and update owners
 
@@ -597,15 +597,99 @@ No setup/update/service workflows, networked tests or VM provisioning are run.
 
 | Package | Script | Purpose |
 |---------|--------|---------|
-| `tableplus` (AUR) | `setup-tableplus.sh` | Database GUI |
-| `postman-bin` (AUR) | `setup-postman.sh` | API client |
-| `spotify` (AUR) | `setup-spotify.sh` | Music |
-| `obsidian` (AUR) | `setup-obsidian.sh` | Notes |
+| Arch `tableplus` (AUR), Ubuntu vendor `tableplus` | `setup-tableplus.sh` | Database GUI |
+| Arch `postman-bin` (AUR), Ubuntu official Postman Snap or existing user archive | `setup-postman.sh` | API client |
+| Arch `spotify` (AUR), Ubuntu vendor `spotify-client` or existing official Snap | `setup-spotify.sh` | Music |
+| Arch native `obsidian` (retain existing `obsidian-bin` AUR), Ubuntu official `obsidian` DEB | `setup-obsidian.sh` | Notes; installer refresh includes Electron |
 | `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
 | `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
 | `zed` | `setup-zed.sh` | Code editor |
 | `stably-orca-bin` (AUR) | `setup-orca.sh` | [Orca](https://www.onorca.dev/), an IDE for parallel coding agents; launch with `stably-orca` (the `orca` package is the GNOME screen reader) |
-| `zsa-keymapp-bin` (AUR) | `setup-moonlander.sh` | ZSA Moonlander keyboard flashing |
+| Arch `zsa-keymapp-bin` (AUR), Ubuntu verified pinned Keymapp archive | `setup-moonlander.sh` | ZSA keyboard live layout/firmware flashing; GTK3, WebKitGTK 4.1 and libusb |
+
+### Desktop utility sources and update owners
+
+Implemented for [#152](https://github.com/mikedelafuente/dotfiles-arch/issues/152).
+The existing shared profile runner selects all five apps on both hosts; standalone
+setup paths are enabled on Ubuntu 26.04 amd64. User preferences, Obsidian vaults,
+database credentials, Postman collections and login state remain user-owned.
+
+| App / command | Arch source / update owner | Ubuntu source / update owner |
+|---------------|----------------------------|-------------------------------|
+| TablePlus / `tableplus` | Scanned AUR `tableplus` / guarded yay | [Official Ubuntu 26 APT repository](https://tableplus.com/download/linux) / APT |
+| Postman / `postman` | Scanned AUR `postman-bin` / guarded yay | [Verified official Postman Snap](https://snapcraft.io/postman) / Snap automatic refresh; preserve known writable user archives 9.13+ / genuine in-app updater |
+| Spotify / `spotify` | Scanned AUR `spotify` / guarded yay | [Official vendor APT](https://www.spotify.com/us/download/linux/) / APT; preserve an existing official Spotify Snap / Snap automatic refresh |
+| Obsidian / `obsidian` | [Native Extra](https://archlinux.org/packages/extra/x86_64/obsidian/) / pacman; preserve existing `obsidian-bin` / guarded yay | [Official stable amd64 DEB](https://github.com/obsidianmd/obsidian-releases/releases) with GitHub SHA-256 / common maintenance installer refresh |
+| Keymapp / `keymapp` | Scanned AUR `zsa-keymapp-bin` and dependencies / guarded yay | [Official ZSA archive](https://www.zsa.io/keymapp) / reviewed version/checksum pin and common maintenance verification/refresh |
+
+Ubuntu's native catalog does not supply these five apps with the required vendor
+workflows. TablePlus uses `https://deb.tableplus.com/debian/26 tableplus main`;
+Spotify uses `https://repository.spotify.com stable non-free`. Each APT source uses
+`arch=amd64`, a repository-specific `signed-by=/usr/share/keyrings/<app>.gpg`,
+one pinned primary signing key, and a candidate-origin check. Existing compatible
+scoped sources retain their paths. Duplicate, disabled, wrong-release, globally
+trusted or unofficial sources fail without automatic migration. Vendor examples
+using `trusted.gpg.d` are deliberately narrowed to repository-scoped trust here.
+
+Primary-key fingerprints inspected on 2026-10-09:
+
+- TablePlus: `211438D2880D8D98E100B1412A17818B38772786`.
+- Spotify: `E1096BCBFF6D418796DE78515384CE82BA52C83A` (vendor key URL ends `5384CE82BA52C83A.asc`). Rotation requires reviewed pin changes.
+
+Postman's Snap is the vendor-recommended bundled-library exception; the official
+Snap ID is `fFcOtEEF4EdyYb95IUE5Isy28tICYMLf` (publisher `postman-inc`).
+Spotify's existing official Snap ID is `pOBIoZ2LrCB3rDohMxoYGnbN14EHOgD7`.
+Setup checks those asserted identities and retains existing stable channels;
+maintenance leaves Snap automatic updates and holds in control rather than using
+an explicit refresh that could override a hold. Fresh Postman installs use
+`latest/stable`. Recognized writable user Postman archives retain their
+[in-app updater](https://learning.postman.com/docs/getting-started/installation/update);
+keep updates enabled and restart to apply downloads. Disabled in-app updates
+require user action; common maintenance never rewrites app settings or claims to
+have applied an in-app update. New archive installation is not selected because
+the download lacks independently published integrity metadata; no silent fallback
+from failed Snap acquisition occurs.
+
+[Obsidian's automatic updater](https://obsidian.md/help/updates) updates the app,
+but cannot update the Electron installer runtime. `dfa-update-system` separately
+checks official stable DEB metadata, stages a SHA-256 verified amd64 artifact,
+checks package name/version/architecture, and installs only a newer installer.
+APT holds defer this refresh without overriding policy. Obsidian can show a newer
+app version than its installed package; compare **Settings → General → installer
+version** when diagnosing runtime requirements. Existing AppImages/tar archives
+with unknown installer ownership are preserved and reported as required source
+gaps, not marked current merely because in-app updates work. There is no official
+Obsidian APT repository; a standalone DEB does not update through APT alone.
+
+Keymapp's vendor publishes a mutable `keymapp-latest.tar.gz` without a published
+signature/checksum. The reviewed 1.3.7 pin
+`a87bc7083cd6461ba10e0da4b94f249a29100d712542d54498f01e947cf868fa`
+matches the [IoC-inspected AUR packaging source](https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=zsa-keymapp-bin)
+and the official downloaded archive. Only regular `keymapp`/`icon.png` members
+are extracted; the binary must identify as x86_64 ELF. The user-owned release lives
+under `USER_HOME_DIR/.local/share/dotfiles-arch/keymapp/1.3.7`, with a stable
+`current` link, executable link and separate `dfa-keymapp.desktop` launcher.
+Reviewed pin changes publish a new version and atomically switch `current`,
+retaining the previous release. Common maintenance verifies
+the vendor archive against the pin before changing a working installation. If
+the vendor changes bytes, refresh fails clearly and requires a reviewed
+version/checksum update in the recipe; no unverified "latest" replacement occurs.
+No genuine installer updater is documented, so the repository pin owns archive
+refreshes. Ubuntu dependencies are native `libusb-1.0-0`, `libgtk-3-0t64` and
+`libwebkit2gtk-4.1-0` (verified in the official Resolute catalog).
+
+`setup-moonlander.sh` installs the shared [ZSA udev permissions](https://github.com/zsa/wally/wiki/Linux-install)
+from `scripts/zsa-udev.rules`, creates/adds the real user to `plugdev`, and reloads
+rules only when first installing them. Existing files containing all required
+rules retain user additions/comments; different rules or symlinks fail for manual
+review. The vendor's device-ID-scoped flashing permissions are retained, including
+its `0666` bootloader rules. There is no global `udevadm trigger`: log out/back in
+for group changes, then replug the keyboard. Keymapp 1.2+ requires WebKitGTK 4.1.
+Wayland launch, sandbox behavior, firmware/live training, group activation and
+keyboard access remain unverified; no installer, updater, service or device action
+was executed for validation. The offline selection/source regression check is
+`tests/test_desktop_utility_decisions.py`, deliberately left unrun; validation was
+direct Bash syntax/ShellCheck and source/acquisition/udev inspection only.
 
 ## Profile extras
 
@@ -625,10 +709,10 @@ Profiles are **additive multi-select** — enable any combination on one machine
 
 | Package | Purpose | Related commands |
 |---------|---------|------------------|
-| `steam` (multilib) | Games | — |
-| `discord` (AUR) | Chat | — |
-| `firefox` | Personal browser (Super+B when personal is selected and work is not) | — |
-| `mullvad-vpn-bin` (AUR) | VPN | `mvup`, `mvdown`, `mvst` |
+| `steam` (Arch multilib) / `steam-installer` + `steam-libs-i386:i386` (Ubuntu multiverse/universe) | Games; native launcher plus Valve client updater | `steam` |
+| `discord` (Arch native; Ubuntu official DEB bootstrap) | Chat; Linux app updater retains user settings | `discord` |
+| `firefox` (Arch native; Ubuntu Mozilla Snap or retained Mozilla APT) | Personal browser (Super+B when personal is selected and work is not) | `firefox` |
+| `mullvad-vpn-bin` (Arch AUR) / `mullvad-vpn` (Ubuntu vendor APT) | VPN; account, connection and other VPNs unchanged | `mvup`, `mvdown`, `mvst` |
 
 ### devcontainer — `setup-devcontainer.sh`
 
@@ -678,6 +762,59 @@ These gaps or failed writes return nonzero instead of a completed host setup.
 | Package | Script | Purpose |
 |---------|--------|---------|
 | `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` | `setup-nvidia.sh` | NVIDIA drivers, installed only when `INSTALL_NVIDIA=true` |
+
+### GPU sources, capability gates and update owners
+
+| Component | Arch source | Ubuntu 26.04 source | Update owner / requirements |
+| --- | --- | --- | --- |
+| Optional NVIDIA | Native `nvidia-open-dkms`, `nvidia-utils`, `nvidia-settings`, `linux-headers` for a new Turing+ installation | Native `ubuntu-drivers-common` hardware recommendation; signed `linux-modules-nvidia-<branch>-<running-kernel>` preferred, Ubuntu DKMS otherwise | Native pacman/APT; saved explicit `INSTALL_NVIDIA=true` or `bash scripts/setup-nvidia.sh --install`. `--yes`, PCI detection and an unset preference do not opt in. All existing flavors, utility-only stacks, manual and work-managed installations remain untouched; no CUDA repository, purge or module loading |
+| CUDA Ollama | Native `ollama-cuda` and its `cuda` dependency | Official stable amd64 archive bundles CUDA runtime libraries; only the existing host driver is used | Ollama 0.40.0+ for the current runtime layout; native owner or verified archive refresh by `dfa-update-system` |
+| Vulkan Ollama | Native `ollama-vulkan` and `vulkan-icd-loader`; existing hardware ICD retained | Official archive bundles the Vulkan backend; host Vulkan loader/ICD remain native/vendor-owned | Same owner; Vulkan 1.2+ on a successfully enumerated discrete/integrated GPU. CPU software ICDs do not qualify |
+| GPU probes | Native `python`, `vulkan-tools` | Native `python3`, `vulkan-tools` | Native updater. NVIDIA readiness needs a supported compute capability/driver and successful CUDA initialization/device enumeration with the current user's permissions. Vulkan readiness uses `vulkaninfo --summary`, not executable or ICD presence |
+| Archive prerequisites | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python` if a managed archive already exists | Native `curl`, `jq`, `ca-certificates`, `zstd`, `python3` | Native updater; SHA256 verified before archive extraction or switching a working installation |
+
+[Ollama's Linux instructions](https://docs.ollama.com/linux) offer archives rather
+than an official vendor APT repository. A compatible native Ubuntu candidate is
+preferred if available; a local DEB without a repository candidate is a source
+conflict. The [official stable v0.40.2 release](https://github.com/ollama/ollama/releases/tag/v0.40.2)
+was inspected on 2026-10-09: `ollama-linux-amd64.tar.zst` has a GitHub SHA256
+digest and the [pinned release build](https://github.com/ollama/ollama/blob/v0.40.2/.github/workflows/release.yaml)
+bundles CUDA v12/v13 and Vulkan. Setup resolves current stable metadata each time,
+requires a digest and the expected GPU libraries, and does not silently fall back.
+
+Archives reuse the managed release layout at
+`~/.local/share/dotfiles-arch/editor-tools/ollama/<version>` with `current` and
+`~/.local/bin/ollama`. Ubuntu archive installs use the current user's
+`~/.config/systemd/user/ollama.service`, loopback port 11434, Vulkan enabled,
+and the default user model store. The service starts with the user session;
+setup does not enable lingering, create service accounts, download models or
+grant extra device groups/capabilities. Native installs retain their
+package-owned system service. Source/launcher/unit/drop-in conflicts are reported
+before replacement; arbitrary upstream/manual installs are not adopted.
+
+[Current upstream NVIDIA requirements](https://docs.ollama.com/gpu) are compute
+capability 5.0+ and driver 550+, with driver 570+ for compute capabilities
+5.0–6.2. Existing CPU-only/ROCm Ollama flavors are preserved and report a pending
+GPU capability rather than being replaced. Missing CUDA/Vulkan capability skips
+a new installation; a previously installed app with missing capability fails
+with a diagnostic. Native service-user GPU access can differ from the interactive
+user and still requires runtime verification. Vulkan VRAM measurements can be
+approximate without additional capabilities; setup does not grant those capabilities.
+
+`dfa-update-system` refreshes recognized archives and verifies services before a
+success stamp. Archive upgrades restart the active user service; updates do not
+enable a disabled service. Acquisition, service and local-model-list failures
+return nonzero and retain harness configuration. NVIDIA installation/activation,
+Secure Boot/MOK enrollment, device permissions, archive compatibility, service
+startup, actual GPU inference, model loading and upgrades remain unverified.
+New Arch open-driver installs require recognized Turing+ PCI chipset names;
+legacy or unknown chipsets defer manual driver selection. Package installation
+does not prove GPU readiness; reboot/MOK steps are reported
+as pending, following [Ubuntu's driver guidance](https://ubuntu.com/desktop/docs/en/latest/how-to/graphics/install-nvidia-drivers/).
+
+`tests/test_gpu_decisions.py` contains isolated supplied-fact checks with blocked
+OS/network/GPU commands. It was left unrun under the implementation constraint;
+only Bash syntax, direct ShellCheck and static operation inspection were used.
 
 ## Build / AUR plumbing
 
@@ -930,3 +1067,93 @@ GNOME launch/default-browser integration, Slack keyring/login/tray integration,
 Wayland screen sharing/audio/video, and managed-workstation policies. No package
 manager, networked test, live app, service, or desktop workflow was executed as
 verification. Vendor Linux support is feasibility evidence, not runtime parity.
+
+
+### Personal apps on Ubuntu 26.04 (amd64)
+
+The additive `personal` profile selects all four existing setup scripts. Individual
+`scripts/setup-{steam,discord,firefox,mullvad}.sh` entrypoints support both distros.
+No package setup connects a VPN, starts a game, logs in, changes a browser profile,
+or replaces unrelated VPN/browser installations. No new command or config key is added.
+
+| App / normalized desktop | Ubuntu selected source | Update owner |
+|---|---|---|
+| Steam / `steam.desktop` | Native `steam-installer` (multiverse) and `steam-libs-i386:i386` (universe); amd64 host plus i386 foreign architecture | APT owns installer/dependencies via common maintenance; Valve owns client/game updates in user state |
+| Discord / `discord.desktop` | Official stable 1.0.161 DEB bootstrap, pinned SHA-256; compatible existing stable DEBs require package-owned executable and Rust updater bootstrap | Genuine Discord Linux updater installs/updates the app in the user's configuration directory on launch; APT owns bootstrap dependencies, no periodic DEB reinstall |
+| Firefox / `firefox_firefox.desktop` (Snap) or `firefox.desktop` (DEB) | Mozilla's stable Snap (Ubuntu's default) for new/stock installations; retain an existing scoped Mozilla APT installation | Snap automatic refresh or existing Mozilla APT through common maintenance; no Snap-to-DEB migration or new APT pin |
+| Mullvad VPN / `mullvad-vpn.desktop` | Vendor stable APT `repository.mullvad.net/deb/stable`, stable/main; `mullvad-vpn` | APT via `dfa-update-system`, daily/weekly; no direct service/VPN commands in setup |
+| Source prerequisites | `software-properties-common` for Steam components, `curl`, `ca-certificates`, `gnupg` for pinned/scoped sources | Native updater |
+
+Steam setup adds i386 if missing and enables Ubuntu multiverse idempotently with
+`add-apt-repository`; universe and native amd64/i386 indexes must be available.
+Candidate metadata is cross-checked against Ubuntu `resolute` release indexes,
+including official update/security/backport pockets and local Ubuntu mirrors.
+Unexpected pinned candidates or source architecture restrictions fail with a
+source diagnostic; source architecture restrictions, GPU drivers and package
+holds are not rewritten. `steam-launcher`/Valve APT, Steam Snap/Flatpak, manual
+launchers, and old standalone `steam:i386` without the native installer report
+conflicts; they are never removed or migrated. Existing Steam libraries/client
+state are not touched. A missing `/usr/games` PATH entry gains only an owned
+`~/.local/bin/steam` symlink, with user-file conflicts rejected. Arch retains
+multilib and native Steam; enabling multilib refreshes through the full guarded
+upgrade, avoiding a partial Arch upgrade.
+
+Discord published its full Linux Rust updater on 2026-05-04. Read-only inspection
+of the official stable DEB confirms `/usr/bin/discord` launches a writable app
+in `$XDG_CONFIG_HOME/discord` (otherwise `~/.config/discord`), bootstrapping it
+from `updates.discord.com` with `/usr/share/discord/updater_bootstrap` when needed.
+The reviewed bootstrap URL is
+`https://stable.dl2.discordapp.net/apps/linux/1.0.161/discord-1.0.161.deb`, SHA-256
+`1a486a0cd0dc0e79b952b14dd5e361a8614dc28d1d371cd00ebf37a2ad0ce63d`.
+This local pin was calculated from official HTTPS bytes; it is not a vendor
+signature or independently published checksum. Setup verifies it and DEB
+package/version/architecture before installing. Missing or changed pinned bytes
+fail without falling back to an unverified download. An alternate Discord APT candidate fails before native upgrade. Existing stable updater
+DEBs are preserved; pre-updater DEBs and manual archives report a conflict,
+requiring an explicit source repair. Arch uses native `discord`, correcting the
+old AUR description. A sole existing stable Snapcrafters Discord Snap retains
+its asserted Snap owner instead of changing source; it is a community exception,
+not endorsed vendor packaging. Snap confinement/voice/screen sharing remain
+unverified. No updater setting, account, or `SKIP_HOST_UPDATE` policy is changed.
+
+Mozilla Snap ID: `3wdHCAVyZEmYsCMFDE9qt92UV8rC8Wdk` (Mozilla publisher).
+Retained Discord Snap ID: `qHVefGEBezeuCeSfTND40uoUD6GRw8BO` (Snapcrafters).
+Both require `latest/stable`, asserted identity and owned command/desktop exports;
+other channels/Flatpaks/unknown publishers are preserved and reported as conflicts.
+Ubuntu's Firefox `*snap*` DEB is recognized as the Snap bootstrap, not a duplicate
+browser. An existing Mozilla APT feed without its selected DEB is a conflict,
+not permission to install a second Snap. Retained Mozilla DEBs need a scoped
+`Signed-By`, stable vendor candidate and pinned primary fingerprint
+`35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3`; no preferences/pins are written.
+GNOME consumes the selected desktop ID and retains Chrome's work-over-personal
+preference. User desktop overrides are preserved and cause a launcher conflict.
+
+Mullvad's scoped key primary fingerprint is
+`A1198702FC3E0A09A9AE5B75D5A1D4F266DE8DDF` (official key inspected 2026-10-09).
+New source/key destinations are `/etc/apt/sources.list.d/mullvad.list` and
+`/usr/share/keyrings/mullvad-keyring.gpg`; existing compatible scoped sources/keys
+are retained. Disabled/beta/duplicate/malformed/unscoped feeds, unrelated source
+owners, or changed keys fail without replacement. APT candidate/owner checks run
+before upgrades; failures propagate and cannot advance the system-update stamp.
+APT/Snap holds and automatic security updates remain in force. App-owned updates
+happen when launched; common maintenance verifies ownership without claiming an
+in-app update completed or launching an application.
+
+Evidence checked 2026-10-09: [Ubuntu Steam installer](https://packages.ubuntu.com/resolute/steam-installer),
+[32-bit Steam dependency package](https://packages.ubuntu.com/resolute/steam-libs-i386),
+[Discord Linux updater announcement](https://discord.com/blog/discord-patch-notes-may-4-2026),
+[official Discord download](https://discord.com/download),
+[Mozilla's Linux source guidance](https://support.mozilla.org/en-US/kb/install-firefox-linux),
+[Mozilla Snap](https://snapcraft.io/firefox), [Snapcrafters Discord exception](https://snapcraft.io/discord),
+[Mullvad Linux repository support](https://mullvad.net/en/help/install-mullvad-app-linux).
+
+Validation: direct Bash syntax/ShellCheck plus static inspection only. The pure
+supplied-fact checks in `tests/test_personal_app_decisions.py` are left unrun per
+user instruction. No setup/update script, test, app, package manager, VPN, GNOME
+setting, service, VM, or networked validation workflow was executed. Vendor/source
+metadata and archive contents were read without execution as feasibility research.
+Unverified: Ubuntu dependency resolution (including Discord's legacy dependency
+names), native installation/upgrades and maintainer-script effects, APT signing
+policy, Snap refresh/holds and desktop exports, Discord bootstrap/client updates,
+Steam client/Proton/games/32-bit GPU libraries, Firefox profiles/default-browser
+runtime, and Mullvad daemon/account/VPN/DNS/kill-switch behavior.
