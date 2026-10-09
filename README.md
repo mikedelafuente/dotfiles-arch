@@ -534,3 +534,9 @@ because their in-app update messages only notify. See [PACKAGES.md](PACKAGES.md#
 for sources, conflicts and unverified runtime paths. Zed needs Vulkan and 1.18+;
 setup preserves unrelated desktop/MIME defaults and reports source/config conflicts.
 Full Ubuntu bootstrap/sync remains guarded while remaining slices are converted.
+
+Shared appearance: `bash scripts/setup-fonts.sh` installs required font families
+on Arch and Ubuntu 26.04. Native fonts/themes use normal distro updates; pinned
+font/GTK/Papirus/bat data uses maintainer-reviewed versions applied by setup/full
+sync. User assets are preserved on conflicts. See [PACKAGES.md](PACKAGES.md#shared-appearance-sources-and-update-owners)
+for sources, ownership, and unverified desktop behavior.
