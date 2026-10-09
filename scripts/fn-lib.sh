@@ -1133,6 +1133,15 @@ npm_harness_owns_launcher() {
   [[ -n "$1" && -f "$1/package.json" && "$2" == "$1/"* ]]
 }
 
+# Official user-native Claude layout, from supplied resolved launcher facts.
+claude_native_owns_launcher() {
+  local root="$1" launcher="$2" version
+  [[ "$launcher" == "$root/versions/"* ]] || return 1
+  version="${launcher#"$root/versions/"}"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && -f "$launcher" && -x "$launcher" \
+    && ! -L "$launcher" && "$(readlink -f "$root/versions")" == "$root/versions" ]]
+}
+
 # Canonical NVM location (matches home/.bashrc).
 nvm_dir() {
   echo "${USER_HOME_DIR:-$HOME}/.config/nvm"

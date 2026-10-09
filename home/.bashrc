@@ -293,7 +293,7 @@ aliases() {
         echo '  Native CLI/Glow updates: dfa-update-system; Node LTS: nvm install --lts (select default explicitly)'
         echo '  Maintenance: dfa-daily / dfa-weekly use native Arch/APT updates; weekly cleanup only previews'
         echo '  orphans: native removal preview; dfa-remove-orphans --remove requires terminal confirmation'
-        echo '  npm CLI updates: only npm-owned launchers; other sources are retained and reported'
+        echo '  Agent updates: npm-owned CLIs plus recognized native Claude via claude update; no duplicate installs'
         echo "  Tools catalog: run 'packages' (what every installed package is for)"
         echo "  Source of truth: PACKAGES.md in the dotfiles-arch repo → ~/.packages.md"
         

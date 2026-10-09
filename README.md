@@ -43,6 +43,10 @@ belong to `dfa-update-system`; NVM files to standalone Node setup after pin upda
 Node LTS to `nvm install --lts` with an explicitly selected default. See the
 [full command/source/version/update matrix and unverified paths](PACKAGES.md#shared-shell-and-core-cli-distro-slice).
 
+`dfa-update-npm-clis` also recognizes official user-native Claude installations
+and runs `claude update` without NVM/npm or root ownership changes. Unknown agent
+sources still report conflicts; no duplicate npm install is added.
+
 The shared editor slice supports `bash scripts/setup-neovim.sh` and
 `bash scripts/setup-dev.sh` on both hosts. Run Node setup first, then load the shared
 shell so `USER_HOME_DIR/.local/bin` is on PATH. Neovim **0.12+**, tree-sitter CLI

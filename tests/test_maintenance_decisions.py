@@ -30,7 +30,8 @@ def main():
         guard = home / "guard-bin"
         guard.mkdir()
         for name in ("sudo", "pacman", "pacman-conf", "yay", "apt", "apt-get", "dpkg",
-                     "dpkg-query", "systemctl", "gsettings", "curl", "wget", "git"):
+                     "dpkg-query", "systemctl", "gsettings", "curl", "wget", "git",
+                     "claude", "npm", "node"):
             command = guard / name
             command.write_text('#!/bin/sh\necho "Forbidden maintenance command" >&2\nexit 97\n')
             command.chmod(0o755)
@@ -84,6 +85,27 @@ def main():
         (package_dir / "package.json").unlink()
         command = f"npm_harness_owns_launcher {shlex.quote(str(package_dir))} {shlex.quote(str(package_dir / 'bin/agent'))}"
         assert not decision(home, "arch", command)
+        native_root = home / ".local/share/claude"
+        native_binary = native_root / "versions/2.1.295"
+        native_binary.parent.mkdir(parents=True)
+        native_binary.write_text("supplied native executable fact")
+        native_binary.chmod(0o755)
+        for launcher, owned in ((native_binary, True),
+                                (native_root / "versions-other/2.1.295", False),
+                                (home / "vendor/claude", False),
+                                (native_root / "versions/unknown", False),
+                                (native_root / "versions/2.1.296", False)):
+            command = shlex.join(["claude_native_owns_launcher", str(native_root), str(launcher)])
+            assert decision(home, "ubuntu", command) == owned
+        native_binary.chmod(0o644)
+        command = shlex.join(["claude_native_owns_launcher", str(native_root), str(native_binary)])
+        assert not decision(home, "arch", command)
+        native_binary.chmod(0o755)
+        redirected = home / "redirected-claude"
+        redirected.symlink_to(native_root, target_is_directory=True)
+        command = shlex.join(["claude_native_owns_launcher", str(redirected),
+                              str(redirected / "versions/2.1.295")])
+        assert not decision(home, "ubuntu", command)
     print("Maintenance decisions passed (no update/cleanup workflows executed)")
 
 

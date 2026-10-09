@@ -1,5 +1,5 @@
 #!/bin/bash
-# Update the npm-installed agent CLIs (claude, codex, pi) via `npm update -g`.
+# Update npm-owned agent CLIs; recognized native Claude uses `claude update`.
 # Usage: dfa-update-npm-clis
 
 set -euo pipefail
