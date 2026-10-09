@@ -619,11 +619,73 @@ No setup/update/service workflows, networked tests or VM provisioning are run.
 | Arch `postman-bin` (AUR), Ubuntu official Postman Snap or existing user archive | `setup-postman.sh` | API client |
 | Arch `spotify` (AUR), Ubuntu vendor `spotify-client` or existing official Snap | `setup-spotify.sh` | Music |
 | Arch native `obsidian` (retain existing `obsidian-bin` AUR), Ubuntu official `obsidian` DEB | `setup-obsidian.sh` | Notes; installer refresh includes Electron |
-| `voxtype-bin` (AUR), `dotool` (AUR) | `setup-voxtype.sh` | Voice-to-text dictation — Super+T toggles |
-| `cuda`, `cudnn` (on working NVIDIA driver only) | `setup-voxtype.sh` | CUDA runtime + cuDNN shared libs for voxtype's Parakeet/ONNX Runtime GPU backend |
+| Arch `voxtype-bin`/`dotool` (AUR); Ubuntu official `voxtype` DEB + verified dotool source build | `setup-voxtype.sh` | GNOME Wayland dictation — Super+T toggles; uinput typing |
+| Arch `cuda`, `cudnn`; Ubuntu scoped NVIDIA CUDA13 runtime libraries | `setup-voxtype.sh` | Parakeet ONNX GPU backend requires AVX-512, working compatible CUDA, driver 580+, runtime ABI and cuDNN9; no driver installs |
 | `zed` | `setup-zed.sh` | Code editor |
 | `stably-orca-bin` (AUR) | `setup-orca.sh` | [Orca](https://www.onorca.dev/), an IDE for parallel coding agents; launch with `stably-orca` (the `orca` package is the GNOME screen reader) |
 | Arch `zsa-keymapp-bin` (AUR), Ubuntu verified pinned Keymapp archive | `setup-moonlander.sh` | ZSA keyboard live layout/firmware flashing; GTK3, WebKitGTK 4.1 and libusb |
+
+### Dictation sources and update owners
+
+Implemented for [#155](https://github.com/mikedelafuente/dotfiles-arch/issues/155).
+`bash scripts/setup-voxtype.sh` supports Arch and Ubuntu 26.04 amd64 and retains
+GNOME `Super+T` (`/usr/bin/voxtype record toggle`). No X11-only typing replacement.
+
+| Component | Source | Update owner |
+| --- | --- | --- |
+| Arch Voxtype/dotool | Scanned `voxtype-bin`/`dotool` AUR packages | Guarded AUR upgrades |
+| Ubuntu Voxtype | [Official stable amd64 DEB](https://github.com/peteonrails/voxtype/releases), minimum 1.1.0; stage and verify the release API SHA256 digest before APT installation | `dfa-update-system` checks stable releases; APT alone cannot refresh a standalone DEB. A compatible existing repository package keeps its repository owner. |
+| Ubuntu dotool | [Official source](https://git.sr.ht/~geb/dotool), 1.6 commit `180af21c46dcc848d93dbec2644c011f4eea1592`, SHA256 `960f83d4fa33f9d8a8b162663b4185a970a27f37d972d4496457eff6e0b6613c` | Repo-reviewed pin changes rebuilt by standalone setup/`dfa-update-system` into `dotool` 1.6-1dfa1 local DEB. Compatible existing repository packages retain their owner. |
+| Ubuntu dotool build dependencies | Native `build-essential`, `golang-go`, `libxkbcommon-dev`, `pkg-config`, `scdoc` | APT; unprivileged staged build, pinned Go dependencies, checksum database enabled and `GOTOOLCHAIN=local` |
+| Whisper CPU/Vulkan | Voxtype baseline x86-64-v2, AVX2 or AVX-512 variant; Vulkan additionally needs AVX2, `libvulkan1` and a working hardware Vulkan device | Voxtype owner/native loader; drivers retained. New default model is `base.en`. |
+| Parakeet CUDA13 | Voxtype bundled CUDA13 providers/ORT; AVX-512, working CUDA, driver 580+, every visible GPU sm70–sm120 | Voxtype owner plus runtime libraries below. New default is `parakeet-tdt-0.6b-v3`. |
+| Ubuntu CUDA13 runtime | [NVIDIA ubuntu2604/x86_64](https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2604/x86_64/), repository-scoped fingerprint `14BAFBC7562AD710CA04E69905FBB6DA60DF8A40` | APT. `cuda-cudart-13-4`, `libcublas-13-4`, `libcufft-13-4`, `libcurand-13-4`, `libcudnn9-cuda-13`, and their three toolkit config dependencies only; all other vendor packages pinned negative. No `cuda`/driver metapackages or older Ubuntu repository. |
+| Existing Parakeet CPU/CUDA12 | Retain compatible selected variant/config; AVX2/AVX-512 CPU or actual existing CUDA12/cuDNN9/provider runtime | Existing owner. No CUDA12 source substitution; missing/incompatible runtime returns failure. |
+
+Unknown launchers, unowned source builds, duplicate sources, older/unscoped NVIDIA
+sources, pin conflicts, APT holds and driver/removal plans are retained and reported.
+Holds defer installer/build updates; they do not authorize source migration.
+Ubuntu's native `nvidia-cudnn` installer is not substituted for cuDNN9/CUDA13.
+The release-owner marker `/var/lib/dotfiles-arch/dictation/voxtype-source` and
+dotool's package-owned source marker prevent a later repository candidate from
+silently taking over a managed local installation.
+Direct dotool needs no daemon; its upstream rule uses the `input` group and writable
+`/dev/uinput`. This group permits access to **all keyboard devices**. Setup does not
+grant access automatically: it fails with instructions when device access is pending.
+After choosing that policy, run `sudo usermod -aG input "$USER"`, log out/in, and
+check that `uinput` exists and its packaged rule is loaded. Reload the installed
+rule explicitly with `sudo udevadm control --reload-rules` and
+`sudo udevadm trigger --name-match=uinput` if needed. Custom rules are preserved.
+
+User config/models stay under `USER_HOME_DIR`; run setup as that user. New configs
+disable evdev hotkeys and select `output.mode="type"`, `driver_order=["dotool","clipboard"]`.
+Existing TOML/models/units/drop-ins are never overwritten or recursively chowned.
+An incompatible engine/backend or custom service requires explicit resolution;
+the exact legacy upstream-generated user unit is retained as compatible. Absolute
+[XDG config/data overrides](https://github.com/peteonrails/voxtype/blob/v1.1.0/src/config/root.rs)
+are honored without changing existing ownership; a compatible system config is
+also retained instead of being shadowed by a new user file.
+GPU selection uses stable `setup variant --to`, with isolated privileged HOME;
+CUDA uses the canonical executable wrapper so providers stay discoverable.
+Setup downloads a model **only for a new config**, without `--activate`; later
+model downloads are separate user actions:
+`voxtype setup --download --model base.en --no-post-install`, or
+`voxtype setup --download --model parakeet-tdt-0.6b-v3 --no-post-install`.
+Changing engines/models is explicit via Voxtype configuration/model commands.
+For non-US layouts, match Voxtype's dotool XKB hint and the active GNOME layout.
+
+The package-owned user service is enabled for a new ready config. Existing inactive
+services remain inactive; start explicitly with
+`systemctl --user enable --now voxtype.service`. Updates restore the chosen backend
+after a package refresh and restart only a previously active intended service.
+They never fetch models, edit user config or enable a disabled service. Clipboard
+fallback, package presence and active service status do not prove direct typing.
+
+Validation is Bash syntax/ShellCheck and static inspection. The supplied-fact check
+`tests/test_dictation_decisions.py` is written and deliberately unrun. Release/build
+installation, Go compilation, linker/provider loading, model downloads/inference,
+microphone capture, uinput access/typing, service behavior and GNOME dispatch are
+unverified; no installer, service, driver, model or device workflow was executed.
 
 ### Desktop utility sources and update owners
 
