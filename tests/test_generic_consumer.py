@@ -49,6 +49,12 @@ def main():
         marker = extra / "scripts/should-not-run.sh"
         marker.parent.mkdir()
         marker.write_text(f"#!/bin/sh\nprintf x > {temp / 'executed'}\n")
+        (extra / "package.json").write_text('{"name":"@example/shared","pi":{"skills":["skills"]}}\n')
+        for args in (("init", "-b", "main"), ("config", "user.name", "Fixture"),
+                     ("config", "user.email", "fixture@example.test"),
+                     ("remote", "add", "origin", "https://github.com/example/shared"),
+                     ("add", "."), ("commit", "-m", "supplied shared source")):
+            subprocess.run(["git", "-C", str(extra), *args], check=True, capture_output=True)
 
         registry = home / ".config/dotfiles-arch/sync-sources"
         registry.parent.mkdir(parents=True)
@@ -78,6 +84,18 @@ def main():
         assert "PRIMARY RULE" in pi_agents.read_text()
         assert "EXTRA RULE" not in pi_agents.read_text()
         assert (home / ".claude/skills/custom").is_symlink()
+        # A package installed through Pi's native route cannot also load the
+        # same source's extensions, skills and prompts from a generation.
+        settings = home / ".pi/agent/settings.json"
+        generation = os.readlink(active)
+        for package_source in (str(extra), os.path.relpath(extra, settings.parent),
+                               "git:github.com/example/shared@v1", "npm:@example/shared@1.0.0"):
+            settings.write_text(json.dumps({"packages": [package_source]}))
+            duplicated = subprocess.run(["python3", str(CLI), "deploy", "--source", str(primary)],
+                                        env=env, capture_output=True, text=True)
+            assert duplicated.returncode != 0 and "duplicates registered source" in duplicated.stderr
+            assert os.readlink(active) == generation
+            assert json.loads(settings.read_text()) == {"packages": [package_source]}
         print("PASS: standard-source Pi data, primary rule precedence, exclusions and no source execution")
 
 

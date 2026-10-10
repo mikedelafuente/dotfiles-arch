@@ -25,9 +25,13 @@ def check(mode):
         resource = primary / "skills/example/SKILL.md"
         resource.parent.mkdir(parents=True)
         resource.write_text("one\ntwo\nthree\nfour\nfive\n")
+        rule = primary / "rules/shared.mdc"
+        rule.parent.mkdir()
+        rule.write_text("---\nalwaysApply: true\n---\nORIGINAL RULE\n")
         state = primary / "pi/models-store.json"
         state.parent.mkdir()
         state.write_text('{"machine":"private"}\n')
+        (primary / "pi/models.json").write_text('{"shared":"old","local":0}\n')
         home.mkdir()
         agent = home / ".pi/agent"
         agent.mkdir(parents=True)
@@ -51,6 +55,10 @@ def check(mode):
         live = home / ".claude/skills/example/SKILL.md"
         active = home / ".local/share/workstation/config"
         original_generation = os.readlink(active)
+        if mode == "rule-edited":
+            (home / ".cursor/rules/shared.mdc").write_text("---\nalwaysApply: true\n---\nLOCAL RULE\n")
+        if mode == "model-edited":
+            (agent / "models.json").write_text('{"shared":"old","local":1}\n')
         assert not (agent / "models-store.json").is_symlink()
         assert (agent / "models-store.json").read_text() == state.read_text()
         old_key = "skills/example/SKILL.md"
@@ -66,6 +74,11 @@ def check(mode):
         moved.parent.mkdir(parents=True)
         moved.write_text("SHARED\ntwo\nthree\nfour\nfive\n" if mode == "conflict"
                          else "one\ntwo\nthree\nfour\nINCOMING\n")
+        replacement_rule = extra / "rules/shared.mdc"
+        replacement_rule.parent.mkdir()
+        replacement_rule.write_text(rule.read_text())
+        (extra / "pi").mkdir()
+        (extra / "pi/models.json").write_text('{"shared":"new","local":0}\n')
         commit(extra)
         registry = home / ".config/dotfiles-arch/sync-sources"
         registry.parent.mkdir(parents=True, exist_ok=True)
@@ -79,8 +92,12 @@ def check(mode):
         if mode == "unregistered":
             registry.unlink()
         shutil.rmtree(primary / "skills")
+        shutil.rmtree(primary / "rules")
+        shutil.rmtree(primary / "pi")
         (primary / ".dfa-source-handoffs.json").write_text(json.dumps({"version": 1, "moves": [
-            {"from": "skills", "to": "skills", "source": "https://github.com/example/shared"}
+            {"from": "skills", "to": "skills", "source": "https://github.com/example/shared"},
+            {"from": "rules", "to": "rules", "source": "https://github.com/example/shared"},
+            {"from": "pi", "to": "pi", "source": "https://github.com/example/shared"}
         ]}))
         commit(primary)
         blocked_cases = {"conflict", "dual-edits", "unregistered"}
@@ -97,6 +114,9 @@ def check(mode):
                     "LOCAL\ntwo\nthree\nfour\nINCOMING\n" if mode in {"edited", "preregistered"} else
                     "one\ntwo\nthree\nfour\nINCOMING\n")
         assert live.read_text() == expected
+        if mode == "rule-edited":
+            assert "LOCAL RULE" in (home / ".cursor/rules/shared.mdc").read_text()
+        assert json.loads((agent / "models.json").read_text()) == {"shared": "new", "local": 1 if mode == "model-edited" else 0}
         manifest = json.loads((active.resolve().parent / "manifest.json").read_text())
         new_key = next(key for key in manifest["artifacts"] if key.endswith("/" + old_key))
         assert old_key not in manifest["artifacts"]
@@ -128,6 +148,6 @@ def check(mode):
 
 
 if __name__ == "__main__":
-    for case in ("clean", "edited", "override", "conflict", "preregistered", "dual-edits", "unregistered"):
+    for case in ("clean", "edited", "override", "conflict", "preregistered", "dual-edits", "unregistered", "rule-edited", "model-edited"):
         check(case)
     print("PASS: registered source moves preserve baselines, edits, overrides, conflicts, legacy state and rollback")

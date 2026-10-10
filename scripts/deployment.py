@@ -463,6 +463,28 @@ class Deployment:
                     elif relative.parts[0] == "pi" and "extensions" not in relative.parts:
                         add_link(pi / relative.relative_to("pi"), key, src)
             staged = incoming / prefix
+            if kind == "standard" and (staged / "pi").is_dir():
+                settings = read_json(pi / "settings.json", {})
+                if not isinstance(settings, dict) or not isinstance(settings.get("packages", []), list):
+                    raise Pending("Invalid Pi package settings; preserve and reconcile them before source sync")
+                package = read_json(staged / "package.json", {})
+                for entry in settings.get("packages", []):
+                    value = entry.get("source") if isinstance(entry, dict) else entry
+                    if not isinstance(value, str):
+                        continue
+                    if value.startswith("npm:"):
+                        match = re.match(r"npm:((?:@[^/]+/)?[^@]+)", value)
+                        duplicate = isinstance(package, dict) and match and match[1] == package.get("name")
+                    elif value.startswith(("git:", "https://", "http://", "ssh://")):
+                        raw = value.removeprefix("git:")
+                        parsed = urlsplit(raw if "://" in raw else "https://" + raw)
+                        remote = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.split("@", 1)[0], "", ""))
+                        duplicate = clean_url(remote) == source["url"]
+                    else:
+                        local = Path(value.replace("~", str(self.home), 1) if value.startswith("~/") else value)
+                        duplicate = (local if local.is_absolute() else pi / local).resolve() == path
+                    if duplicate:
+                        raise Pending(f"Native Pi package duplicates registered source data: {path}; remove that native resource package explicitly before generation syncing")
             skills = staged / "skills" if kind == "standard" else staged if kind == "skills-root" else None
             if skills and skills.is_dir():
                 roots.append(skills)
@@ -622,12 +644,18 @@ class Deployment:
                     raise Pending("Unsafe source handoff path")
             destinations = [s for s in sources[1:] if s["type"] == "standard" and s["url"] == move["source"]]
             for old_key, item in old["artifacts"].items():
-                if old_key in artifacts or item.get("source") != "primary" or not Path(old_key).is_relative_to(move["from"]):
+                source_backed = item.get("source") == "primary" and Path(old_key).is_relative_to(move["from"])
+                generated_rule = move["from"] == "rules" and move["to"] == "rules" and old_key.startswith("generated/rules/primary/")
+                if old_key in artifacts or not (source_backed or generated_rule):
                     continue
                 if len(destinations) != 1:
                     raise Pending("Source handoff requires exactly one manually registered replacement source; restore/register it before deploying")
-                relative = Path(move["to"]) / Path(old_key).relative_to(move["from"])
-                new_key = f"extras/{destinations[0]['id']}/{relative.as_posix()}"
+                if generated_rule:
+                    relative = Path("generated/rules") / destinations[0]["id"] / Path(old_key).name
+                    new_key = relative.as_posix()
+                else:
+                    relative = Path(move["to"]) / Path(old_key).relative_to(move["from"])
+                    new_key = f"extras/{destinations[0]['id']}/{relative.as_posix()}"
                 if new_key not in artifacts:
                     raise Pending(f"Replacement source is missing handoff artifact: {relative}")
                 if new_key in moves or old_key in moves.values():

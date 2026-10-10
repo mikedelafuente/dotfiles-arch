@@ -281,7 +281,7 @@ Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 | Native system packages, including Kitty / Arch | Existing official pacman repositories | `dfa-update-system`: pacman, then guarded AUR updates |
 | AUR apps / Arch | Existing AUR recipes, including their AUR dependencies | `yay -Sua` after an IoC scan; query/scanner/metadata failures fail closed |
 | Native packages, including Kitty / Ubuntu 26.04 | Existing configured Ubuntu and vendor APT repositories | `dfa-update-system`: APT refresh and upgrade with new dependencies permitted, removals refused |
-| Existing npm-installed Claude / Codex / Pi / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
+| Existing npm-installed Claude / Codex / either host | User-level npm packages through NVM | `dfa-update-npm-clis` daily step verifies global package and resolved launcher ownership; no root npm |
 | Recognized user-native Claude / either host | Official user-native launcher into `USER_HOME_DIR/.local/share/claude/versions/<version>` | `dfa-update-npm-clis` runs `claude update` as the user, independently of NVM/npm; native background updates retain user/IT policy; visible DISABLE_UPDATES is deferred |
 | NinjaOne / Arch | Existing opt-in repackaged vendor DEB | Agent self-updater plus existing weekly health check |
 | NinjaOne / Ubuntu | Opt-in vendor native DEB; existing IT-selected installations retained | Agent/patcher self-updater; weekly owned-agent repair or read-only IT-managed health check |
@@ -880,7 +880,7 @@ through `dfa-sync-skills` (Claude/Cursor/detected Codex/Pi). `/grill-me` and
 use the council through `advising`. The `with-docs` variants record accepted
 terms/decisions in glossary/ADRs. Carry accepted Q/A to `/to-spec`
 or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
-agent prompts, not shell commands. See [examples](skills/mikedelafuente/agent-council/references/examples.md).
+agent prompts, not shell commands. See [examples](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/agent-council/references/examples.md).
 Personal `/ask-mike`, `/council-handoff spec|tickets`, `/build-with-ponytail`, and
 `/review-changes` compose unchanged upstream skills without additional packages.
 `/setup-dark-factory`, `/dark-factory-idea`, `/dark-factory`,
@@ -889,11 +889,11 @@ versioned idea approval, independent acceptance and prototype trial pauses.
 Their local control seam uses the existing Python standard library; no runner,
 tracker plugin or scheduler is installed. Actual adapter configuration, schedules,
 actions and synthetic retro publication require accepted project authority.
-See [factory contracts](skills/mikedelafuente/dark-factory/references/contracts.md).
+See [factory contracts](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/dark-factory/references/contracts.md).
 `dfa-sync-skills` discovers nested skill folders and gives dotfiles-arch final
 priority. `dfa-sync-sources add <path> --overwritable true` allows duplicate
 replacement from that source; false is the default and blocks replacement before
-links change; see [source groups and updates](skills/README.md).
+links change; see [source groups and updates](https://github.com/mikedelafuente/skills/blob/main/skills/README.md).
 
 `dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
 source. It displays the current setting; changes apply on the next skill sync.
@@ -960,14 +960,14 @@ Implemented for [#146](https://github.com/mikedelafuente/dotfiles-arch/issues/14
 | --- | --- | --- | --- |
 | Claude Code | User npm `@anthropic-ai/claude-code`; retain recognized user-native installs | New: signed stable native binary; retain existing npm/native or scoped official APT | Native: background + `claude update`; npm: `dfa-update-npm-clis`; retained APT: `dfa-update-system` |
 | Codex CLI | User npm `@openai/codex` | Same | `dfa-update-npm-clis` |
-| Pi | User npm `@earendil-works/pi-coding-agent`, lifecycle scripts blocked | Same | `dfa-update-npm-clis`, also with `--ignore-scripts` |
+| Pi (opt-in external owner) | Standalone skills repository, user npm with lifecycle scripts blocked | Same | Owner `bin/pi-setup update`; dotfiles does not maintain Pi |
 | opencode CLI | Official `opencode` package; retain existing user npm if recognized | Stable user npm `opencode-ai`, documented source exception | Native: `dfa-update-system`; npm: `dfa-update-npm-clis` |
 | Selected official ChatGPT desktop | Guarded `chatgpt-desktop` AUR recipe; retain existing official `chatgpt` package | Official `chatgpt` from scoped, signed OpenAI APT repository | `dfa-update-system` (Arch AUR/native or Ubuntu APT) |
 
 [Stable opencode instructions](https://opencode.ai/docs/) document `opencode-ai`
 and Arch's native package. This slice retains the `opencode` CLI identity and
 existing provider configuration; it does not switch to the beta `opencode2` CLI.
-Claude/Codex/Pi retain existing npm sources. New Ubuntu Claude uses the signed
+Claude/Codex retain existing npm sources; Pi maintenance belongs to the standalone skills owner. New Ubuntu Claude uses the signed
 native installer; `DISABLE_UPDATES` defers recurring native/npm refresh without
 rewriting policy. `DISABLE_AUTOUPDATER` permits the explicitly invoked native updater. Setup/update refuse root invocation
 and system npm prefixes, verify resolved launcher ownership, and preserve unknown
@@ -1334,7 +1334,7 @@ that an upstream project can never add a safe updater.
 | Stably Orca | Verified official AppImage; existing compatible DEB retained | AppImage genuinely self-updates; DEB Refresh (banner alone does not install) | AppImage/FUSE2 and normalized launchers / K |
 | Claude Code | Signed stable native binary for missing installs | Genuine startup/background and `claude update`; existing npm uses npm maintenance, scoped APT uses APT | New signed source 2.1.207+; native launcher/layout / K |
 | Codex CLI | User npm `@openai/codex` | npm maintenance; installer/update command is not an independent verified in-app owner | User NVM/npm, shared hooks / R |
-| Pi | User npm `@earendil-works/pi-coding-agent` | npm maintenance with `--ignore-scripts`; no self-updater selected | User NVM/npm / R |
+| Pi (opt-in external owner) | Standalone skills repository, user npm `@earendil-works/pi-coding-agent` | Owner `bin/pi-setup update --resources generation`, with `--ignore-scripts`; no dotfiles updater | User NVM/npm / R |
 | OpenCode | User npm `opencode-ai` | npm maintenance; curl-method upgrade pipes downloaded installer to shell and is rejected | Stable CLI/provider config / R |
 | Official ChatGPT desktop | Scoped signed OpenAI `chatgpt` APT | APT; no complete Linux in-app updater established | Official amd64 desktop, source/key validation / V |
 | NVM / Node / npm | Existing checksum-verified NVM bootstrap and official Node binaries | Manual reviewed NVM bootstrap refresh / `nvm install --lts`; npm does not self-update Node | Node 22+, fresh current LTS / R, K |
@@ -1398,3 +1398,14 @@ transactions, vendor installers, profile loading, genuine future updater integri
 GUI launches, Ubuntu dependency resolution, sandbox enforcement and hardware/model
 behavior remain **unverified**. Read-only primary research establishes documented
 mechanisms and initial-verification feasibility, not workstation runtime success.
+
+## Shared resource ownership
+
+[skills](https://github.com/mikedelafuente/skills) owns grouped skills, personal
+rules and the complete opt-in Pi lifecycle. Manually register a checkout with
+`dfa-sync-sources add /path/to/skills --type standard`; generic syncing delivers
+models/settings, agents, prompts, extensions, rules and skills through retained
+installed generations without running source scripts. Primary rules/skills are
+final override slots; duplicate skills retain overwrite protection. Native Pi
+package loading and generation loading are mutually exclusive. Cloud consumers
+pass `--source /path/to/skills` to `scripts/install-cloud-agent-config.sh`.
