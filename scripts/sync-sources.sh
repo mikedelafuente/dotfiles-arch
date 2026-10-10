@@ -31,6 +31,9 @@ fi
 source "$DF_SCRIPT_DIR/sync-sources-lib.sh"
 
 REPO_ROOT="$(cd "$DF_SCRIPT_DIR/.." && pwd)"
+if [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
+  REPO_ROOT="$(python3 "$DF_SCRIPT_DIR/deployment.py" source)" || exit 1
+fi
 CURSOR_RULES_DIR="$USER_HOME_DIR/.cursor/rules"
 CLAUDE_SKILLS_DIR="$USER_HOME_DIR/.claude/skills"
 CURSOR_SKILLS_DIR="$USER_HOME_DIR/.cursor/skills"

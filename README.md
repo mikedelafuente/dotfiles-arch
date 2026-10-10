@@ -476,7 +476,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | `z` / `zi` | Smart cd (zoxide) |
 | `r` / `dfa-repos` | fzf-pick a repo under `~/repos` and cd into it |
 | `dfa` | Action guide and command picker: everyday updates, weekly maintenance, local config testing or setup repair. `dfa list` shows the same guide. |
-| `dfa sync-sources` | Interactive manager for local rules, skills, and extensions sources: add, remove, reorder, and apply changes. Removing a source keeps its files; `dfa sync-sources list` lists without prompts |
+| `dfa sync-sources` | Interactive manager for local resource sources: add, remove, reorder, and apply changes. Primary shows the verified editable checkout; scripts still run from the installed generation. Removing a source keeps its files; `dfa sync-sources list` lists without prompts |
 | `pbcopy` / `pbpaste` | Wayland clipboard in/out |
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
