@@ -1,7 +1,9 @@
 # Private retro and publication contract
 
-Analyze only the specified permitted run evidence, with separately accepted limits
-for findings, analysis time/tokens and publication count/time/tokens. Record missing
+Analyze only the specified permitted run evidence. Initial observe-only calibration
+has no user token/time/attempt cap; explicitly configured caps apply. Keep finite
+finding scope and publication-count authorization. Record retro as a distinct
+item under [usage reporting](metrics.md) and include it in project effort summaries. Record missing
 cost/time telemetry rather than estimating a measured result. Reuse the upstream
 `retro` categories and `writing-for-agents`; this wrapper does not build fixes.
 
@@ -38,7 +40,7 @@ absence parks the proposal. Never publish the same fingerprint under a new run I
 `control.py fingerprint PROPOSAL.json` computes the stable generalized identity.
 `control.py publication-check PROPOSAL.json` rejects missing synthetic-content
 attestation, unresolved source, missing verified content/destination approval,
-privacy gaps, budget/count exhaustion and duplicate/uncertain publication receipts.
+privacy gaps, configured budget/count exhaustion and duplicate/uncertain publication receipts.
 These supplied facts must come from the accepted source/privacy/approval adapters;
 the helper cannot authenticate them or guarantee semantic privacy by pattern matching.
 Save private proposal and action records before using an authorized tracker tool.

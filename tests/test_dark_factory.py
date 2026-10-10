@@ -223,6 +223,134 @@ def main():
         assert event("approval", receipt=receipt(records["proposal"]["sha256"]))["phase"] == "budget-exhausted"
         event("reserve", success=False, **launch)
 
+        # Observe-only runs retain all attempts, timings and missing telemetry without caps.
+        observed = copy.deepcopy(bundle)
+        observed["run"] = "observe-run"
+        observed["policy"]["budget_mode"] = "observe-only"
+        observed["policy"]["deadline"] = None
+        for unit in ("tokens", "seconds", "attempts", "repairs"):
+            observed["policy"]["limits"][unit] = None
+        observed["records"]["authority"] = artifact("observe-authority.json", {"policy": observed["policy"]})
+        observed["accepted"]["authority"] = receipt(observed["records"]["authority"]["sha256"])
+        aggregate = root / "observations"
+        aggregate.mkdir(mode=0o700)
+        store = aggregate / "runs" / "first"
+        run("init", store, observed)
+        uncapped_launch = dict(launch, allocation={"tokens": None, "seconds": None})
+        event("reserve", success=False, **uncapped_launch)  # observe-only grants no approval
+        event("approval", receipt=receipt(records["proposal"]["sha256"]))
+        for attempt in (1, 2):
+            action = f"observe-{attempt}"
+            current = dict(owner, run="observe-run", action=action, fence=attempt)
+            event("reserve", **dict(uncapped_launch, action=action))
+            event("launched", **current, evidence=evidence, observed=launch["effort"])
+            if attempt == 1:
+                event("result", **current, evidence=evidence, terminal=terminal,
+                      timing={"started_at": 100, "finished_at": 110.5})
+                event("evaluate", **dict(evaluation, **current, passed=False, signature="initial-failure"))
+            else:
+                breakdown = {"tokens": 3000000, "seconds": 45.5, "input_tokens": 2990000,
+                             "cached_input_tokens": 2800000, "output_tokens": 10000, "reasoning_tokens": 8000}
+                event("result", success=False, **current, evidence=evidence, terminal=terminal,
+                      usage=dict(breakdown, tokens=5800000))  # cache/reasoning are subsets
+                event("result", success=False, **current, evidence=evidence, terminal=terminal,
+                      usage=dict(breakdown, seconds=float("inf")))
+                event("result", **current, evidence=evidence, terminal=terminal, usage=breakdown,
+                      timing={"started_at": 200, "finished_at": 260})
+                event("evaluate", **dict(evaluation, **current))
+        # Late usage for the first attempt still settles after a retry replaced its claim.
+        first_owner = dict(owner, run="observe-run", action="observe-1", fence=1)
+        event("settle-usage", **first_owner, evidence=evidence, usage={"tokens": None, "seconds": 8.5})
+        event("settle-usage", **first_owner, evidence=evidence, usage={"tokens": 1000000, "seconds": 8.5})
+        event("settle-usage", success=False, **first_owner, evidence=evidence,
+              usage={"tokens": 1000001, "seconds": 8.5})
+        activity = {"id": "review-metrics", "lineage": observed["lineage"], "run": "observe-run", "op": "activity",
+                    "identity": "review-attempt-1", "item": "parent standards/spec review", "ticket": "parent",
+                    "phase": "evaluation", "owner": "independent-evaluator", "attempt": 1,
+                    "model": "supplied-sol-6.1", "effort": "high", "outcome": "completed",
+                    "usage": {"tokens": None, "seconds": 3.25}, "evidence": evidence,
+                    "timing": {"started_at": 300, "finished_at": 304.25}}
+        run("apply", store, activity)
+        run("apply", store, activity)  # replay never double-counts
+        run("apply", store, dict(activity, id="duplicate-review"), success=False)
+        run("apply", store, dict(activity, id="stale-review", identity="another", run="other"), success=False)
+        run("apply", store, dict(activity, id="bad-clock", identity="another",
+                                  timing={"started_at": 5, "finished_at": 4}), success=False)
+        report = run("report", store)
+        assert len(report["items"]) == 3 and report["totals"]["attempts"] == 3
+        assert {row["identity"]: row["attempt"] for row in report["items"]} == {"observe-1": 1, "observe-2": 2, "review-attempt-1": 1}
+        metrics = report["totals"]["metrics"]
+        assert metrics["tokens"]["known_total"] == 4000000 and metrics["tokens"]["missing_items"] == 1
+        assert metrics["seconds"]["known_total"] == 57.25
+        assert metrics["wall_seconds"]["known_total"] == 74.75
+        assert metrics["tokens"]["median"] == 2000000
+        parent_item = next(row for row in report["by_item"] if row["item"] == "parent")
+        assert parent_item["attempts"] == 2 and parent_item["metrics"]["tokens"]["known_total"] == 4000000
+        assert report["timeline"]["observed_span_seconds"] >= 0
+        assert {row["effort"] for row in report["by_effort"]} == {"medium", "high"}
+        packet = run("packet", store)
+        assert packet["used"]["tokens"] == 4000000 and packet["used"]["attempts"] == 3
+        assert packet["remaining"]["tokens"] is None and packet["remaining"]["attempts"] is None
+        saved = run("report", store, extra=("--write",))
+        saved_path = Path(saved["report"]["path"])
+        assert saved_path.is_file() and saved_path.stat().st_mode & 0o077 == 0
+        assert hashlib.sha256(saved_path.read_bytes()).hexdigest() == saved["report"]["sha256"]
+        assert event("checkpoint", prototype=prototype)["phase"] == "awaiting-user-trial"
+        event("reserve", success=False, **dict(uncapped_launch, ticket="child", action="trial-bypass"))
+
+        # Project aggregation reads multiple runs, deduplicates identical copies and separates efforts.
+        other = copy.deepcopy(observed)
+        other["run"] = "another-run"
+        second_store = aggregate / "runs" / "second"
+        run("init", second_store, other)
+        second_activity = dict(activity, id="second-activity", run="another-run", identity="second-activity",
+                               phase="research", ticket=None, item="integration research", effort="medium",
+                               usage={"tokens": 50, "seconds": 1.5})
+        run("apply", second_store, second_activity)
+        combined = run("report-project", aggregate)
+        assert len(combined["runs"]) == 2 and combined["totals"]["attempts"] == 4
+        assert combined["totals"]["metrics"]["tokens"]["known_total"] == 4000050
+        assert len(combined["by_effort"]) == 4
+        import shutil
+        shutil.copytree(second_store, aggregate / "copy")
+        assert run("report-project", aggregate)["totals"]["attempts"] == 4
+        project_saved = run("report-project", aggregate, extra=("--write",))
+        assert Path(project_saved["report"]["path"]).parent == aggregate
+        # Changed receipts must fail visibly instead of silently corrupting statistics.
+        receipt_file = second_store / "receipts" / (hashlib.sha256(json.dumps("second-activity",
+                              separators=(",", ":")).encode()).hexdigest() + ".json")
+        original_receipt = receipt_file.read_bytes()
+        altered = json.loads(original_receipt); altered["usage"]["tokens"] = 99
+        receipt_file.write_text(json.dumps(altered))
+        run("report", second_store, success=False)
+        receipt_file.write_bytes(original_receipt)
+        # Observe-only can retain explicitly chosen caps without losing unknown-use reservations.
+        mixed = copy.deepcopy(observed); mixed["run"] = "mixed-run"
+        mixed["policy"]["limits"]["tokens"] = 100
+        mixed["records"]["authority"] = artifact("mixed-authority.json", {"policy": mixed["policy"]})
+        mixed["accepted"]["authority"] = receipt(mixed["records"]["authority"]["sha256"])
+        store = root / "mixed-caps"
+        run("init", store, mixed)
+        event("approval", receipt=receipt(records["proposal"]["sha256"]))
+        mixed_launch = dict(launch, allocation={"tokens": 40, "seconds": None})
+        mixed_owner = dict(owner, run="mixed-run")
+        event("reserve", **mixed_launch)
+        event("launched", **mixed_owner, evidence=evidence, observed=launch["effort"])
+        event("result", success=False, **mixed_owner, evidence=evidence, terminal=terminal,
+              usage={"tokens": None, "seconds": 5})
+        event("result", **mixed_owner, evidence=evidence, terminal=terminal)
+        event("evaluate", **dict(evaluation, **mixed_owner, passed=False, signature="needs-repair"))
+        assert run("packet", store)["reserved"]["tokens"] == 40
+        event("reserve", success=False, **dict(mixed_launch, action="mixed-retry"))
+        event("settle-usage", **mixed_owner, evidence=evidence, usage={"tokens": 45, "seconds": None})
+        event("reserve", success=False, **dict(mixed_launch, action="mixed-retry",
+                                                allocation={"tokens": 101, "seconds": None}))
+        event("reserve", **dict(mixed_launch, action="mixed-retry"))
+
+        # Null limits remain invalid in legacy bounded policies.
+        invalid = copy.deepcopy(observed); invalid["policy"]["budget_mode"] = "bounded"
+        run("init", root / "invalid-observe", invalid, success=False)
+
         # Duplicate receipts are idempotent; altered content under one ID is rejected.
         store = root / "idempotent"
         run("init", store, bundle)
@@ -287,7 +415,7 @@ def main():
                           "subject": content_hash, "unresolved": [private_class]})
             run("publication-check", value=unsafe, success=False)
 
-    print("PASS: dark-factory approval, claims, finite budgets, independent acceptance, trial pauses,")
+    print("PASS: dark-factory approval, capped/observe-only usage, per-attempt/project reports, trial pauses,")
     print("resume/fencing, drift, portable supplied graphs, bounded packets and retro publication gates")
 
 

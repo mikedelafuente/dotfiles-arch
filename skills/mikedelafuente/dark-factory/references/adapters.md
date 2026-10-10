@@ -61,7 +61,7 @@ when implementing an adapter; this package ships no network adapter or credentia
 ## Effort and runner contract
 
 Discover actual allowed family, model IDs, effort names, settings inheritance,
-scoped-context support, telemetry, cancellation/terminal observation, checkpoints
+scoped-context support, usage/timing telemetry, cancellation/terminal observation, checkpoints
 and exclusive-owner/fencing capability. Save capability source/version/date. The
 families in the requested contract are Sol 6.1 and Opus 5.5; use only IDs actually
 supplied by the runner and allowed by policy. Do not assume Opus is available or
@@ -73,7 +73,7 @@ difficulty from 0 (routine) to 2 (material). Setup proposes and obtains acceptan
 of a mapping from the four-score total to supported model/effort names. Scores are
 heuristics, not measured performance. Record the four scores, rationale, capability
 reference and the exact requested setting. Escalation needs a specific reason and
-remaining budget; maximum effort is not automatic.
+remaining configured budget; maximum effort is not automatic.
 
 Append/merge a parseable block into tickets without erasing existing guidance:
 
@@ -110,8 +110,13 @@ Enforce global/project/wake backpressure outside the per-run seam with an accept
 shared registry reservation. A wake is finite and returns after receipt persistence.
 No busy loop, replacement executor while another may live, or recursive supervisor.
 Computer offline/credentials/capability gaps are blocked outcomes, not claimed runs.
-Unknown usage conservatively retains the full reservation. Use an absolute deadline
-and cancellation/terminal receipts; a restart cannot reset usage or repair counts.
+Finite caps retain unknown-use reservations and configured deadlines. Observe-only
+uses no user resource deadline and records missing telemetry without blocking
+calibration. Retain cancellation/terminal receipts; a restart never resets usage
+or attempts. Each wake handles one scheduling pass, persists receipts, then returns.
+Record actual runner input/cache/output/reasoning counts, exclusive agent time and
+start/end timestamps when available. Distinguish unavailable token measurements
+from failed launch verification. Follow [usage reporting](metrics.md).
 
 Deduplicate notifications by project/lineage/state/evidence identity in the accepted
 registry, with intended/confirmed/uncertain receipts. No-op/unchanged wakes are

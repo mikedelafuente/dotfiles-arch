@@ -576,7 +576,10 @@ reconciles finite wakes through an accepted runner, and `/dark-factory-retro`
 analyzes private evidence with separately authorized synthetic publication.
 These skills create no schedules or live runs during installation. See
 [factory contracts](skills/mikedelafuente/dark-factory/references/contracts.md)
-for authority, budgets, adapters, recovery and validation limits.
+for authority, optional budgets, adapters, recovery and validation limits. Initial
+factory runs use uncapped observe-only calibration with durable per-item token,
+time and attempt records; [usage reports](skills/mikedelafuente/dark-factory/references/metrics.md)
+aggregate project history by model, effort and phase for later tuning.
 
 `dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
 source. It displays the current setting; changes apply on the next skill sync.

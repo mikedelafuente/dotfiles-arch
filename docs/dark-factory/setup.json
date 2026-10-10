@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "revision": 4,
+  "project": "mikedelafuente/dotfiles-arch",
+  "kind": "setup-index",
+  "status": "proposed",
+  "acceptance": null,
+  "lineage": "setup-v1",
+  "run": null,
+  "records": {
+    "charter": {
+      "path": "docs/dark-factory/charter.json",
+      "sha256": "d18e14c7e2e2cb28cc0d4f15f3a65502f279189e799e86d883ce708d4be4ed05"
+    },
+    "council": {
+      "path": "docs/dark-factory/COUNCIL.md",
+      "sha256": "6e3ed5869c00eb2991f3ade300e5e349a072428c0d903cd167ad9827d7ebf235"
+    },
+    "guidance": {
+      "path": "docs/dark-factory/guidance.md",
+      "sha256": "1c79e5168fa6084dd2495a5127153dfe96ed4bdf7061e0f4ab3ce438f604adcf"
+    },
+    "adr": {
+      "path": "docs/adr/0003-bounded-dark-factory.md",
+      "sha256": "231829f842272d76f83b3ced41ae6aba23ba04689d7760f42300940d293bad4e"
+    },
+    "authority": {
+      "path": "docs/dark-factory/authority.json",
+      "sha256": "7ec0a7c4f9f9d0d9085eb8e5ed69aae87b5dd9f7384d613b8eec3fce2b40c634"
+    },
+    "tracker": {
+      "path": "docs/dark-factory/tracker.json",
+      "sha256": "d094b0049f4ee3dcbaf49093c9906643da65553e94f20c1db5d51bbc700974a0"
+    },
+    "decisions": {
+      "path": "docs/dark-factory/decisions.json",
+      "sha256": "6ae8e09460f80e362f620a162349ebcb102b4cf37a258d5889b35b0bdddaef8d"
+    },
+    "coordination": {
+      "path": "docs/dark-factory/coordination.json",
+      "sha256": "2d422db4a9d9d745fd6bc9a580d3f6ac471d914ae389d42dc77a3bf9b82f4a41"
+    }
+  },
+  "accepted": {
+    "charter": null,
+    "council": null,
+    "guidance": null,
+    "adr": null,
+    "authority": null,
+    "tracker": null,
+    "decisions": null,
+    "coordination": null
+  },
+  "evidence": {
+    "date": "2026-10-09",
+    "base_commit": "4d6cefb7081d4d78e118b0429ea5c0dda2b10c45",
+    "source_checkout": "/home/dela/repos/mikedelafuente/dotfiles-arch",
+    "source_verification": "dfa-deploy source succeeded before shared edits",
+    "project_files": [
+      {
+        "path": "README.md",
+        "sha256": "d8d3a1bf5cbfd6ea4c97c73782e1054386e1336ef0ddc6ec07549e9353b91e33"
+      },
+      {
+        "path": "PACKAGES.md",
+        "sha256": "fdc5d2396d4aa1b6941d04833485f7a92b90708a8648bbf2f9c1d7ccc359014b"
+      },
+      {
+        "path": "docs/deployment.md",
+        "sha256": "39b86103f05445e655125a70348746e13adb13ae53f4c82a630ea864c24112c8"
+      },
+      {
+        "path": "docs/agents/issue-tracker.md",
+        "sha256": "afd6852a80185217bd28aa5cbe456bef1e85be25be7bd1fba382d5b8ee428325"
+      },
+      {
+        "path": "docs/adr/0001-post-install-bootstrap-separation.md",
+        "sha256": "808c3b160e2a5025d4a5bd3b335f923df8bf7ee4e96c17d1f557de5fcafadc46"
+      },
+      {
+        "path": "docs/adr/0002-shared-arch-ubuntu-workstations.md",
+        "sha256": "9f5bcc2dcfbf1660be47d2476710baaff4e59334c1629b0604661a97d7c6305a"
+      },
+      {
+        "path": "scripts/run-profile-setup.sh",
+        "sha256": "09b1d0de06a2e3e41d0edf088a59dc08e76e7b18b1ed9ef4559d740c97310622"
+      },
+      {
+        "path": ".github/workflows/shellcheck.yml",
+        "sha256": "b98f74843c9f9a37b6e31eecfa5a6f2291bf513645ce1cc0a1f05d6faeb61c75"
+      },
+      {
+        "path": "docs/market-research/environment-inspiration.md",
+        "sha256": "fa699d191d6e8a37d23fa4bd90761a2e71cf40b18f3d9cc702252ad6ec49ec02"
+      }
+    ],
+    "skills": [
+      {
+        "name": "setup-dark-factory",
+        "discovery_path": "/home/dela/.codex/skills/setup-dark-factory/SKILL.md",
+        "resolved_path": "/home/dela/.local/share/workstation/generations/cefc520e0528f9d2a47c09553006acaed4da40a391cca13ad6c07aad106dcabc-1/tree/skills/mikedelafuente/setup-dark-factory/SKILL.md",
+        "sha256": "e2e2ddd7017ff23ccb3ef32f83d00cbfed663b097e65c0f6eb3d0d38053004ae",
+        "role": "discovery evidence; copy to immutable private root before admission"
+      },
+      {
+        "name": "dark-factory",
+        "discovery_path": "/home/dela/.codex/skills/dark-factory/SKILL.md",
+        "resolved_path": "/home/dela/.local/share/workstation/generations/cefc520e0528f9d2a47c09553006acaed4da40a391cca13ad6c07aad106dcabc-1/tree/skills/mikedelafuente/dark-factory/SKILL.md",
+        "sha256": "7860863ea23c4632c52d18e17a150474f519414671faca47cfc293a037623551",
+        "role": "discovery evidence; copy to immutable private root before admission"
+      },
+      {
+        "name": "agent-council",
+        "discovery_path": "/home/dela/.codex/skills/agent-council/SKILL.md",
+        "resolved_path": "/home/dela/.local/share/workstation/generations/cefc520e0528f9d2a47c09553006acaed4da40a391cca13ad6c07aad106dcabc-1/tree/skills/mikedelafuente/agent-council/SKILL.md",
+        "sha256": "1e556ca71b54c3c85a5966f7855dad625a4bae816ef2e9ea9f6a7b5cc2ae7951",
+        "role": "discovery evidence; copy to immutable private root before admission"
+      },
+      {
+        "name": "implement-spec",
+        "discovery_path": "/home/dela/.codex/skills/implement-spec/SKILL.md",
+        "resolved_path": "/home/dela/.local/share/workstation/generations/cefc520e0528f9d2a47c09553006acaed4da40a391cca13ad6c07aad106dcabc-1/tree/skills/mattpocock/engineering/implement-spec/SKILL.md",
+        "sha256": "7a22dd2e60b8fcece478ced9d2533582adf3520d695acd3ab715341535c9e56d",
+        "role": "discovery evidence; copy to immutable private root before admission"
+      },
+      {
+        "name": "writing-for-agents",
+        "discovery_path": "/home/dela/.codex/skills/writing-for-agents/SKILL.md",
+        "resolved_path": "/home/dela/.local/share/workstation/generations/cefc520e0528f9d2a47c09553006acaed4da40a391cca13ad6c07aad106dcabc-1/tree/skills/mattpocock/productivity/writing-for-agents/SKILL.md",
+        "sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a",
+        "role": "discovery evidence; copy to immutable private root before admission"
+      }
+    ],
+    "proposed_skill_files": [
+      {
+        "path": "skills/mikedelafuente/dark-factory/SKILL.md",
+        "sha256": "6767f026bfb969b8ff458d1662aaa96f7dc304101b62c1a7e85bede08345fe44"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory/references/adapters.md",
+        "sha256": "f8dd48dde099a835bb1f0a6e297195ec8df9bfbabd1bef3178bc3738945818f6"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory/references/contracts.md",
+        "sha256": "e5ee930be6e8acd0cd407478cdb05893e67011ff0d9f5296e8a6b8ee0aba44a6"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory/references/metrics.md",
+        "sha256": "6fcde22a81e47af6cbb565e296caad27ae1c0716516f17c648bc63d097e13634"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory/references/operations.md",
+        "sha256": "a34ceaa4ade20d196a30c69cf9671a3c3720e8be63c8d51e9c1bf2b75a7a0435"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory/references/retro.md",
+        "sha256": "f768f0e8c3ceddbe47b4e8ded18766d0ec192ca3e956e1c78469abee8aebbcf4"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory/scripts/control.py",
+        "sha256": "32c0ecd4de489898c1d748086c762a3ed1cf259f71d4ad96d448119d7893524b"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory-idea/SKILL.md",
+        "sha256": "bf5842af470127a78849166b114db2cae0e0dc38eb1efd72a66e551cc45ad0fb"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory-retro/SKILL.md",
+        "sha256": "43352477a8149a2941e2dfc69cdf330494d5619819bbcecdd1ee57a1e32ee29c"
+      },
+      {
+        "path": "skills/mikedelafuente/dark-factory-supervisor/SKILL.md",
+        "sha256": "79475f25b2e279e6d726a38084106cd48500367206de794b9e53434875e994fa"
+      },
+      {
+        "path": "skills/mikedelafuente/setup-dark-factory/SKILL.md",
+        "sha256": "b11fcf78a6a8a275c5911b6548c11deec602e953637896d5776d240751ded9b5"
+      }
+    ]
+  },
+  "gaps": [
+    "no accepted setup or authority receipts",
+    "no first goal/proposal/criteria/selected milestone",
+    "no executable run bundle; setup index intentionally parks at missing run",
+    "runtime adapters not established; see coordination",
+    "live runner/verifier integration and adoption of updated source skill/controller snapshots remain unverified"
+  ],
+  "validation": {
+    "setup_fields": "schema/revision/status, references and observe-only optional limits checked; source control and report fixtures passed",
+    "control_cli": "init on this index must park with missing run; no operational store admitted",
+    "runtime": "not verified",
+    "evidence": {
+      "path": "docs/validation/dark-factory-setup.md",
+      "sha256": "d3c2b3a8646478baaa4b5410b1319f543b78ebdfb7820ec6a9b28fe9d8eea011"
+    }
+  }
+}

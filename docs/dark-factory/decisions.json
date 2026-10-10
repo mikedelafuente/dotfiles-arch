@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "revision": 2,
+  "project": "mikedelafuente/dotfiles-arch",
+  "kind": "decision-ledger",
+  "status": "proposed",
+  "acceptance": null,
+  "actual_answers": [
+    {
+      "id": "DF-Q1",
+      "question": "How should approved changes be grouped?",
+      "answer": "Use GitHub milestones per approved change",
+      "status": "accepted-by-user",
+      "source": "current human chat answer",
+      "observed_at": "2026-10-09T23:47:34Z",
+      "subject": "grouping choice only; not full resolver/charter/action authority",
+      "receipt_verification": "pending accepted verifier"
+    },
+    {
+      "id": "DF-Q2",
+      "question": "Should initial calibration runs have user-set token/time caps?",
+      "answer": "Start without user-set token/time caps and report statistics after runs.",
+      "status": "accepted-by-user",
+      "source": "current human chat: Can we just start off unlimited and then report back the stats at the end of some of the runs so I get an idea?",
+      "observed_at": "2026-10-10T00:10:17.097208+00:00",
+      "subject": "initial calibration budget/reporting choice only; separate action authority and runtime admission still required",
+      "receipt_verification": "pending accepted verifier"
+    }
+  ],
+  "existing_direction": [
+    {
+      "id": "ADR-0001",
+      "path": "docs/adr/0001-post-install-bootstrap-separation.md",
+      "status": "existing documented direction; retain"
+    },
+    {
+      "id": "ADR-0002",
+      "path": "docs/adr/0002-shared-arch-ubuntu-workstations.md",
+      "status": "accepted in existing ADR frontmatter; retain"
+    }
+  ],
+  "proposals": [
+    {
+      "id": "DF-P1",
+      "value": "Manual observe-only calibration runs without user token/time caps; one worker, retained approval/review/no-progress/trial stops, usage reports after each run.",
+      "alternatives": [
+        "continue interactive workflow without factory execution"
+      ],
+      "dissent": [],
+      "supersedes": "DF-P1 initial 120000-token / 7200-second cap; rejected as uncalibrated"
+    },
+    {
+      "id": "DF-P2",
+      "value": "Native milestone + sub-issue + dependency resolver, bounded to 100 members / depth 8",
+      "alternatives": [
+        "explicit issue set",
+        "existing wayfinder map with accepted fallback body links"
+      ],
+      "dissent": []
+    },
+    {
+      "id": "DF-P3",
+      "value": "Separate authority acceptance; no external publication or scheduling in initial policy",
+      "alternatives": [
+        "approve scoped publication and scheduler separately after adapter validation"
+      ],
+      "dissent": []
+    }
+  ],
+  "unanswered": [
+    "first delivery goal/spec and selected milestone exact IDs",
+    "acceptance of charter/council/guidance/ADR/resolver/budgets",
+    "separate authority and verifier acceptance",
+    "runtime adapter gaps in coordination record",
+    "optional scheduling/publication/notification permissions"
+  ],
+  "supersession": {
+    "superseded_id": "decision-ledger revision 1 budget proposal",
+    "reason": "User requested uncapped calibration and end-of-run statistics",
+    "impacted_requirements": [
+      "token/time budget policy",
+      "runner usage reporting",
+      "finite-budget controller compatibility"
+    ]
+  },
+  "assumptions": [
+    "Workstation reliability and preserved user state are candidate factory goals inferred from project docs; first business outcome needs human direction."
+  ]
+}

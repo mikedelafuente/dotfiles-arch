@@ -11,6 +11,7 @@ import json
 import math
 import os
 from pathlib import Path
+import statistics
 import tempfile
 import time
 
@@ -48,6 +49,50 @@ def positive(value):
     return type(value) is int and value > 0
 
 
+def observed_number(value):
+    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+
+
+def observe_only(policy):
+    return policy.get("budget_mode", "bounded") == "observe-only"
+
+
+def within(value, limit):
+    return limit is None or value <= limit
+
+
+def expired(policy):
+    return policy["deadline"] is not None and time.time() >= policy["deadline"]
+
+
+def nullable_units(policy):
+    return {unit for unit in ("tokens", "seconds") if observe_only(policy) and policy["limits"][unit] is None}
+
+
+def usage_valid(usage, partial=()):
+    require(isinstance(usage, dict), "invalid observed usage")
+    for unit in ("tokens", "seconds"):
+        value = usage[unit]
+        require((unit in partial and value is None) or
+                (type(value) is int and value >= 0 if unit == "tokens" else observed_number(value)),
+                f"invalid observed usage: {unit}")
+    for unit in ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens", "reasoning_tokens"):
+        value = usage.get(unit)
+        require(value is None or type(value) is int and value >= 0, f"invalid token category: {unit}")
+    for subset, total in (("cached_input_tokens", "input_tokens"),
+                          ("cache_write_tokens", "input_tokens"), ("reasoning_tokens", "output_tokens")):
+        if usage.get(subset) is not None and usage.get(total) is not None:
+            require(usage[subset] <= usage[total], f"token subset exceeds {total}")
+    if all(usage.get(unit) is not None for unit in ("tokens", "input_tokens", "output_tokens")):
+        require(usage["tokens"] == usage["input_tokens"] + usage["output_tokens"], "token total double-counted/mismatched")
+
+
+def timing_valid(timing):
+    require(isinstance(timing, dict) and
+            all(observed_number(timing.get(unit)) for unit in ("started_at", "finished_at")) and
+            timing["finished_at"] >= timing["started_at"], "invalid observed timing")
+
+
 def text(value):
     return isinstance(value, str) and bool(value.strip())
 
@@ -81,11 +126,15 @@ def validate(bundle):
     for name in ("project", "lineage", "run"):
         require(text(bundle.get(name)), f"missing {name}")
     policy = bundle["policy"]
+    require(policy.get("budget_mode", "bounded") in ("bounded", "observe-only"), "invalid budget mode")
     for name in ("tokens", "seconds", "attempts", "concurrency", "queue", "repairs", "no_progress"):
-        require(positive(policy["limits"][name]), f"invalid finite limit: {name}")
+        require(positive(policy["limits"][name]) or
+                (observe_only(policy) and name in ("tokens", "seconds", "attempts", "repairs") and
+                 policy["limits"][name] is None), f"invalid limit: {name}")
     require(positive(policy["context"]["entries"]) and positive(policy["context"]["bytes"]),
             "invalid context limits")
-    require(type(policy["deadline"]) in (int, float) and math.isfinite(policy["deadline"]),
+    require((observe_only(policy) and policy["deadline"] is None) or
+            (type(policy["deadline"]) in (int, float) and math.isfinite(policy["deadline"])),
             "invalid absolute deadline")
     require(text(policy["verifier"]) and policy["approval_sources"], "missing trusted verifier")
     require(isinstance(policy["actions"], list) and policy["actions"], "missing allowed actions")
@@ -169,8 +218,8 @@ def write(path, value):
 
 
 def totals(state):
-    return {unit: sum(claim["allocation"][unit] for claim in state["claims"].values()
-                      if claim["usage"] is None) for unit in ("tokens", "seconds")}
+    return {unit: sum(claim["allocation"][unit] or 0 for claim in state["claims"].values()
+                      if claim["usage"] is None or claim["usage"][unit] is None) for unit in ("tokens", "seconds")}
 
 
 def eligible(bundle, state):
@@ -191,7 +240,7 @@ def admitted(bundle, state):
     receipt(state["approval"], bundle["records"]["proposal"]["sha256"], bundle["policy"])
     require(state["phase"] not in ("awaiting-user-trial", "completed", "budget-exhausted"),
             "run paused or finished")
-    require(time.time() < bundle["policy"]["deadline"], "run deadline exhausted")
+    require(not expired(bundle["policy"]), "run deadline exhausted")
     require(not any(item["status"] in ("intended", "uncertain")
                     for item in state["actions"].values()), "uncertain action: reconcile first")
 
@@ -208,29 +257,36 @@ def effort_plan(bundle, plan):
     return {"model": tier["model"], "effort": tier["effort"]}
 
 
-def owned(state, event):
+def owned(state, event, historical=False):
     require(event["run"] == state["run"], "stale run callback")
     claim = state["claims"][event["ticket"]]
+    if historical and claim["action"] != event["action"]:
+        claim = state.get("history", {})[event["action"]]
+        require(state["actions"][event["action"]]["target"] == event["ticket"], "wrong historical ticket")
     require(event["owner"] == claim["owner"] and event["fence"] == claim["fence"] and
             event["action"] == claim["action"], "stale owner/fence/action callback")
     return claim
 
 
-def settle(state, claim, usage):
-    require(claim["usage"] is None, "usage already settled")
-    require(all(type(usage[unit]) is int and usage[unit] >= 0 for unit in ("tokens", "seconds")),
-            "invalid observed usage")
-    claim["usage"] = usage
+def settle(state, claim, usage, partial=()):
+    usage_valid(usage, partial)
+    previous = claim["usage"] or {}
+    require(all(value is None or usage.get(unit, value) == value for unit, value in previous.items()),
+            "settled usage cannot change")
+    require(not previous or any(value is not None and previous.get(unit) is None
+                               for unit, value in usage.items()), "usage already settled")
+    claim["usage"] = dict(previous, **usage)
+    usage_valid(claim["usage"], partial)
     for unit in ("tokens", "seconds"):
-        state["used"][unit] += usage[unit]
+        state["used"][unit] += (usage[unit] or 0) - (previous.get(unit) or 0)
 
 
 def refresh(bundle, state):
     if state["phase"] in ("awaiting-idea-approval", "awaiting-user-trial", "completed"):
         return
     limits = bundle["policy"]["limits"]
-    if time.time() >= bundle["policy"]["deadline"] or any(
-            state["used"][unit] + totals(state)[unit] > limits[unit]
+    if expired(bundle["policy"]) or any(
+            not within(state["used"][unit] + totals(state)[unit], limits[unit])
             for unit in ("tokens", "seconds")):
         state["phase"] = "budget-exhausted"
     elif any(action["status"] in ("intended", "uncertain") for action in state["actions"].values()):
@@ -250,6 +306,10 @@ def apply_event(bundle, state, event):
     operation = event["op"]
     policy = bundle["policy"]
     root = policy["artifact_root"]
+    if event.get("timing") is not None:
+        timing_valid(event["timing"])
+    if event.get("phase") is not None:
+        require(text(event["phase"]), "invalid activity phase")
     if operation == "approval":
         item = event["receipt"]
         require(item.get("verified") is True and item.get("verifier") == policy["verifier"] and
@@ -270,25 +330,31 @@ def apply_event(bundle, state, event):
         require(running < policy["limits"]["concurrency"], "concurrency/backpressure limit")
         old = state["claims"].get(ticket)
         if old:
-            require(old["terminal"] is not None and old["usage"] is not None,
+            require(old["terminal"] is not None and all(
+                    unit in nullable_units(policy) or old["usage"] is not None and old["usage"][unit] is not None
+                    for unit in ("tokens", "seconds")),
                     "prior worker/usage uncertain: reconcile before retry")
-            require(old["repairs"] < policy["limits"]["repairs"], "repair limit exhausted")
+            require(within(old["repairs"] + 1, policy["limits"]["repairs"]), "repair limit exhausted")
             require(max(old["failures"].values(), default=0) < policy["limits"]["no_progress"],
                     "repeated failure/no progress")
-        require(state["used"]["attempts"] < policy["limits"]["attempts"], "attempt limit exhausted")
+        require(within(state["used"]["attempts"] + 1, policy["limits"]["attempts"]), "attempt limit exhausted")
         allocation = event["allocation"]
         for unit in ("tokens", "seconds"):
-            require(positive(allocation[unit]), f"invalid reservation: {unit}")
-            require(state["used"][unit] + totals(state)[unit] + allocation[unit] <=
-                    policy["limits"][unit], f"{unit} budget exhausted")
+            require(positive(allocation[unit]) or (observe_only(policy) and
+                    policy["limits"][unit] is None and allocation[unit] is None), f"invalid reservation: {unit}")
+            require(within(state["used"][unit] + totals(state)[unit] + (allocation[unit] or 0),
+                           policy["limits"][unit]), f"{unit} budget exhausted")
         effort = event["effort"]
         require(effort["model"] in policy["models"] and
                 effort["effort"] in policy["models"][effort["model"]], "unsupported model/effort")
         require(effort == effort_plan(bundle, event["plan"]), "launch differs from accepted effort plan")
         require(text(event["owner"]) and event["lease_until"] > time.time(), "invalid owner/lease")
         action = event["action"]
-        require(text(action) and action not in state["actions"], "duplicate launch action")
+        require(text(action) and action not in state["actions"] and
+                action not in state.get("activities", {}), "duplicate launch action")
         state["used"]["attempts"] += 1
+        if old:
+            state.setdefault("history", {})[old["action"]] = old
         state["claims"][ticket] = {
             "owner": event["owner"], "fence": old["fence"] + 1 if old else 1,
             "lease_until": event["lease_until"], "action": action,
@@ -314,7 +380,7 @@ def apply_event(bundle, state, event):
         claim["terminal"] = event["terminal"]
         claim["evidence"] = event["evidence"]
         if event.get("usage") is not None:
-            settle(state, claim, event["usage"])
+            settle(state, claim, event["usage"], nullable_units(policy))
         claim["status"] = "reported"
         state["phase"] = "evaluating"
     elif operation == "evaluate":
@@ -346,14 +412,32 @@ def apply_event(bundle, state, event):
         require(event["outcome"] in ("cancelled", "failed"), "invalid terminal reconciliation")
         claim["terminal"] = event["terminal"]
         if claim["usage"] is None and event.get("usage") is not None:
-            settle(state, claim, event["usage"])
+            settle(state, claim, event["usage"], nullable_units(policy))
         claim["status"] = event["outcome"]
         state["actions"][claim["action"]]["status"] = "confirmed"
     elif operation == "settle-usage":
-        claim = owned(state, event)
+        claim = owned(state, event, historical=True)
         require(claim["terminal"] is not None, "usage settlement needs terminal evidence")
         reference(event["evidence"], root)
-        settle(state, claim, event["usage"])
+        settle(state, claim, event["usage"], nullable_units(policy))
+    elif operation == "activity":
+        require(event["run"] == state["run"], "stale activity run")
+        require(text(event["identity"]) and event["identity"] not in state["actions"] and
+                event["identity"] not in state.get("activities", {}), "duplicate activity identity")
+        require(event.get("ticket") is None or event["ticket"] in bundle["selection"]["tickets"],
+                "activity outside selected tickets")
+        require(text(event["item"]) and text(event["phase"]) and text(event["owner"]) and
+                positive(event["attempt"]), "missing activity identity/phase/attempt")
+        require(event["model"] in policy["models"] and event["effort"] in policy["models"][event["model"]],
+                "unsupported activity model/effort")
+        require(event["outcome"] in ("completed", "failed", "cancelled", "interrupted"), "invalid activity outcome")
+        reference(event["evidence"], root)
+        usage_valid(event["usage"], nullable_units(policy))
+        # Accounting only: this records already authorized work, never admits a launch.
+        state.setdefault("activities", {})[event["identity"]] = event["id"]
+        for unit in ("tokens", "seconds"):
+            state["used"][unit] += event["usage"][unit] or 0
+        state["used"]["attempts"] += 1
     elif operation == "checkpoint":
         admitted(bundle, state)
         require(set(bundle["selection"]["checkpoint"]) <= set(state["accepted_tickets"]),
@@ -380,7 +464,8 @@ def apply_event(bundle, state, event):
         owned(state, event)
         require(event["operation"] in policy["actions"], "external action forbidden")
         require(event["target"] in bundle["selection"]["tickets"], "external action outside selection")
-        require(text(event["identity"]) and event["identity"] not in state["actions"],
+        require(text(event["identity"]) and event["identity"] not in state["actions"] and
+                event["identity"] not in state.get("activities", {}),
                 "external action already recorded; reconcile outcome")
         state["actions"][event["identity"]] = {
             "operation": event["operation"], "target": event["target"], "status": "intended",
@@ -413,8 +498,9 @@ def packet(store, bundle, state, cursor):
         "schema_version": 1, "project": bundle["project"], "lineage": bundle["lineage"],
         "run": bundle["run"], "phase": state["phase"], "version": state["version"],
         "used": state["used"], "reserved": totals(state),
-        "remaining": {unit: max(0, bundle["policy"]["limits"][unit] - state["used"][unit] -
-                                totals(state).get(unit, 0)) for unit in state["used"]},
+        "remaining": {unit: None if bundle["policy"]["limits"][unit] is None else
+                      max(0, bundle["policy"]["limits"][unit] - state["used"][unit] -
+                          totals(state).get(unit, 0)) for unit in state["used"]},
         "bundle": {"path": str(store / "bundle.json"), "sha256": digest(bundle)},
         "state": {"path": str(store / "state.json"), "sha256": digest(state)},
         "receipt_index": str(store / "receipts"), "prototype": state.get("prototype"),
@@ -430,6 +516,137 @@ def packet(store, bundle, state, cursor):
         result = candidate
     require(not rows[cursor:] or result["page"], "frontier entry exceeds bound: park; detail is indexed")
     return result
+
+
+def run_report(store, bundle, state):
+    """Rebuild per-attempt observations from committed receipts, including old retries."""
+    rows = {}
+    events = []
+    for key, expected in state["events"].items():
+        event = read(store / "receipts" / f"{key}.json")
+        if key in state.get("receipt_hashes", {}):
+            require(digest(event) == state["receipt_hashes"][key], "usage receipt/timestamp drift")
+        received = event.pop("_received_at", None)
+        require(digest(event) == expected, "usage receipt drift")
+        events.append((event, received))
+    order = {op: index for index, op in enumerate(
+        ("reserve", "launched", "result", "reconcile", "evaluate", "settle-usage", "activity"))}
+    for event, received in sorted(events, key=lambda pair: (pair[1] or 0, order.get(pair[0]["op"], 0))):
+        op = event["op"]
+        if op not in ("reserve", "launched", "result", "reconcile", "settle-usage", "evaluate", "activity"):
+            continue
+        identity = event["identity"] if op == "activity" else event["action"]
+        row = rows.setdefault(identity, {
+            "identity": identity, "ticket": event.get("ticket"), "item": event.get("ticket"),
+            "phase": "implementation", "owner": event.get("owner"), "attempt": event.get("fence"),
+            "requested": None, "observed": None, "started_at": None, "finished_at": None,
+            "timing_source": None, "usage": None, "outcome": "unknown", "evidence": []})
+        if "fence" in event:
+            row["attempt"] = event["fence"]
+        if op == "reserve":
+            claim = state["claims"].get(event["ticket"])
+            if claim and claim["action"] != identity:
+                claim = state.get("history", {}).get(identity)
+            row.update(requested=event["effort"], item=event.get("item", event["ticket"]),
+                       attempt=claim["fence"] if claim else None,
+                       phase=event.get("phase", "repair" if claim and claim["fence"] > 1 else "implementation"),
+                       outcome="reserved")
+        elif op == "launched":
+            row.update(observed=event["observed"], started_at=received, outcome="running")
+        elif op in ("result", "reconcile"):
+            row.update(finished_at=received, outcome=event.get("outcome", "completed"))
+        elif op == "evaluate":
+            row["outcome"] = "accepted" if event["passed"] else "failed"
+        elif op == "activity":
+            row.update(item=event["item"], phase=event["phase"], attempt=event["attempt"],
+                       observed={"model": event["model"], "effort": event["effort"]}, outcome=event["outcome"])
+        if "usage" in event and event["usage"] is not None:
+            row["usage"] = dict(row["usage"] or {}, **event["usage"])
+        if event.get("timing") is not None:
+            row.update(event["timing"], timing_source="runner-evidence")
+        for name in ("evidence", "terminal"):
+            if event.get(name) is not None:
+                row["evidence"].append(event[name])
+    items = []
+    for row in rows.values():
+        row["wall_seconds"] = (row["finished_at"] - row["started_at"]
+                               if row["started_at"] is not None and row["finished_at"] is not None else None)
+        if row["wall_seconds"] is not None and row["timing_source"] is None:
+            row["timing_source"] = "coordinator-receipt-clock"
+        items.append(dict(row, project=bundle["project"], lineage=bundle["lineage"], run=bundle["run"],
+                          target=bundle["selection"]["target"], store=str(store.resolve())))
+    clocks = [received for _, received in events if received is not None]
+    timeline = {"first_receipt_at": min(clocks) if clocks else None,
+                "last_receipt_at": max(clocks) if clocks else None,
+                "observed_span_seconds": max(clocks) - min(clocks) if clocks else None,
+                "source": "coordinator-receipt-clock", "includes_waits": True}
+    return {"schema_version": 1, "project": bundle["project"], "lineage": bundle["lineage"],
+            "run": bundle["run"], "target": bundle["selection"]["target"], "phase": state["phase"],
+            "timeline": timeline, "items": items, **usage_summary(items)}
+
+
+def usage_summary(items):
+    def summarize(rows):
+        metrics = {}
+        for name in ("tokens", "seconds", "input_tokens", "cached_input_tokens", "cache_write_tokens",
+                     "output_tokens", "reasoning_tokens", "wall_seconds"):
+            values = [row.get("wall_seconds") if name == "wall_seconds" else
+                      (row.get("usage") or {}).get(name) for row in rows]
+            known = [value for value in values if value is not None]
+            metrics[name] = {"known_total": sum(known), "measured_items": len(known),
+                             "missing_items": len(values) - len(known),
+                             "mean": statistics.mean(known) if known else None,
+                             "median": statistics.median(known) if known else None,
+                             "min": min(known) if known else None, "max": max(known) if known else None}
+        return {"attempts": len(rows), "metrics": metrics}
+
+    grouped, by_item = {}, {}
+    for row in items:
+        observed = row["observed"] or {"model": None, "effort": None}
+        key = (row["project"], row["phase"], observed["model"], observed["effort"])
+        grouped.setdefault(key, []).append(row)
+        item_key = (row["project"], row["lineage"], row["run"], row["ticket"], row["item"])
+        by_item.setdefault(item_key, []).append(row)
+    return {"totals": summarize(items), "by_item": [
+        {"project": key[0], "lineage": key[1], "run": key[2], "ticket": key[3], "item": key[4],
+         "outcomes": [row["outcome"] for row in rows], **summarize(rows)} for key, rows in by_item.items()],
+        "by_effort": [
+        {"project": key[0], "phase": key[1], "model": key[2], "effort": key[3], **summarize(rows)}
+        for key, rows in grouped.items()]}
+
+
+def project_report(root):
+    reports, identities = [], {}
+    # ponytail: scan private run stores on demand; index only if history makes this slow.
+    for path in sorted(root.rglob("state.json")):
+        store = path.parent
+        if not (store / "bundle.json").is_file():
+            continue
+        require(not path.is_symlink() and not (store / "bundle.json").is_symlink(), "linked report store")
+        require(store.stat().st_mode & 0o077 == 0, "report store must be private (0700)")
+        with (store / "lock").open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            bundle, state = read(store / "bundle.json"), read(path)
+            require(state["bundle_hash"] == digest(bundle), "immutable snapshot changed")
+            identity = (bundle["project"], bundle["lineage"], bundle["run"])
+            signature = (digest(bundle), digest(state))
+            if identity in identities:
+                require(identities[identity] == signature, "conflicting copies of one run")
+                continue
+            identities[identity] = signature
+            reports.append(run_report(store, bundle, state))
+    items = [item for report in reports for item in report["items"]]
+    return {"schema_version": 1, "runs": [{name: report[name] for name in
+            ("project", "lineage", "run", "target", "phase", "timeline")} for report in reports],
+            "items": items, **usage_summary(items)}
+
+
+def save_report(root, report):
+    path = root / "usage-report.json"
+    require(not path.is_symlink(), "report cannot replace symlink")
+    write(path, report)
+    os.chmod(path, 0o600)
+    return {"report": {"path": str(path.resolve()), "sha256": digest(report)}, "totals": report["totals"]}
 
 
 def fingerprint(proposal):
@@ -456,9 +673,13 @@ def publication_check(proposal):
     require(proposal["lookup_complete"] is True and proposal["prior_outcome"] == "absent",
             "existing/uncertain publication: reconcile or link")
     for unit in ("count", "tokens", "seconds"):
-        require(positive(proposal["limits"][unit]) and
-                type(proposal["usage"][unit]) is int and 0 <= proposal["usage"][unit] <
-                proposal["limits"][unit], f"publication {unit} exhausted")
+        limit = proposal["limits"][unit]
+        require(positive(limit) or (unit != "count" and observe_only(proposal) and limit is None),
+                f"invalid publication limit: {unit}")
+        value = proposal["usage"][unit]
+        valid = (type(value) is int and value >= 0) if unit != "seconds" else observed_number(value)
+        require((limit is None and value is None) or
+                (valid and (limit is None or value < limit)), f"publication {unit} exhausted")
     return {"fingerprint": fingerprint(proposal), "content_hash": content_hash,
             "status": "eligible-for-authorized-publication"}
 
@@ -466,13 +687,15 @@ def publication_check(proposal):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "apply", "status", "packet", "effort-plan"):
+    for name in ("init", "apply", "status", "packet", "effort-plan", "report", "report-project"):
         command = sub.add_parser(name)
         command.add_argument("store", type=Path)
         if name in ("init", "apply", "effort-plan"):
             command.add_argument("input", type=Path)
         if name == "packet":
             command.add_argument("--cursor", type=int, default=0)
+        if name in ("report", "report-project"):
+            command.add_argument("--write", action="store_true", help="Save private usage-report.json; return its reference")
     for name in ("fingerprint", "publication-check"):
         sub.add_parser(name).add_argument("input", type=Path)
     args = parser.parse_args()
@@ -488,6 +711,12 @@ def main():
                 store.mkdir(mode=0o700, parents=True, exist_ok=True)
             require(store.is_dir(), "store unavailable")
             require(store.stat().st_mode & 0o077 == 0, "store must be private (0700)")
+            if args.command == "report-project":
+                result = project_report(store)
+                if args.write:
+                    result = save_report(store, result)
+                print(encoded(result).decode())
+                return 0
             with (store / "lock").open("a+") as lock:
                 os.chmod(store / "lock", 0o600)
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -512,6 +741,7 @@ def main():
                         result = effort_plan(bundle, read(args.input))
                     elif args.command == "apply":
                         event = read(args.input)
+                        require("_received_at" not in event, "receipt timestamp is coordinator-owned")
                         require(text(event["id"]), "missing event identity")
                         key = digest(event["id"])
                         previous = state["events"].get(key)
@@ -523,9 +753,21 @@ def main():
                             state["version"] += 1
                             state["events"][key] = digest(event)
                             # Receipt first; interruption before state commit is replayable locally.
-                            write(store / "receipts" / f"{key}.json", event)
+                            path = store / "receipts" / f"{key}.json"
+                            received = time.time()
+                            if path.exists():
+                                previous_event = read(path)
+                                received = previous_event.pop("_received_at", received)
+                                require(previous_event == event, "uncommitted receipt differs: reconcile")
+                            recorded = dict(event, _received_at=received)
+                            state.setdefault("receipt_hashes", {})[key] = digest(recorded)
+                            write(path, recorded)
                             write(store / "state.json", state)
                             result = {"phase": state["phase"], "version": state["version"]}
+                    elif args.command == "report":
+                        result = run_report(store, bundle, state)
+                        if args.write:
+                            result = save_report(store, result)
                     else:
                         result = packet(store, bundle, state, args.cursor if args.command == "packet" else 0)
         print(encoded(result).decode())

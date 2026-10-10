@@ -12,6 +12,10 @@ guidance, ADRs and authority; validate their identities. Missing, conflicting or
 changed grouping configuration routes to `setup-dark-factory`, not a new tracker
 interview on every idea.
 
+Read the resolved dark-factory leaf's [usage reporting](../dark-factory/references/metrics.md)
+when recording planning/council/research effort. Initial calibration proposes
+observe-only usage reporting; a finite selected graph does not require resource caps.
+
 Inputs: broad idea or change request, accepted project records and, for a delta,
 the current verified prototype. Idea invocation starts no implementation.
 
@@ -40,7 +44,7 @@ the current verified prototype. Idea invocation starts no implementation.
    Apply the four-score model/effort contract; retain existing `execution_guidance`
    and user edits. Publication/assignment needs destination/action authority;
    otherwise save private draft tickets and parent summary.
-6. Present outcome, scope, material architecture choices, risk, budget and
+6. Present outcome, scope, material architecture choices, risk, observation/configured budget policy and
    checkpoints with an exact revision/hash. Record actual authenticated approval
    only through the accepted verifier; stop in `awaiting-idea-approval` until it
    matches. A label, assistant text, silence or wake is not approval. Material
@@ -48,7 +52,8 @@ the current verified prototype. Idea invocation starts no implementation.
    relationship to the existing approval without another gate.
 
 Completion: versioned spec/delta, bounded graph, effort plan, evidence and dissent,
-blockers, approval status and authority references. Archive interview/research detail
+blockers, approval status and authority references. Preserve per-item planning
+usage/timing/attempt receipts for the project aggregate, with missing telemetry explicit. Archive interview/research detail
 behind durable pointers. Hand off to a direct authorized `dark-factory` invocation
 or an explicitly accepted supervisor; this skill starts no build, commit, push,
 PR, merge or deployment.

@@ -303,3 +303,15 @@ Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `read
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+<!-- dark-factory-navigation:start -->
+
+### Dark factory
+
+For factory planning, execution, evaluation, resume or retro, load
+[`docs/dark-factory/setup.json`](docs/dark-factory/setup.json), then its hashed
+charter, council, guidance, tracker, ADR and authority pointers. Revision 4 is
+proposed: require current human acceptance and separate action authority before
+relying on it autonomously; preserve approval and hands-on trial pauses.
+
+<!-- dark-factory-navigation:end -->

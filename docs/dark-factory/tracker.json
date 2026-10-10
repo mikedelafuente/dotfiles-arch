@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "revision": 1,
+  "project": "mikedelafuente/dotfiles-arch",
+  "kind": "tracker-resolver",
+  "status": "proposed",
+  "acceptance": null,
+  "tracker": "github",
+  "repository": {
+    "name": "mikedelafuente/dotfiles-arch",
+    "database_id": 1105810955,
+    "node_id": "R_kgDOQelWCw"
+  },
+  "human_choice": {
+    "value": "native milestones per approved change",
+    "status": "accepted-by-user",
+    "source": "current chat; explicit answer \"Use GitHub milestones per approved change\"",
+    "observed_at": "2026-10-09T23:47:34Z",
+    "automated_verification": "not configured"
+  },
+  "target": {
+    "kind": "github-native-milestone",
+    "number": null,
+    "database_id": null,
+    "node_id": null
+  },
+  "labels": {
+    "grouping_ids": [],
+    "required_for_membership": false
+  },
+  "query": "GET /repos/mikedelafuente/dotfiles-arch/issues?milestone={exact_number}&state=all&per_page=100",
+  "resolver": {
+    "api_version": "2022-11-28; verify supported version at admission",
+    "pagination": "Follow every next Link; record each response and terminal page. Stop and mark incomplete when any bound is reached before exhaustion.",
+    "descendants": "Traverse each seed issue GET /repos/{owner}/{repo}/issues/{number}/sub_issues recursively. Include all descendants, even outside the milestone, in the approval snapshot; cross-repository descendants require a separately approved repository scope. Record database/node IDs, parent edges and updated_at. Dedupe by repository plus database ID; reject cycles.",
+    "fallback": "Native hierarchy unavailable: use documented map task lists plus child Part of links only after explicit resolver-successor acceptance; never silently switch.",
+    "dependencies": "GET /repos/{owner}/{repo}/issues/{number}/dependencies/blocked_by for each selected issue, fully paginate. Resolve transitive external blockers within the same finite bounds; verify acyclic graph. Closed external blockers need pinned satisfaction evidence; open/unreadable blockers prevent dependent admission.",
+    "dependency_fallback": "Explicitly accepted successor may use documented Blocked by body lines; unsupported native API currently parks affected work.",
+    "exclusions": [
+      "pull_request objects",
+      "issues outside milestone with no selected descendant relationship",
+      "explicit human-approved exclusions, provided they remove no required descendant or dependency"
+    ],
+    "bounds": {
+      "members": 100,
+      "depth": 8,
+      "pages_total": 100,
+      "dependency_nodes": 100
+    },
+    "completeness": "All seed, descendant and dependency pages exhausted; all memberships/edges/IDs and versions recorded; no unresolved scope or API failures; recheck drift before admission. Snapshot additions/removals require successor scope approval.",
+    "completion": "Every frozen selected descendant independently passes required criteria and human trial disposition is recorded. Tracker closure needs separate action authority.",
+    "trial_stop": "Explicit checkpoint ticket IDs selected with the idea proposal; no selection yet."
+  },
+  "inspection": {
+    "date": "2026-10-09",
+    "milestones": [],
+    "milestone_page_count": 1,
+    "scope": "state=all, per_page=100 returned empty; no target created"
+  },
+  "primary_sources": [
+    {
+      "url": "https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28",
+      "access_date": "2026-10-09",
+      "applicability": "Milestone-scoped issue query; PR exclusion and pagination.",
+      "limitations": "Documentation does not prove credentials or runtime resolver correctness."
+    },
+    {
+      "url": "https://docs.github.com/en/rest/issues/sub-issues?apiVersion=2022-11-28",
+      "access_date": "2026-10-09",
+      "applicability": "Native descendant traversal.",
+      "limitations": "Actual target/API access remains untested."
+    },
+    {
+      "url": "https://docs.github.com/en/rest/issues/issue-dependencies?apiVersion=2022-11-28",
+      "access_date": "2026-10-09",
+      "applicability": "Native blocking relationship lookup.",
+      "limitations": "No network resolver ships with the control CLI; adapter must be supplied and validated."
+    }
+  ]
+}
