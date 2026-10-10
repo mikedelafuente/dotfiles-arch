@@ -2,14 +2,18 @@
 
 ## Installed DFA copies
 
-Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
-`~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
-obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
-live files and return failure. `dfa-deploy source` identifies the shared edit destination.
-Use `dfa-deploy capture <artifact>` for one selected source improvement,
-`dfa-deploy override <artifact> <file>` for a persistent local override,
-`dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
-for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
+Managed configuration, helpers, rules, skills and Pi resources use
+`~/.local/share/workstation/config`, a symlink to `blue` or `green`.
+A fresh installation starts with `blue`. Deployment copies and validates the
+inactive folder, switches `config`, and keeps the old active folder as the backup.
+Installed files are replaceable: edit shared files in the checkout identified by
+`dfa-deploy source`. Machine-local settings stay outside managed files.
+
+`dfa-deploy deploy` applies local working files without fetching or committing.
+`dfa-deploy update` requires a clean checkout and pulls before deployment.
+Use `dfa-deploy rebind <checkout>` after a source move, `dfa-deploy rollback`
+for the previous copy, and `dfa-deploy recover` after interrupted activation.
+See [deployment policy](docs/deployment.md).
 
 
 You have been away. This is the short version. Full detail: [README.md](README.md) · install deep dive: [NOTES.md](NOTES.md).
@@ -280,7 +284,7 @@ Super+1-9        workspaces        sync.sh      update machine
 
 The [skills repository](https://github.com/mikedelafuente/skills) owns shared
 skills/rules and all opt-in Pi maintenance. Workstation sync consumes only manually
-registered data through generations. Review [deployment](docs/deployment.md)
+registered data through installed copies. Review [deployment](docs/deployment.md)
 before a separately authorized live cutover. For future authorized workstation
 use, the owner supplies `bin/pi-setup install --resources generation`; registration
 is `dfa-sync-sources add /path/to/skills --type standard`. Do not also load that

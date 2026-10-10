@@ -10,7 +10,7 @@
 # (see dfa-sync-sources --type). Only ever touches symlinks whose target is a
 # configured source's effective skills dir — real directories elsewhere are
 # left alone. Pi settings reconciliation belongs to the standalone resource
-# owner; generation preflight blocks duplicate resource routes. Safe to re-run.
+# owner; Copy preflight blocks duplicate resource routes. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 

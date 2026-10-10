@@ -5,7 +5,7 @@ Arch Linux / installed Ubuntu 26.04 LTS, x86_64/amd64, GNOME Wayland workstation
 
 ## Read when relevant
 
-- Deployment, migration, source moves, overrides, capture, rollback or daily ordering:
+- Deployment, migration, source moves, rollback or daily ordering:
   [docs/deployment.md](docs/deployment.md).
 - Packages, acquisition and update owners: [PACKAGES.md](PACKAGES.md).
   Ubuntu source decisions: [source audit](docs/ubuntu-source-update-audit.md).
@@ -23,10 +23,9 @@ Arch Linux / installed Ubuntu 26.04 LTS, x86_64/amd64, GNOME Wayland workstation
 - Before shared edits, run `dfa-deploy source`; edit only the verified checkout.
   Missing source/provenance: stop shared edits and restore/rebind. For extra sources,
   use `dfa-deploy source --source-id ID`. Installed copies are never source checkouts.
-- Runtime links use `~/.local/share/workstation/config`, backed by installed generations.
-  Current deployment preserves local edits and blocks the whole generation on conflict.
-  Intentional local differences use `dfa-deploy override`; source review uses
-  `dfa-deploy capture`, which neither commits nor pushes.
+- Runtime links use `~/.local/share/workstation/config`, pointing to `blue` or `green`.
+  Deploy replaces installed edits from source, validates before activation and keeps one backup.
+  Machine-local settings stay outside managed files. No automatic merging, override or capture.
 - Verify using temporary fixtures. Implementation does not authorize deployment,
   migration, package changes, services, GNOME/driver changes or VM operations on this workstation.
 

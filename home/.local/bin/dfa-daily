@@ -4,8 +4,8 @@
 # Edit DAILY_STEPS below to add or reorder tasks. Each name must be on PATH
 # (~/.local/bin). Missing required repository steps fail; custom steps may skip.
 #
-# Obtain source changes, stage/merge, validate and activate a complete generation
-# before migrations and dependent maintenance. Conflicts/source failures stop here.
+# Obtain source changes, copy, validate and activate blue/green deployment
+# before migrations and dependent maintenance. Source/ownership failures stop here.
 # Restart into changed helpers at most once. Native/app update owners keep their
 # existing cooldown and failure rules. --dry-run performs no writes/acquisition.
 # Usage: dfa-daily [args…]; generic flags go to dependent maintenance steps.
@@ -48,7 +48,7 @@ Default steps:
   dfa-sync-harness-agents  sync local Ollama models into Codex/opencode's model lists
 
 Repository/source acquisition and safe deployment run first. Failure blocks
-dependent steps; a changed generation restarts this routine at most once.
+dependent steps; a changed installed copy restarts this routine at most once.
 --dry-run reports the source/deployment plan without acquisition or writes.
 
 For weekly maintenance on top of this (orphan cleanup, a forced package
@@ -89,14 +89,14 @@ main() {
   # Source acquisition/deployment is a required gate before dependent steps.
   before="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config" 2>/dev/null || true)"
   if [[ "${_DAILY_RESTARTED:-0}" == 1 ]]; then
-    [[ "$before" == "$root" ]] || return 1
+    [[ "$before" == "$(readlink -f "$root")" ]] || return 1
   elif [[ -L "$USER_HOME_DIR/.local/share/workstation/config" ]]; then
     python3 "$root/scripts/deployment.py" update || return 1
   else
     python3 "$root/scripts/deployment.py" update --source "$root" || return 1
   fi
   if [[ "${_DAILY_RESTARTED:-0}" == 1 ]]; then
-    after="$root"
+    after="$before"
   else
     after="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")" || return 1
   fi
@@ -104,7 +104,7 @@ main() {
     export _DAILY_RESTARTED=1
     exec "$after/home/.local/bin/dfa-daily" "$@"
   fi
-  root="$after"
+  root="$USER_HOME_DIR/.local/share/workstation/config"
   # shellcheck source=/dev/null
   source "$root/scripts/dotheader.sh"
   set +e

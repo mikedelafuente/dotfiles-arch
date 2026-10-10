@@ -1,5 +1,5 @@
 #!/bin/bash
-# Stage/deploy installed copies, manage source provenance, overrides and recovery.
+# Stage/deploy installed copies, manage source sources, rollback and recovery.
 set -euo pipefail
 _LIB_DIR="$(cd -- "$(dirname -- "$(readlink -f "/proc/$$/fd/255" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=/dev/null

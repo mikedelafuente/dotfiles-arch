@@ -2,15 +2,18 @@
 
 ## Installed DFA copies
 
-Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
-`~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
-obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
-live files and return failure. `dfa-deploy deploy` snapshots local edits without committing or fetching.
-Direct sync and setup commands use those snapshots for testing. `dfa-deploy source` identifies the shared edit destination.
-Use `dfa-deploy capture <artifact>` for one selected source improvement,
-`dfa-deploy override <artifact> <file>` for a persistent local override,
-`dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
-for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
+Managed configuration, helpers, rules, skills and Pi resources use
+`~/.local/share/workstation/config`, a symlink to `blue` or `green`.
+A fresh installation starts with `blue`. Deployment copies and validates the
+inactive folder, switches `config`, and keeps the old active folder as the backup.
+Installed files are replaceable: edit shared files in the checkout identified by
+`dfa-deploy source`. Machine-local settings stay outside managed files.
+
+`dfa-deploy deploy` applies local working files without fetching or committing.
+`dfa-deploy update` requires a clean checkout and pulls before deployment.
+Use `dfa-deploy rebind <checkout>` after a source move, `dfa-deploy rollback`
+for the previous copy, and `dfa-deploy recover` after interrupted activation.
+See [deployment policy](docs/deployment.md).
 
 Choose by what you want to do:
 
@@ -289,7 +292,7 @@ With `--yes`, pass `--profile` if none is saved yet. `--cleanup` only previews; 
 updates, health checks, repair and shared resources. Dotfiles does not install or
 update Pi; an existing Pi CLI remains available to the generic harness launcher.
 Use that owner's `bin/pi-setup install --resources generation` for the workstation
-resource route. Native package loading and generation loading are mutually exclusive.
+resource route. Native package loading and installed-copy loading are mutually exclusive.
 
 Register the source manually when ready for a separately authorized live cutover:
 
@@ -298,7 +301,7 @@ dfa-sync-sources add /path/to/skills --type standard
 ```
 
 Any normal resource sync then deploys the registered source through complete
-retained generations: skills, rules, models/settings, custom agents, prompts and
+blue/green copies: skills, rules, models/settings, custom agents, prompts and
 extensions. Source setup scripts are never executed. Credentials, runtime model
 stores and local edits stay protected. Primary `skills/` and `rules/` are empty
 slots for final overrides; a duplicate skill requires its losing source to be
@@ -476,7 +479,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | `z` / `zi` | Smart cd (zoxide) |
 | `r` / `dfa-repos` | fzf-pick a repo under `~/repos` and cd into it |
 | `dfa` | Action guide and command picker: everyday updates, weekly maintenance, local config testing or setup repair. `dfa list` shows the same guide. |
-| `dfa sync-sources` | Interactive manager for local resource sources: add, remove, reorder, and apply changes. Primary shows the verified editable checkout; scripts still run from the installed generation. Removing a source keeps its files; `dfa sync-sources list` lists without prompts |
+| `dfa sync-sources` | Interactive manager for local resource sources: add, remove, reorder, and apply changes. Primary shows the verified editable checkout; scripts still run from the installed copy. Removing a source keeps its files; `dfa sync-sources list` lists without prompts |
 | `pbcopy` / `pbpaste` | Wayland clipboard in/out |
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
