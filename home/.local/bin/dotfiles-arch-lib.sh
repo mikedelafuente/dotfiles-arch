@@ -2,11 +2,16 @@
 # Shared helpers for ~/.local/bin wrappers (dfa-sync-dotfiles, dfa-update-system, dev, zed-agent-init).
 # Sourced by those scripts — not meant to be executed directly.
 
-# Resolve installed runtime dependencies first; pin a running helper to its generation.
+# Use the stable runtime path so later calls survive blue/green reuse.
 # Source acquisition/editing uses dfa-deploy source and recorded provenance instead.
 export PYTHONDONTWRITEBYTECODE=1
 resolve_dotfiles_arch() {
   local self runtime
+  runtime="${USER_HOME_DIR:-$HOME}/.local/share/workstation/config"
+  if [[ -f "$runtime/scripts/sync.sh" ]]; then
+    printf '%s\n' "$runtime"
+    return 0
+  fi
   self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
   if [[ -n "$self" ]]; then
     runtime="$(cd -- "$(dirname -- "$self")/../../.." && pwd)"
@@ -14,11 +19,6 @@ resolve_dotfiles_arch() {
       printf '%s\n' "$runtime"
       return 0
     fi
-  fi
-  runtime="${USER_HOME_DIR:-$HOME}/.local/share/workstation/config"
-  if [[ -f "$runtime/scripts/sync.sh" ]]; then
-    readlink -f "$runtime"
-    return 0
   fi
   if [[ -n "${DOTFILES_ARCH:-}" && -f "$DOTFILES_ARCH/scripts/sync.sh" ]]; then
     printf '%s\n' "$DOTFILES_ARCH"

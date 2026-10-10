@@ -72,12 +72,6 @@ def check(mode):
         old_key = "skills/example/SKILL.md"
         if mode in {"edited", "conflict", "preregistered", "dual-edits"}:
             live.write_text("LOCAL\ntwo\nthree\nfour\nfive\n")
-        if mode == "override":
-            resolution = root / "resolution"
-            resolution.write_text("OVERRIDE\ntwo\nthree\nfour\nfive\n")
-            run("override", old_key, str(resolution))
-            run("deploy", "--source", str(primary))
-            original_generation = os.readlink(active)
         moved = extra / old_key
         moved.parent.mkdir(parents=True)
         moved.write_text("SHARED\ntwo\nthree\nfour\nfive\n" if mode == "conflict"
@@ -108,47 +102,35 @@ def check(mode):
             {"from": "pi", "to": "pi", "source": "https://github.com/example/shared"}
         ]}))
         commit(primary)
-        blocked_cases = {"conflict", "dual-edits", "unregistered"}
+        blocked_cases = {"unregistered"}
         result = run("deploy", "--source", str(primary), ok=mode not in blocked_cases)
         if mode in blocked_cases:
-            reason = {"conflict": "conflict", "dual-edits": "also has local edits",
-                      "unregistered": "manually registered"}[mode]
+            reason = "manually registered"
             assert reason in result.stderr.lower()
             assert os.readlink(active) == original_generation
             assert live.read_text().startswith("one" if mode == "unregistered" else "LOCAL")
             assert run("deploy", "--source", str(primary), ok=False).stderr == result.stderr
             return
-        expected = ("OVERRIDE\ntwo\nthree\nfour\nfive\n" if mode == "override" else
-                    "LOCAL\ntwo\nthree\nfour\nINCOMING\n" if mode in {"edited", "preregistered"} else
+        expected = ("SHARED\ntwo\nthree\nfour\nfive\n" if mode == "conflict" else
                     "one\ntwo\nthree\nfour\nINCOMING\n")
         assert live.read_text() == expected
         if mode == "rule-edited":
-            assert "LOCAL RULE" in (home / ".cursor/rules/shared.mdc").read_text()
-        assert json.loads((agent / "models.json").read_text()) == {"shared": "new", "local": 1 if mode == "model-edited" else 0}
-        manifest = json.loads((active.resolve().parent / "manifest.json").read_text())
-        new_key = next(key for key in manifest["artifacts"] if key.endswith("/" + old_key))
-        assert old_key not in manifest["artifacts"]
-        assert manifest["artifacts"][new_key]["source"] != "primary"
+            assert "ORIGINAL RULE" in (home / ".cursor/rules/shared.mdc").read_text()
+        assert json.loads((agent / "models.json").read_text()) == {"shared": "new", "local": 0}
+        sources = json.loads((active / ".dfa/sources.json").read_text())
+        assert sources[1]["id"] == "extra"
+        assert not (active / old_key).exists()
+        assert (active / "extras/extra" / old_key).read_text() == expected
         generation = os.readlink(active)
         run("deploy", "--source", str(primary))
         assert os.readlink(active) == generation
         assert (agent / "auth.json").read_text() == '{"credential":"private"}\n'
         assert (agent / "models-store.json").read_text() == '{"machine":"private"}\n'
-        if mode == "override":
-            # Override commands use the new artifact identity but retain one store key.
-            resolution.write_text("UPDATED OVERRIDE\n")
-            run("override", new_key, str(resolution))
-            run("deploy", "--source", str(primary))
-            assert live.read_text() == "UPDATED OVERRIDE\n"
-            run("override", new_key)
-            run("deploy", "--source", str(primary))
-            assert live.read_text() == "UPDATED OVERRIDE\n"
-        else:
-            run("rollback")
-            assert live.read_text().endswith("five\n")
-            assert (agent / "models-store.json").is_file()
-            run("deploy", "--source", str(primary))
-            assert live.read_text() == expected
+        run("rollback")
+        assert live.read_text().endswith("five\n")
+        assert (agent / "models-store.json").is_file()
+        run("deploy", "--source", str(primary))
+        assert live.read_text() == expected
         extra.rename(root / "missing-extra")
         generation = os.readlink(active)
         assert "unavailable" in run("deploy", "--source", str(primary), ok=False).stderr.lower()
@@ -156,6 +138,6 @@ def check(mode):
 
 
 if __name__ == "__main__":
-    for case in ("clean", "edited", "override", "conflict", "preregistered", "dual-edits", "unregistered", "rule-edited", "model-edited", "legacy-broken"):
+    for case in ("clean", "edited", "conflict", "preregistered", "dual-edits", "unregistered", "rule-edited", "model-edited", "legacy-broken"):
         check(case)
-    print("PASS: registered source moves preserve baselines, edits, overrides, conflicts, legacy state and rollback")
+    print("PASS: source-owned handoffs, missing-source protection, machine-local state and rollback")

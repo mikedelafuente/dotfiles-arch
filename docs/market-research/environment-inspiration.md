@@ -12,7 +12,7 @@ maintenance. Inspect my existing setup and identify concrete friction before
 recommending changes. Use the creators below for ideas, then verify each proposed
 change against current upstream documentation and this repository's constraints.
 Preserve Arch/Ubuntu, GNOME Wayland, Kitty, tmux, Neovim/Zed, package ownership and
-installed-generation deployment unless I explicitly approve a change in direction.
+installed-copy deployment unless I explicitly approve a change in direction.
 Reuse existing tools before adding packages or services. Consider consistency,
 readability, keyboard use, accessibility and laptop/dock/multi-monitor behavior.
 

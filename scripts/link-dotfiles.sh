@@ -14,7 +14,7 @@ else
   exit 1
 fi
 
-# v5 stages a complete generation before any checkout links are replaced.
+# Deployment stages a complete copy before any checkout links are replaced.
 # Profile selection remains owned by bootstrap/sync; linking is shared.
 REPO_ROOT="$(cd -- "$CURRENT_FILE_DIR/.." && pwd)"
 ensure_local_gitconfig || exit 1

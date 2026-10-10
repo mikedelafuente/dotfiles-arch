@@ -47,7 +47,7 @@ esac
 export PATH="$USER_HOME_DIR/.local/bin:${CARGO_HOME:-$USER_HOME_DIR/.cargo}/bin:$PATH"
 
 # A standalone setup entered from a source checkout first deploys safely, then
-# executes its installed counterpart. One process uses one complete generation.
+# executes its installed counterpart. Subsequent runtime calls use the stable config path.
 case "${WORKSTATION_ENTRYPOINT##*/}" in
   setup-*.sh)
     _source_root="$(cd -- "$DF_SCRIPT_DIR/.." && pwd)"

@@ -2,21 +2,21 @@
 
 ## Installed DFA copies
 
-Managed configuration, helpers, rules, skills and Pi extensions now use stable installed copies at
-`~/.local/share/workstation/config`. Moving the checkout preserves runtime paths. `dfa-deploy update`
-obtains shared changes, stages/merges, validates and activates one generation; conflicts preserve
-live files and return failure. `dfa-deploy deploy` snapshots local edits without committing or fetching.
-Direct sync and setup commands use those snapshots for testing.
-Use `dfa daily` for routine updates, `dfa weekly` for weekly maintenance,
-`dfa deploy` for local config edits and `dfa sync-dotfiles` for setup-script edits.
-Daily/weekly require a clean dotfiles checkout; local testing requires no commit. `dfa-deploy source` identifies the shared edit destination.
-Use `dfa-deploy capture <artifact>` for one selected source improvement,
-`dfa-deploy override <artifact> <file>` for a persistent local override,
-`dfa-deploy rebind <checkout>` after a source move, and `dfa-deploy rollback` / `recover`
-for recovery. See [deployment policy and dependency inventory](docs/deployment.md).
+Managed configuration, helpers, rules, skills and Pi resources use
+`~/.local/share/workstation/config`, a symlink to `blue` or `green`.
+A fresh installation starts with `blue`. Deployment copies and validates the
+inactive folder, switches `config`, and keeps the old active folder as the backup.
+Installed files are replaceable: edit shared files in the checkout identified by
+`dfa-deploy source`. Machine-local settings stay outside managed files.
 
-Deployment uses existing Git (`merge-file`), Bash syntax checks and native Python 3.11+
-(`python` on Arch, `python3` on Ubuntu); no Stow/AI/model/network merge service is used.
+`dfa-deploy deploy` applies local working files without fetching or committing.
+`dfa-deploy update` requires a clean checkout and pulls before deployment.
+Use `dfa-deploy rebind <checkout>` after a source move, `dfa-deploy rollback`
+for the previous copy, and `dfa-deploy recover` after interrupted activation.
+See [deployment policy](docs/deployment.md).
+
+Deployment uses existing Git, Bash syntax checks and native Python 3.11+
+(`python` on Arch, `python3` on Ubuntu); no added dependency is required.
 Native/app acquisition and update owners keep the contracts below.
 
 
@@ -1398,7 +1398,7 @@ mechanisms and initial-verification feasibility, not workstation runtime success
 rules and the complete opt-in Pi lifecycle. Manually register a checkout with
 `dfa-sync-sources add /path/to/skills --type standard`; generic syncing delivers
 models/settings, agents, prompts, extensions, rules and skills through retained
-installed generations without running source scripts. Primary rules/skills are
+installed copies without running source scripts. Primary rules/skills are
 final override slots; duplicate skills retain overwrite protection. Native Pi
-package loading and generation loading are mutually exclusive. Cloud consumers
+package loading and installed-copy loading are mutually exclusive. Cloud consumers
 pass `--source /path/to/skills` to `scripts/install-cloud-agent-config.sh`.

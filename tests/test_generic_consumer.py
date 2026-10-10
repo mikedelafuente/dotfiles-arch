@@ -1,8 +1,9 @@
-"""Registered standard sources deliver Pi data through a retained generation."""
+"""Registered standard sources deliver Pi data through the installed copy."""
 import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 
 
@@ -66,13 +67,14 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
 
         active = home / ".local/share/workstation/config"
-        manifest = json.loads((active.resolve().parent / "manifest.json").read_text())
-        extra_id = manifest["sources"][1]["id"]
+        sources = json.loads((active / ".dfa/sources.json").read_text())
+        extra_id = sources[1]["id"]
+        assert extra_id == "skills"
         for relative in ("pi/models.json", "pi/settings.json", "pi/agents/reviewer.md", "pi/prompts/review.md"):
             target = home / ".pi/agent" / relative.removeprefix("pi/")
             assert target.is_symlink() and target.read_text() == (extra / relative).read_text()
             assert os.readlink(target).startswith(str(active))
-            assert f"extras/{extra_id}/{relative}" in manifest["artifacts"]
+            assert f"extras/{extra_id}/{relative}" in {p.relative_to(active).as_posix() for p in active.rglob("*")}
         assert (home / ".pi/agent/extensions/sample.ts").is_symlink()
         assert not (home / ".pi/agent/auth.json").exists()
         assert not (home / ".pi/agent/models-store.json").exists()
@@ -85,7 +87,7 @@ def main():
         assert "EXTRA RULE" not in pi_agents.read_text()
         assert (home / ".claude/skills/custom").is_symlink()
         # A package installed through Pi's native route cannot also load the
-        # same source's extensions, skills and prompts from a generation.
+        # same source's extensions, skills and prompts from the installed copy.
         settings = home / ".pi/agent/settings.json"
         generation = os.readlink(active)
         for package_source in (str(extra), os.path.relpath(extra, settings.parent),
@@ -103,7 +105,48 @@ def main():
                                     env=env, capture_output=True, text=True)
         assert duplicated.returncode != 0 and "cross-harness skills" in duplicated.stderr
         assert os.readlink(active) == generation
-        print("PASS: standard-source Pi data, primary rule precedence, exclusions and no source execution")
+        settings.write_text('{}')
+        # Translate legacy opaque IDs into readable folder names in both copies.
+        state_root = active.parent
+        legacy = state_root / "generations/old"
+        shutil.copytree(active, legacy / "tree", symlinks=True)
+        legacy_sources = json.loads((legacy / "tree/.dfa/sources.json").read_text())
+        legacy_links = json.loads((legacy / "tree/.dfa/links.json").read_text())
+        shutil.rmtree(legacy / "tree/.dfa")
+        opaque = "607b49c05a5dd342"
+        legacy_sources[1]["id"] = opaque
+        (legacy / "tree/extras/skills").rename(legacy / "tree/extras" / opaque)
+        for prefix in ("extras", "generated/rules"):
+            folder = legacy / "tree" / prefix / "skills"
+            if folder.exists():
+                folder.rename(folder.parent / opaque)
+        legacy_links = {k: {"artifact": v.replace("extras/skills/", f"extras/{opaque}/").replace("generated/rules/skills/", f"generated/rules/{opaque}/")} for k,v in legacy_links.items()}
+        (legacy / "manifest.json").write_text(json.dumps({"version": 1, "sources": legacy_sources, "links": legacy_links}))
+        active.unlink(); active.symlink_to(legacy / "tree")
+        shutil.rmtree(state_root / "blue")
+        result = subprocess.run(["python3", str(CLI), "deploy"], env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads((active / ".dfa/sources.json").read_text())[1]["id"] == "skills"
+        assert json.loads((state_root / "previous/.dfa/sources.json").read_text())[1]["id"] == "skills"
+        assert (state_root / "previous/extras/skills/pi/models.json").exists()
+        assert not list(state_root.rglob("manifest.json"))
+        # An extra-source rebind preserves its readable ID and updates registration atomically.
+        original_registry = registry.read_text()
+        moved = temp / "renamed shared source"
+        extra.rename(moved)
+        (moved / "invalid.json").write_text("bad JSON")
+        for args in (("add", "."), ("commit", "-m", "invalid fixture")):
+            subprocess.run(["git", "-C", str(moved), *args], check=True, capture_output=True)
+        failed = subprocess.run(["python3", str(CLI), "rebind", str(moved), "--source-id", "skills"], env=env, capture_output=True, text=True)
+        assert failed.returncode != 0 and registry.read_text() == original_registry
+        (moved / "invalid.json").unlink()
+        for args in (("add", "."), ("commit", "-m", "valid fixture")):
+            subprocess.run(["git", "-C", str(moved), *args], check=True, capture_output=True)
+        rebound = subprocess.run(["python3", str(CLI), "rebind", str(moved), "--source-id", "skills"], env=env, capture_output=True, text=True)
+        assert rebound.returncode == 0, rebound.stdout + rebound.stderr
+        assert str(moved) in registry.read_text()
+        assert json.loads((active / ".dfa/sources.json").read_text())[1]["id"] == "skills"
+        print("PASS: standard resources, precedence, exclusions, legacy IDs and atomic rebind")
 
 
 if __name__ == "__main__":

@@ -281,7 +281,7 @@ aliases() {
         echo "  dfa: action guide + picker; daily = routine updates, weekly = extra maintenance"
         echo "       deploy = test config edits, sync-dotfiles = test setup edits (no commit needed)"
         echo "  dfa deploy: deploy tests local edits without committing; update pulls a clean checkout"
-        echo "              source/capture/override/rebind/rollback/recover manage installed copies"
+        echo "              source/rebind/rollback/recover manage blue/green copies"
         echo "  dfa sync-sources: add/remove AI sources, reorder priority, apply changes"
         echo "  Agent skills: /grill-me, /grill-with-docs (interview without council)"
         echo "  Agent skills: /advise-me, /advise-with-docs (automatic agent-council recommendations)"
