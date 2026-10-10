@@ -302,8 +302,8 @@ retained generations: skills, rules, models/settings, custom agents, prompts and
 extensions. Source setup scripts are never executed. Credentials, runtime model
 stores and local edits stay protected. Primary `skills/` and `rules/` are empty
 slots for final overrides; a duplicate skill requires its losing source to be
-explicitly overwritable. See [handoff trial](docs/validation/skills-pi-source-handoff.md)
-and [deployment](docs/deployment.md) before changing an existing source mapping.
+explicitly overwritable. See [deployment](docs/deployment.md) before changing an
+existing source mapping.
 
 ---
 
@@ -579,20 +579,6 @@ in the standalone skills repository and installed under
 their original names. Dotfiles-arch has final skill priority; duplicate replacement requires the losing
 source to allow overwrites (`dfa-sync-sources add <path> --overwritable true`).
 Protected duplicates stop sync before links change. See [imports and update review](https://github.com/mikedelafuente/skills/blob/main/skills/README.md).
-
-Factory entrypoints: `/setup-dark-factory` accepts project council/guidance and
-tracker conventions (this project uses parent issues with native sub-issues and
-dependency links for future work); `/dark-factory-idea` turns intent or prototype feedback into
-a bounded versioned proposal; `/dark-factory` builds approved selected work with
-independent checks and pauses for hands-on trial. `/dark-factory-supervisor`
-reconciles finite wakes through an accepted runner, and `/dark-factory-retro`
-analyzes private evidence with separately authorized synthetic publication.
-These skills create no schedules or live runs during installation. See
-[factory contracts](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/dark-factory/references/contracts.md)
-for authority, optional budgets, adapters, recovery and validation limits. Initial
-factory runs use uncapped observe-only calibration with durable per-item token,
-time and attempt records; [usage reports](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/dark-factory/references/metrics.md)
-aggregate project history by model, effort and phase for later tuning.
 
 `dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
 source. It displays the current setting; changes apply on the next skill sync.
