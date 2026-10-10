@@ -292,6 +292,9 @@ class Deployment:
         for key in manifest["artifacts"]:
             if Path(key).is_absolute() or ".." in Path(key).parts:
                 raise Pending("Invalid artifact provenance; restore a recorded generation")
+            override_key = manifest["artifacts"][key].get("override_artifact", key)
+            if not isinstance(override_key, str) or not override_key or Path(override_key).is_absolute() or ".." in Path(override_key).parts:
+                raise Pending("Invalid override provenance; restore a recorded generation")
         for source in manifest["sources"]:
             if not re.fullmatch(r"primary|[0-9a-f]{16}", source.get("id", "")) or not Path(source.get("path", "")).is_absolute():
                 raise Pending("Invalid source provenance; restore a recorded generation")
@@ -569,6 +572,44 @@ class Deployment:
                     if (path.is_file() or path.is_symlink()) and lexical(path) not in known:
                         raise Pending(f"Unmanaged legacy descendant preserved: {path}; track it explicitly or move it outside the managed folder before migration")
 
+    def source_handoffs(self, incoming, artifacts, sources, old, tree):
+        """Explicit primary-source moves reuse old B/L and persistent override keys."""
+        for key in artifacts.keys() & old["artifacts"].keys():
+            if "override_artifact" in old["artifacts"][key]:
+                artifacts[key]["override_artifact"] = old["artifacts"][key]["override_artifact"]
+        config = read_json(incoming / ".dfa-source-handoffs.json", {"version": 1, "moves": []})
+        if not isinstance(config, dict) or config.get("version") != 1 or not isinstance(config.get("moves"), list):
+            raise Pending("Invalid source handoff configuration")
+        moves = {}
+        for move in config["moves"]:
+            if not isinstance(move, dict) or set(move) != {"from", "to", "source"}:
+                raise Pending("Invalid source handoff entry")
+            for field in ("from", "to"):
+                value = move[field]
+                if not isinstance(value, str) or not value or Path(value).is_absolute() or any(p in {"..", "."} for p in value.split("/")):
+                    raise Pending("Unsafe source handoff path")
+            destinations = [s for s in sources[1:] if s["type"] == "standard" and s["url"] == move["source"]]
+            for old_key, item in old["artifacts"].items():
+                if old_key in artifacts or item.get("source") != "primary" or not Path(old_key).is_relative_to(move["from"]):
+                    continue
+                if len(destinations) != 1:
+                    raise Pending("Source handoff requires exactly one manually registered replacement source; restore/register it before deploying")
+                relative = Path(move["to"]) / Path(old_key).relative_to(move["from"])
+                new_key = f"extras/{destinations[0]['id']}/{relative.as_posix()}"
+                if new_key not in artifacts:
+                    raise Pending(f"Replacement source is missing handoff artifact: {relative}")
+                if new_key in moves or old_key in moves.values():
+                    raise Pending("Ambiguous source handoff; retain the original source and resolve duplicate identities")
+                if new_key in old["artifacts"]:
+                    destination_base = identity(tree.parent / "baseline" / new_key)
+                    if destination_base != old["artifacts"][new_key]["baseline"] or identity(tree / new_key) != destination_base:
+                        raise Pending(f"Replacement artifact also has local edits or an altered baseline: {new_key}; reconcile both copies before handoff")
+                    if (self.root / "overrides" / new_key).exists():
+                        raise Pending(f"Replacement artifact also has an override: {new_key}; reconcile both overrides before handoff")
+                moves[new_key] = old_key
+                artifacts[new_key]["override_artifact"] = item.get("override_artifact", old_key)
+        return moves
+
     def deploy(self, primary, locked=False):
         with nullcontext() if locked else self.locked():
             tree, old = self.current()
@@ -582,11 +623,12 @@ class Deployment:
             registry_before = identity(registry)
             try:
                 artifacts, links, sources = self.inventory(primary, incoming)
+                moves = self.source_handoffs(incoming, artifacts, sources, old, tree)
                 # A content-derived staging key gives repeated identical conflicts identical evidence paths.
                 state = {"incoming": artifacts, "sources": sources, "previous": old,
                          "live": {key: identity(tree / key) for key in old["artifacts"]} if tree else {},
                          "baseline": {key: identity(tree.parent / "baseline" / key) for key in old["artifacts"]} if tree else {},
-                         "overrides": {key: identity(self.root / "overrides" / key) for key in artifacts},
+                         "overrides": {key: identity(self.root / "overrides" / artifacts[key].get("override_artifact", key)) for key in artifacts},
                          "targets": {target: {"link": identity(Path(target)) if not Path(target).is_dir() or Path(target).is_symlink() else "directory",
                                      "content": identity(Path(target).resolve()) if Path(target).is_file() else None}
                                      for target in links}}
@@ -612,10 +654,12 @@ class Deployment:
                         snapshots[target] = self.link_snapshot(target, info, old["links"])
                 if not tree:
                     self.preserve_legacy_directories(links, snapshots, artifacts)
-                observed = {}
-                for key in sorted(artifacts.keys() | old["artifacts"].keys()):
-                    live = (tree / key) if tree else stage / "absent-live" / key
-                    base = (tree.parent / "baseline" / key) if tree else stage / "absent-base" / key
+                observed = {key + ":replacement": {"path": str(tree / key), "identity": identity(tree / key)}
+                            for key in moves if key in old["artifacts"]}
+                for key in sorted((artifacts.keys() | old["artifacts"].keys()) - set(moves.values())):
+                    old_key = moves.get(key, key)
+                    live = (tree / old_key) if tree else stage / "absent-live" / key
+                    base = (tree.parent / "baseline" / old_key) if tree else stage / "absent-base" / key
                     inc = incoming / key
                     if not tree:
                         # A legacy layout's Git HEAD is trusted source B/I; its working
@@ -635,9 +679,9 @@ class Deployment:
                                     break
                     observed[key] = {"path": str(live), "identity": identity(live)}
                     try:
-                        if tree and key in old["artifacts"] and identity(base) != old["artifacts"][key]["baseline"]:
+                        if tree and old_key in old["artifacts"] and identity(base) != old["artifacts"][old_key]["baseline"]:
                             raise Pending("Missing or altered source baseline; recover a retained generation")
-                        override = self.root / "overrides" / key
+                        override = self.root / "overrides" / artifacts.get(key, old["artifacts"].get(old_key, {})).get("override_artifact", key)
                         if override.exists():
                             if key not in artifacts or not override.is_file() or override.is_symlink():
                                 raise Pending("Override no longer has an incoming managed artifact")
@@ -1002,7 +1046,7 @@ class Deployment:
                     known.update(read_json(inventories[-1])["artifacts"])
             if key not in known or Path(key).is_absolute() or ".." in Path(key).parts:
                 raise Pending("Select a manifested or initial-pending artifact key")
-            dest = self.root / "overrides" / key
+            dest = self.root / "overrides" / known[key].get("override_artifact", key)
             safe_parents(dest, self.root)
             if file is None:
                 dest.unlink(missing_ok=True)

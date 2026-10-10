@@ -136,6 +136,34 @@ with `dfa-sync-sources`. No basename-based clone selection occurs.
 
 ## Activation, interruption and rollback
 
+### Registered source ownership handoffs
+
+The primary checkout can declare data ownership moves in
+`.dfa-source-handoffs.json`:
+
+```json
+{"version": 1, "moves": [
+  {"from": "skills", "to": "skills", "source": "https://github.com/mikedelafuente/skills"}
+]}
+```
+
+This declaration neither acquires nor registers a source. Each disappeared primary
+artifact must have an exact relative replacement in one manually registered
+standard source with the declared origin. Missing registration or replacement
+blocks deployment. The move reuses the original installed B/L inputs against the
+replacement I, then records the replacement origin and baseline in the new
+manifest. Local edits merge normally; competing edits block the entire generation.
+An already deployed replacement must have its baseline intact and no local edit
+or override of its own, otherwise both copies need explicit reconciliation.
+
+The manifest's `override_artifact` retains the original persistent override-store
+key. Use the **new** manifest artifact key with `dfa-deploy override` and `capture`;
+override edits/removal still address that original key, including after rollback.
+Retained generations keep the previous ownership and home links for rollback.
+Never remove a replacement snapshot before the old source has contracted and the
+human has verified the handoff. A missing registered source blocks further
+deployment while the installed generation stays usable.
+
 Deployment takes an exclusive nonblocking lock, stages and validates, rechecks source
 and live bytes/modes and home link ownership, then journals the activation before
 switching `config`. Executables resolve their real generation and use libraries
