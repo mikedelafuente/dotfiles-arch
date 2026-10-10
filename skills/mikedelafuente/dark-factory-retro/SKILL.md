@@ -13,10 +13,14 @@ categories; this wrapper owns publication and prevents retro's recommendations
 from becoming implementation actions.
 
 Inputs: specified run/iteration, permitted evidence, pinned skill/source provenance,
-project guidance/ADRs and separate accepted retro/publication budgets. Optional
+project guidance/ADRs and separate accepted retro/publication policy. Resource
+caps are optional in observe-only calibration; content/destination and finite
+publication-count authorization remain separate. Optional
 run-end invocation requires charter authorization; direct invocation remains bounded.
 
 1. Load the compact manifest and selectively inspect scoped private evidence.
+   Read [usage reporting](../dark-factory/references/metrics.md); include this retro
+   as its own measured item and compare the project's model/effort/phase aggregates.
    Examine failures, repairs/no progress, successes, interventions, time/cost,
    capability mismatch and available measurements. Reuse existing checks; classify
    mechanical guardrail gaps separately from judgement guidance.
@@ -33,7 +37,7 @@ run-end invocation requires charter authorization; direct invocation remains bou
    [mikedelafuente/dotfiles-arch](https://github.com/mikedelafuente/dotfiles-arch).
    Missing provenance/access/credentials or offline/denied publication yields a draft.
 5. Validate content/destination authorization and privacy clearance, reserve the
-   separate publication budget, and source-scope a stable generalized fingerprint.
+   separate publication policy and any configured budget, and source-scope a stable generalized fingerprint.
    Search existing issues and prior proposal/action outcomes. Link an existing
    finding; update it only when separately authorized. Persist intended action
    identity before publishing and confirmed/uncertain outcome afterwards.

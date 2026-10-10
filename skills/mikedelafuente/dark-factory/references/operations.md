@@ -9,24 +9,32 @@ These guards consume adapter-verified facts, not self-authenticating assertions.
 | `init STORE BUNDLE.json` | Validate envelope and pinned accepted records; create immutable bundle/private state, awaiting idea approval; refuses an existing lineage |
 | `apply STORE EVENT.json` | Serialize with nonblocking local lock, apply guarded event, persist receipt/state, return phase/version; duplicate exact event ID is idempotent |
 | `effort-plan STORE PLAN.json` | Four scores, rationale and capability reference → accepted actual model/effort tier |
+| `report STORE [--write]` | Per-attempt run usage/timing/outcomes and model/effort/phase summaries; `--write` saves private `usage-report.json` |
+| `report-project ROOT [--write]` | Aggregate committed run stores below the private project root; identical run copies deduplicate, conflicting copies park |
 | `status STORE` / `packet STORE --cursor N` | Bounded manifest, used/reserved/remaining totals, current claim/frontier page, artifact/receipt pointers and next cursor |
 | `fingerprint PROPOSAL.json` | Stable source-scoped generalized retro finding identity |
 | `publication-check PROPOSAL.json` | Supplied privacy/approval/source/lookup/limits guard; no publication |
 
+Read [usage reporting](metrics.md) when constructing telemetry or reporting a run.
+
 Every event has unique nonempty `id`, the existing `lineage` and `op`. A repeated
-ID with changed content is rejected. Worker/action events additionally have `run`,
+ID with changed content is rejected. The CLI adds `_received_at` to committed receipts; callers cannot supply it.
+This coordinator clock supports approximate elapsed timing, distinct from runner
+start/end evidence. Legacy receipts without timestamps retain missing timing.
+Worker/action events additionally have `run`,
 `ticket`, `owner`, `fence` and `action` matching the stored claim. Generate the
 stable action ID before runner dispatch and reuse it for reconciliation.
 
 | Event `op` | Additional required fields / evidence |
 |---|---|
 | approval | `receipt`: verified current human proposal approval or revocation; missing/stale status preserves approval pause |
-| reserve | selected `ticket`, `owner`, stable launch `action`, `lease_until` Unix seconds, positive `allocation.tokens/seconds`, `effort.model/effort`, `plan.scores/rationale/capability` |
+| reserve | selected `ticket`, `owner`, stable launch `action`, `lease_until` Unix seconds, `allocation.tokens/seconds` positive for capped units, null for uncapped observe-only units, `effort.model/effort`, `plan.scores/rationale/capability` |
 | launched | worker identity, `observed.model/effort`, hashed runner `evidence`; actual settings must match requested before work |
-| result | worker identity, hashed result `evidence` and runner `terminal`; optional verified `usage.tokens/seconds`; unknown usage stays fully reserved |
+| result | worker identity, hashed result `evidence` and runner `terminal`; optional verified `usage.tokens/seconds` and category counts; observe-only accepts null missing metrics; capped unknown usage stays reserved |
 | evaluate | worker identity, distinct `evaluator`, pinned `criteria` hash, all `checks`, hashed independent `evidence`, boolean `passed`, failure `signature` when false |
 | reconcile | worker identity, hashed actual `terminal`, `outcome` cancelled/failed, optional verified `usage`; a lease timestamp is insufficient |
-| settle-usage | worker identity, existing terminal receipt, hashed actual usage `evidence`, verified `usage.tokens/seconds`; reported/accepted status stays unchanged |
+| settle-usage | worker identity, existing terminal receipt, hashed actual usage `evidence`, verified `usage.tokens/seconds` and categories; fill previously missing observations (including archived retries), never change known values; status stays unchanged |
+| activity | `run`, unique stable `identity`, `item`, selected `ticket` or null, `phase`, `owner`, positive attempt ordinal, actual `model`/`effort`, `outcome`, hashed `evidence`, `usage`; optional runner `timing`; accounting only for already authorized work |
 | checkpoint | hashed reproducible `prototype`; selected checkpoint independently accepted, no possibly active worker |
 | trial | verified actual human `receipt` bound to prototype hash, `disposition` accept/resume/delta; delta preserves pause for separately approved successor |
 | begin-action | worker identity, allowed `operation`, selected `target`, stable new `identity`; persist before actual authorized external mutation |
@@ -35,7 +43,7 @@ stable action ID before runner dispatch and reuse it for reconciliation.
 `plan.scores` has exactly ambiguity/integration/consequence/validation, integers
 0–2. The accepted policy owns their tier mapping; supplied capability evidence
 owns available IDs/names. An escalation needs a revised evidence-backed score or
-accepted mapping revision and remaining budget; family switching is separately
+accepted mapping revision and remaining configured budget; family switching is separately
 authorized. Full-history inheritance/settings limitations belong to the runner
 adapter, and mismatch retains the claim for reconciliation.
 

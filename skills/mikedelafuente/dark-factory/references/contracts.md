@@ -19,10 +19,10 @@ The project record set contains:
 | Council | Domain/actors/use cases, BA/PM and relevant technical remits, omissions, evidence ownership/references, bounded disagreement and honest independence coverage |
 | Guidance | Platform/workflow, validation restrictions, quality and architecture preferences, accepted ADRs, accepted repository-specific tracker adapter |
 | Decision ledger/ADRs | Actual answers/direction, accepted decisions, proposals/assumptions/dissent/evidence separately; superseded ID, reason, impacted requirements and acceptance receipt |
-| Authority | Scope, allowed actions/resources/models, publication destinations/content, runtime limits, finite budgets/stop rules, trusted verifier and human acceptance |
+| Authority | Scope, allowed actions/resources/models, publication destinations/content, optional resource caps, observation/reporting and stop rules, trusted verifier and human acceptance |
 | Coordination | Accepted registry, runner/schedule, project/global/wake concurrency, notification route, approval verifier, stable lineage/storage, lease/fence and deduplication records |
 | Proposal | Revision/hash, outcome/scope/material architecture constraints, budget/risk/publication/checkpoints, frozen criteria, spec/ticket graph and approval relationship |
-| Run | Frozen references/selection/criteria/source/skills, actual launch settings, claims/actions, budget/repair history, independent evaluations, prototype and trial disposition |
+| Run | Frozen references/selection/criteria/source/skills, actual launch settings, per-item usage/timing/attempts, claims/actions, budget/repair history, independent evaluations, prototype and trial disposition |
 
 `scripts/control.py init STORE BUNDLE.json` checks the machine envelope described
 below. It does not create or accept these human records. The coordinator validates
@@ -65,13 +65,17 @@ A bundle has `schema_version: 1`, nonempty `project`, `lineage`, `run`, and:
   skills and decision-ledger references. Each reference includes `path`/`sha256`.
   `accepted` holds charter/guidance/authority receipts; authority also requires
   council/decisions/coordination acceptance where the project contract calls for it.
-- `policy`: `actions` (explicit operation names), `models` (model ID → supported
+- `policy`: `budget_mode` (`observe-only` for initial calibration, or `bounded`), `actions` (explicit operation names), `models` (model ID → supported
   effort strings), `families` (model ID → `sol-6.1` or `opus-5.5`), accepted
   `effort_mapping` (ascending inclusive `max_score` tiers ending at 8 with actual
   `model`/`effort`), `verifier`, `approval_sources`, `limits` (`tokens`, `seconds`,
   `attempts`, `concurrency`, `queue`, `repairs`, `no_progress`), `deadline` (Unix
-  seconds), `context` (`entries`, `bytes`) and `artifact_root`. All bounds are
-  finite positive integers accepted by setup; there are no implicit defaults.
+  seconds or null), `context` (`entries`, `bytes`) and `artifact_root`. In
+  `observe-only`, tokens/seconds/attempts/repairs and deadline may be null: no
+  user-set cap. Explicit positive caps still apply. Concurrency/queue/no-progress
+  and context bounds remain positive; scope, approval and trial stops still apply.
+  An omitted mode retains legacy `bounded` behavior with all finite limits.
+  Setup proposes observation first, without arbitrary task/run/wake resource caps.
   This must equal the referenced authority JSON's `policy`.
 - `selection`: adapter reference, exact target kind/identity, ticket IDs, complete
   descendant IDs, exclusions, dependency IDs by ticket, already satisfied external
@@ -94,14 +98,14 @@ limitations, runtime-unverified coverage and measurement provenance/gaps.
 
 | State | Guard / owner / exit |
 |---|---|
-| preparing | Coordinator validates accepted records, frozen graph/criteria, capability and authority; missing data blocks; finite limits apply |
+| preparing | Coordinator validates accepted records, frozen graph/criteria, capability and authority; missing approval/scope data blocks; configured caps apply |
 | awaiting-idea-approval | Idea proposal presented; coordinator records only verifier-backed matching current human receipt |
 | ready | Matching approval, checked records and at least one dependency-satisfied authorized ticket; reconciled owner and allocation before dispatch |
 | running | Coordinator reserves a claim and stable action ID before calling runner; implementer starts only after observed settings match |
 | evaluating | Implementer has reported artifacts/usage; separate evaluator receives pinned criteria/diff/evidence independently |
 | repairing | Failed criterion has a targeted repair with remaining run/child/repair/no-progress allocation; original criteria remain frozen |
 | blocked | Durable cause/affected tickets/next choice; independent eligible work can continue, blocked dependent work cannot |
-| budget-exhausted | Deadline or enclosing budget exhausted: no new launches; retain reservations and all usage |
+| budget-exhausted | Configured deadline or enclosing budget exhausted: no new launches; retain reservations and all usage |
 | awaiting-user-trial | Independently accepted selected checkpoint, reproducible prototype handed off; preserve this pause across every wake/resume |
 | completed | Every selected descendant accepted, required evidence and actual trial disposition; unresolved work cannot complete |
 
@@ -112,12 +116,16 @@ identity, frozen criteria hash, coverage of every frozen required check, result
 artifact and recorded pass/fail; missing coverage is a failure, not acceptance.
 Reuse the existing Standards/Spec owner once without recursive coordinators.
 
-`reserve` counts an attempt and reserves requested tokens/seconds before launch.
-Unknown usage remains fully reserved; `result` settles verified actual use and
-retains any overrun (blocks further work). Include research, reviews, repairs and
-child use in the parent allocation. All child processes obey accepted deadlines;
-time spent waiting does not extend the deadline. An exhausted child does not
-necessarily exhaust independent work. Never allocate beyond remaining parent limits.
+`reserve` counts each implementation attempt and claims the item before launch.
+In observe-only mode, uncapped allocations are null; missing usage is reported as
+missing, never zero, and does not block retries once terminal evidence is present.
+Configured finite caps retain reservation/overrun behavior and require sufficient
+remaining allocation. Children obey configured deadlines; waits do not extend them.
+Use [usage reporting](metrics.md) to record each council/research/implementation/
+review/repair/retro item once, with observed effort, tokens, timing and attempts.
+Store per-run reports and aggregate by project/model/effort/phase for later tuning.
+Resumes retain receipts and retry history. Measurement gaps alone do not prevent
+uncapped calibration; actual launch/action uncertainty still parks affected work.
 
 Callbacks carry lineage/run/ticket/action/fence/owner identity. Stable reservations
 survive interruption. Reconciliation needs actual runner terminal evidence before

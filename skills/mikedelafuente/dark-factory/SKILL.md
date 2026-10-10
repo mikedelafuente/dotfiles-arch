@@ -1,11 +1,13 @@
 ---
 name: dark-factory
-description: Execute an explicitly selected, approved dark-factory ticket set through finite build and independent acceptance cycles, stopping for a hands-on prototype trial.
+description: Execute an explicitly selected, approved dark-factory ticket set with usage reporting and independent acceptance cycles, stopping for a hands-on prototype trial.
 ---
 
 Read [contracts](references/contracts.md) at admission, evaluation and resume.
 Read [adapters](references/adapters.md) when selecting tracker, model/effort or
-launch/handoff routes. Use [control CLI](scripts/control.py) for persisted admission,
+launch/handoff routes. Read [usage reporting](references/metrics.md) for initial
+uncapped calibration, per-item observations and project aggregates. Use
+[control CLI](scripts/control.py) for persisted admission,
 claims, reservations, receipts, transitions and bounded packets. The CLI never
 launches runners or grants permission; adapters must verify actual facts.
 
@@ -17,7 +19,7 @@ work. Freeze a finite authorized selection; open/ready status alone grants nothi
    target through the setup-accepted adapter; snapshot exact membership, native
    hierarchy/descendants, dependencies, versions and exclusions. External unmet
    prerequisites block affected tickets; propose additions instead of including them.
-   Missing hierarchy/capability or conflicting grouping parks dependent work.
+   Missing hierarchy/launch capability or conflicting grouping parks dependent work.
    Park new arrivals. Reconcile graph drift once per affected frontier; material
    scope changes need explicit direction, not endless backlog chasing.
 2. Freeze buildable specs/criteria, deterministic invariants, mandatory repository
@@ -30,8 +32,10 @@ work. Freeze a finite authorized selection; open/ready status alone grants nothi
    or VM provisioning.
 3. Compose installed `implement-spec`'s sparse pointers, ticket-scoped worktrees,
    implementers and separate merger under the accepted action/delegation policy.
-   Reserve all child/research/review/repair/retry costs before dispatch and apply
-   backpressure. Persist stable claims/action IDs before launch. Reconcile actual
+   Claim each item before dispatch and apply concurrency backpressure. Initial
+   calibration uses observe-only without arbitrary token/time/attempt caps;
+   enforce explicitly accepted caps when configured. Persist stable claims/action IDs
+   before launch. Reconcile actual
    runner settings before work; mismatch parks/cancels under the adapter contract.
    Its branch/PR/merge/close/cleanup defaults require their own permissions.
 4. Give each worker a fresh scoped packet: ticket, criteria, relevant immutable
@@ -44,13 +48,16 @@ work. Freeze a finite authorized selection; open/ready status alone grants nothi
    coverage prevents acceptance. Freeze checks before launch; nobody weakens them
    to pass. Repair only recorded failures within remaining limits; reuse the
    responsible evaluator for targeted rechecks. Repeated failure/no progress,
-   contradiction, timeout or exhausted allocation produces a consolidated exception.
+   contradiction, platform interruption or exhausted configured allocation produces
+   a consolidated exception.
 6. Checkpoint at phase/frontier boundaries and before the accepted context threshold.
    Generate the bounded packet, page indexed history, and reconcile ownership,
    uncertain actions and budget usage on resume. Supported fresh-context handoff
    is an adapter capability, not an upstream implement-spec guarantee. If unavailable,
    checkpoint and pause; a fresh context/run ID does not reset budgets or claims.
-7. At the chosen intermediate checkpoint or delivery goal, deliver the reproducible
+7. Persist the run usage report and refresh the project aggregate after completed,
+   interrupted or blocked runs; include missing telemetry and actual effort.
+   At the chosen intermediate checkpoint or delivery goal, deliver the reproducible
    runnable/testable prototype, identity, prerequisites, run instructions,
    acceptance/regression evidence and known/runtime-unverified limitations.
    Stop in `awaiting-user-trial`; machine acceptance is distinct from experiential

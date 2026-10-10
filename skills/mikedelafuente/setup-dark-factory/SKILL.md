@@ -38,7 +38,12 @@ it does not start a build or schedule.
    a universal epic hierarchy. Record target/object/label IDs, queries, nested
    descendants, dependencies, exclusions, bounds, completion and trial stops.
    An artifact describing an idea is distinct from a tracker object named Idea.
-5. Propose finite budgets, scoring-to-effort mapping, context limits, artifact
+5. Start with observe-only calibration: no arbitrary user token/time/attempt/repair
+   caps; keep scope, concurrency, no-progress, approval and trial stops. Offer caps
+   only when requested or informed by measured runs. Load the dark-factory leaf's
+   `references/metrics.md`; propose private per-item usage/timing/attempt storage,
+   per-project model/effort/phase aggregates and run-end reports, with telemetry gaps
+   explicit. Propose scoring-to-effort mapping, context limits, artifact
    storage/access/retention, supported scoped workers and checkpoint/handoff route.
    Propose supervisor runner/schedule, one-project registry, concurrency, operations,
    approval verification and notification destination. Discover capabilities;

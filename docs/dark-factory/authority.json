@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "revision": 3,
+  "project": "mikedelafuente/dotfiles-arch",
+  "kind": "authority",
+  "status": "proposed",
+  "acceptance": null,
+  "scope": {
+    "repository": "mikedelafuente/dotfiles-arch",
+    "resources": [
+      "approved integration branch and assigned worktrees",
+      "accepted private artifact/store root"
+    ],
+    "allowed_after_acceptance": [
+      "scoped implementation",
+      "fixture/static verification",
+      "independent evaluation",
+      "local checkpoint receipts"
+    ],
+    "separate_authorization": [
+      "commit/push/PR/merge",
+      "tracker create/edit/assign/comment/close",
+      "workstation deployment/migration/package/service/driver actions",
+      "external notifications",
+      "scheduling",
+      "artifact deletion"
+    ],
+    "publication_destinations": [],
+    "publication_content": []
+  },
+  "policy": {
+    "actions": [
+      "implement",
+      "evaluate",
+      "checkpoint"
+    ],
+    "models": {
+      "gpt-6.1-sol": [
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "families": {
+      "gpt-6.1-sol": "sol-6.1"
+    },
+    "effort_mapping": [
+      {
+        "max_score": 3,
+        "model": "gpt-6.1-sol",
+        "effort": "medium"
+      },
+      {
+        "max_score": 6,
+        "model": "gpt-6.1-sol",
+        "effort": "high"
+      },
+      {
+        "max_score": 8,
+        "model": "gpt-6.1-sol",
+        "effort": "xhigh"
+      }
+    ],
+    "verifier": "pending-trusted-human-verifier",
+    "approval_sources": [
+      "pending-authenticated-human-source"
+    ],
+    "limits": {
+      "tokens": null,
+      "seconds": null,
+      "attempts": null,
+      "concurrency": 1,
+      "queue": 100,
+      "repairs": null,
+      "no_progress": 2
+    },
+    "deadline": null,
+    "context": {
+      "entries": 32,
+      "bytes": 65536
+    },
+    "artifact_root": "/home/dela/.local/state/dotfiles-arch-dark-factory",
+    "budget_mode": "observe-only"
+  },
+  "deadline_rule": "No user-set token or wall-clock cap during initial calibration runs. Actual platform/session limits still apply; interrupted work checkpoints instead of resetting statistics.",
+  "allocations": {
+    "worker_max": {
+      "tokens": null,
+      "seconds": null
+    },
+    "independent_evaluation_max": {
+      "tokens": null,
+      "seconds": null
+    },
+    "retro_max": {
+      "tokens": null,
+      "seconds": null,
+      "attempts": null
+    },
+    "enclosing_accounting": "Accumulate all coordinator, council, research, worker, evaluator, repair and retro usage under the same milestone/run lineage. Null means no user-set token/time maximum, not zero or a fabricated finite limit. Resumes retain usage; unknown telemetry is marked unavailable."
+  },
+  "scoring": "ambiguity, integration, consequence, validation each 0..2; sum 0..8. Tier is a heuristic, not measured quality.",
+  "stop_rules": [
+    "human approval missing/stale/revoked",
+    "hash drift or changed scope",
+    "unknown launch/action/usage",
+    "platform/session limits reached",
+    "unsupported requested capability",
+    "selected prototype checkpoint awaiting human trial"
+  ],
+  "trust": "Human evidence must be authenticated, current, unrevoked and bound to exact hashes by an accepted verifier. Assistant-authored JSON and verified=true are not proof.",
+  "acceptance_relationships": [
+    "charter",
+    "council",
+    "guidance",
+    "decisions",
+    "tracker",
+    "coordination",
+    "authority"
+  ],
+  "retention": {
+    "days_after_completion": 90,
+    "deletion": "explicit human authorization; preserve unresolved runs and receipts"
+  },
+  "reporting": {
+    "frequency": "after every completed, blocked or interrupted calibration run",
+    "grouping": [
+      "milestone",
+      "run",
+      "ticket",
+      "phase",
+      "agent",
+      "model/effort"
+    ],
+    "metrics": [
+      "input tokens",
+      "cached input tokens (subset of input where provider semantics specify)",
+      "output tokens",
+      "reasoning tokens (subset of output where provider semantics specify)",
+      "total tokens without double-counting category subsets",
+      "wall time and active agent time separately",
+      "attempts and repairs",
+      "completed/failed checks and trial disposition",
+      "monetary cost only with known rates and billable usage"
+    ],
+    "provenance": "Runner/provider usage evidence only; identify unavailable fields and partial coverage. Do not infer exact counts from prose length or infer dollars from account usage percentages.",
+    "rollup": "Sum disjoint action/agent records once; dedupe resumes and repeated callbacks by stable identity.",
+    "calibration": "After several runs report median, mean, range and sample count by task size before recommending limits."
+  },
+  "control_compatibility": {
+    "status": "source-supported",
+    "evidence": "tests/test_dark_factory.py and independent supplied-fact forward check; no live runner/telemetry certification",
+    "adoption": "Use the pinned updated source controller or adopt the updated skill generation explicitly; installed copies retain their prior version until deployment."
+  }
+}

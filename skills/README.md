@@ -108,7 +108,10 @@ Use [ask-mike](mikedelafuente/ask-mike/SKILL.md) to choose a workflow:
   produces private evidence-backed findings; synthetic source-scoped publication
   needs separate content/destination approval. Shared
   [records and control seam](mikedelafuente/dark-factory/references/contracts.md)
-  retain approval, budgets, claims and trial pauses across resumes. Setup accepts
+  retain approval, optional caps, usage history, claims and trial pauses across resumes.
+  Initial observe-only calibration has no user token/time/attempt caps. The
+  [usage reports](mikedelafuente/dark-factory/references/metrics.md) preserve each
+  item/attempt and aggregate by project, model, effort and phase. Setup accepts
   actual runner/tracker adapters; this package ships no network/runner adapter.
 
 Direct upstream invocations retain upstream behavior: `ask-matt`, `grill-*`,
