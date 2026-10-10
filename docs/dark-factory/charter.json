@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 4,
+  "revision": 5,
   "project": "mikedelafuente/dotfiles-arch",
   "kind": "charter",
   "status": "proposed",
@@ -18,7 +18,7 @@
     "automatic backlog selection"
   ],
   "operating_boundaries": [
-    "accepted selected milestone only",
+    "accepted selected parent issue and frozen descendant graph only",
     "existing architecture and project constraints",
     "static checks and temporary fixtures",
     "independent acceptance and actual human trial",
@@ -27,31 +27,36 @@
   "references": {
     "council": {
       "path": "docs/dark-factory/COUNCIL.md",
-      "sha256": "6e3ed5869c00eb2991f3ade300e5e349a072428c0d903cd167ad9827d7ebf235"
+      "sha256": "bc7ca1818d6d143cfc5168fbf87b9628114a924753e5278d1027ccad716adf64"
     },
     "guidance": {
       "path": "docs/dark-factory/guidance.md",
-      "sha256": "1c79e5168fa6084dd2495a5127153dfe96ed4bdf7061e0f4ab3ce438f604adcf"
+      "sha256": "e13b93e1e394936600e14e06ab4ff8fe8c3184bdec252be66f44ed392e85972d"
     },
     "adr": {
       "path": "docs/adr/0003-bounded-dark-factory.md",
-      "sha256": "231829f842272d76f83b3ced41ae6aba23ba04689d7760f42300940d293bad4e"
+      "sha256": "2317251df62860648d593433161eac8c75d85279d4563fb4b7bd8c458d1a03bf"
     },
     "authority": {
       "path": "docs/dark-factory/authority.json",
-      "sha256": "7ec0a7c4f9f9d0d9085eb8e5ed69aae87b5dd9f7384d613b8eec3fce2b40c634"
+      "sha256": "3bd2404e1cbcec383852ec924239a76231261a0331aff48a3fcb942a95f879c9"
     },
     "tracker": {
       "path": "docs/dark-factory/tracker.json",
-      "sha256": "d094b0049f4ee3dcbaf49093c9906643da65553e94f20c1db5d51bbc700974a0"
+      "sha256": "24dffbd837af7cabba9edd06930bc66d5139be18b515245867ebc275600d2995"
     },
     "decisions": {
       "path": "docs/dark-factory/decisions.json",
-      "sha256": "6ae8e09460f80e362f620a162349ebcb102b4cf37a258d5889b35b0bdddaef8d"
+      "sha256": "8728a58bc7df49acf467382375898316643cc1aabd295ad41a1b9909ada57e64"
     },
     "coordination": {
       "path": "docs/dark-factory/coordination.json",
       "sha256": "2d422db4a9d9d745fd6bc9a580d3f6ac471d914ae389d42dc77a3bf9b82f4a41"
     }
+  },
+  "supersession": {
+    "revision": 4,
+    "git_commit": "63cb998577483441da89cf6687bd026278c75094",
+    "reason": "Future grouping changes to explicit parent issue hierarchy; historical accepted run scopes and authority are unchanged"
   }
 }

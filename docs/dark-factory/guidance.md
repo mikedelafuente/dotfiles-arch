@@ -1,4 +1,4 @@
-# Factory guidance — revision 4, proposed
+# Factory guidance — revision 5, proposed
 
 Load this guidance for planning, execution, evaluation, resume and retro. The
 hashed setup index identifies the proposal; acceptance is still required.
@@ -31,9 +31,10 @@ video timestamps are optional; include them when they clarify an option or resol
 uncertainty. Treat the note as planning guidance within the accepted scope and
 authority.
 
-Use the milestone resolver in `tracker.json`, subject to its outstanding contract
-acceptance. The user selected native GitHub milestones per approved change;
-no milestone, issue set or delivery outcome has been selected. A document called
+Use the parent-issue resolver in `tracker.json`, subject to its outstanding contract
+acceptance. For future approved changes, the user selected one parent GitHub issue
+with native sub-issues and dependency links. No new parent or outcome is selected.
+Historical milestone selections and approvals remain unchanged. A document called
 an idea is an artifact, not a new tracker object type. Resolve bounded membership,
 descendants, exclusions and dependencies before proposing tickets. Freeze all
 mandatory criteria and explicit prototype/trial checkpoints before approval.
@@ -60,7 +61,7 @@ paths; configuration alone does not supply them.
 For initial calibration runs, use no user-set token or wall-clock cap. Preserve
 platform/session limits, approved scope, review, recorded attempts/repairs,
 no-progress stops and the human trial pause. Keep cumulative usage across resumes.
-After every completed, blocked or interrupted run, report milestone/run/ticket,
+After every completed, blocked or interrupted run, report parent issue/run/ticket,
 agent/model/effort, phase, input/cache/output/reasoning usage, elapsed time,
 attempts, repairs and outcomes. Use actual usage evidence; label unavailable
 metrics and avoid double-counting cached/reasoning subsets. Report money only
@@ -68,7 +69,7 @@ when rates and billable usage are known. After several runs, compare sample
 count, median, mean and range before proposing calibrated limits.
 
 The source control CLI supports observe-only calibration. Follow its
-[usage reporting contract](../../skills/mikedelafuente/dark-factory/references/metrics.md):
+[usage reporting contract](https://github.com/mikedelafuente/skills/blob/bd00537de1d7ae4150980f49a2a7af11da9fd970/skills/mikedelafuente/dark-factory/references/metrics.md):
 record each authorized work attempt once, write per-run reports, and refresh the
 private project aggregate. Capture actual runner usage when available; missing
 measurements alone do not stop uncapped calibration. Preserve claim/fence,
@@ -93,7 +94,7 @@ Unsupported fresh-context transfer means a checkpoint and human handoff.
 
 Stop at the selected prototype checkpoint and await actual human trial disposition.
 Completion requires every selected descendant independently accepted and the
-required trial disposition; closing a parent/milestone is insufficient. Retain run
+required trial disposition; closing a parent is insufficient. Retain run
 history through worktree cleanup; propose 90-day retention after completion and
 explicit human authorization for deletion. Retro has separate accepted limits and
 source-scoped publication authority. No automatic next-goal selection.

@@ -310,7 +310,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 
 For factory planning, execution, evaluation, resume or retro, load
 [`docs/dark-factory/setup.json`](docs/dark-factory/setup.json), then its hashed
-charter, council, guidance, tracker, ADR and authority pointers. Revision 4 is
+charter, council, guidance, tracker, ADR and authority pointers. Revision 5 is
 proposed: require current human acceptance and separate action authority before
 relying on it autonomously; preserve approval and hands-on trial pauses.
 

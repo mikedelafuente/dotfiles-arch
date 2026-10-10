@@ -4,6 +4,8 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 ## Conventions
 
+- **Group future approved changes**: use one parent issue for the outcome/spec, with native GitHub sub-issues for executable tickets. Use native dependency links for ordering. Select the parent by its exact repository and issue number; milestone membership and body mentions do not define scope. See [the bounded resolver](../dark-factory/tracker.json).
+- **Complete linked work**: after required merges/checks and acceptance, close child tickets as completed when tracker-closing authority exists. Close the parent after every required descendant and the human trial pass. Preserve completed milestone history.
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
 - **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.

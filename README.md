@@ -581,7 +581,8 @@ source to allow overwrites (`dfa-sync-sources add <path> --overwritable true`).
 Protected duplicates stop sync before links change. See [imports and update review](https://github.com/mikedelafuente/skills/blob/main/skills/README.md).
 
 Factory entrypoints: `/setup-dark-factory` accepts project council/guidance and
-tracker conventions; `/dark-factory-idea` turns intent or prototype feedback into
+tracker conventions (this project uses parent issues with native sub-issues and
+dependency links for future work); `/dark-factory-idea` turns intent or prototype feedback into
 a bounded versioned proposal; `/dark-factory` builds approved selected work with
 independent checks and pauses for hands-on trial. `/dark-factory-supervisor`
 reconciles finite wakes through an accepted runner, and `/dark-factory-retro`
