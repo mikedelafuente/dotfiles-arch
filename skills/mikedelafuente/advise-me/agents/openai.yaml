@@ -1,5 +1,0 @@
-interface:
-  display_name: "Advise Me"
-  short_description: "Sharpen a plan with council recommendations"
-policy:
-  allow_implicit_invocation: false

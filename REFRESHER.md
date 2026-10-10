@@ -275,3 +275,13 @@ Super+1-9        workspaces        sync.sh      update machine
 3. [PACKAGES.md](PACKAGES.md) — what each installed package is for  
 4. [NOTES.md](NOTES.md) — WiFi, archinstall, NVIDIA  
 5. Ask the agent: `agent --mode ask "…"`
+
+## Skills/Pi handoff
+
+The [skills repository](https://github.com/mikedelafuente/skills) owns shared
+skills/rules and all opt-in Pi maintenance. Workstation sync consumes only manually
+registered data through generations. Run the [fixture checkpoint](docs/validation/skills-pi-source-handoff.md)
+and return trial feedback before a live cutover. For future authorized workstation
+use, the owner supplies `bin/pi-setup install --resources generation`; registration
+is `dfa-sync-sources add /path/to/skills --type standard`. Do not also load that
+source as a native Pi resource package.

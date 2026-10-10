@@ -4,7 +4,8 @@
 # Expects fn-lib.sh (print_*, bootstrap_config_dir) to be loaded.
 #
 # Each configured source has a type:
-#   standard    — repo root has rules/, skills/, and/or extensions/ under it
+#   standard    — repo root has rules/, skills/, extensions/, and/or supported
+#                  pi/ data (models.json, settings.json, agents/, prompts/)
 #                  (Pi's own repo may use pi/extensions/),
 #                 same layout as dotfiles-arch itself.
 #   skills-root — the path itself IS a folder of nested skill dirs (no skills/
@@ -33,9 +34,8 @@
 #   - Codex: ~/.codex/skills and ~/.codex/AGENTS.md (or CODEX_HOME), when the
 #     `codex` CLI is detected.
 #   - skills: ~/.pi/agent/skills/<name> (Pi discovers its own global skills dir
-#     natively — no settings needed). A legacy Pi settings `skills` array that
-#     pointed at ~/.claude/skills / ~/.codex/skills is pruned so Pi never
-#     discovers the same skill twice (see prune_pi_settings_skill_paths).
+#     natively — no settings needed). Legacy settings reconciliation belongs
+#     to the standalone resource owner.
 #   - rules: ~/.pi/agent/AGENTS.md — the single raw global agent file Pi reads
 #     at startup. Pi has no @import mechanism, so the alwaysApply bodies of
 #     every active source are concatenated into one regenerated file
@@ -147,7 +147,7 @@ write_sync_source_repos() {
   mkdir -p "$dir"
   {
     echo "# Extra rules/skills source repos, one per line: path | type:path"
-    echo "# Types: standard (default, has rules/ + skills/ + extensions/ subdirs;"
+    echo "# Types: standard (default, has rules/ + skills/ + extensions/ + supported pi/ data;"
     echo "# skills-root (path is itself a folder of nested skill dirs), rules-root"
     echo "# dotfiles-arch uses pi/extensions/), rules-root (path is itself a flat folder"
     echo "# of *.mdc files), extensions-root (path is itself a flat folder of Pi extensions)."
@@ -211,8 +211,10 @@ add_sync_source_repo() {
   write_sync_source_repos
   case "$type" in
     standard)
-      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" && ! -d "$normalized/pi/extensions" ]]; then
-        print_warning_message "No rules/, skills/, extensions/, or pi/extensions/ under $normalized — nothing to sync until you add them"
+      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" && ! -d "$normalized/pi/extensions" \
+        && ! -f "$normalized/pi/models.json" && ! -f "$normalized/pi/settings.json" \
+        && ! -d "$normalized/pi/agents" && ! -d "$normalized/pi/prompts" ]]; then
+        print_warning_message "No rules/, skills/, extensions/, or supported pi/ data under $normalized — nothing to sync until you add them"
       fi
       ;;
     skills-root)
@@ -790,75 +792,6 @@ codex_home_dir() {
   echo "${CODEX_HOME:-$USER_HOME_DIR/.codex}"
 }
 
-# ~/.pi/agent/settings.json path (stdout).
-pi_settings_file() {
-  echo "$(pi_agent_dir)/settings.json"
-}
-
-# Remove dfa-managed harness skill dirs from Pi settings' `skills` array.
-# Before Pi gained its own global skills dir, this was wired manually to
-# ~/.claude/skills and ~/.codex/skills; dfa-sync-skills now mirrors the same
-# sources into ~/.pi/agent/skills natively, so leaving those entries would make
-# Pi discover every skill twice and warn about name collisions at each startup.
-# Only ever removes those two exact entries (tilde and $HOME-expanded forms);
-# any other skills entries and all other settings are preserved byte-for-byte
-# apart from re-serialization.
-prune_pi_settings_skill_paths() {
-  local file removed
-  file="$(pi_settings_file)"
-  [[ -f "$file" ]] || return 0
-  if ! command -v python3 &>/dev/null; then
-    print_warning_message "python3 not found — cannot prune Pi settings.json (remove its skills array manually)"
-    return 1
-  fi
-  removed="$(python3 - "$file" <<'PY'
-import json
-import os
-import sys
-
-path = sys.argv[1]
-managed = {"~/.claude/skills", "~/.codex/skills"}
-managed_expanded = {os.path.normpath(os.path.expandvars(os.path.expanduser(p))) for p in managed}
-
-
-def is_managed(value):
-    return (
-        isinstance(value, str)
-        and os.path.normpath(os.path.expandvars(os.path.expanduser(value))) in managed_expanded
-    )
-
-try:
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-except (OSError, ValueError):
-    sys.exit(0)
-
-skills = data.get("skills")
-if not isinstance(skills, list):
-    sys.exit(0)
-
-removed = sorted({s for s in skills if is_managed(s)})
-if not removed:
-    sys.exit(0)
-
-kept = [s for s in skills if not is_managed(s)]
-if kept:
-    data["skills"] = kept
-else:
-    data.pop("skills", None)
-
-with open(path, "w", encoding="utf-8") as fh:
-    json.dump(data, fh, indent=2)
-    fh.write("\n")
-
-print(", ".join(removed))
-PY
-)"
-  if [[ -n "$removed" ]]; then
-    print_info_message "Pruned dfa-managed skill dirs from Pi settings: $removed"
-  fi
-}
-
 # Staging file that becomes Pi's global AGENTS.md (stdout): the alwaysApply
 # bodies of every active rules-capable source, concatenated. Lives at the root
 # of rules-build/ so prune_orphaned_rules_build_dirs (which only scans
@@ -878,7 +811,8 @@ build_pi_agents_file() {
   out="$(pi_agents_build_file)"
   tmp="$(mktemp)"
 
-  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+  # Extras come first so the primary source is the final instruction authority.
+  for ((i=1; i<${#SYNC_SOURCE_REPOS_ALL[@]}; i++)); do
     repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
     repo_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
     case "$repo_type" in
@@ -894,6 +828,25 @@ build_pi_agents_file() {
     cat "$f" >>"$tmp"
     src_count=$((src_count + 1))
   done
+  if ((${#SYNC_SOURCE_REPOS_ALL[@]} > 0)); then
+    repo_root="${SYNC_SOURCE_REPOS_ALL[0]}"
+    repo_type="${SYNC_SOURCE_REPOS_ALL_TYPES[0]}"
+    case "$repo_type" in
+      standard | rules-root) ;;
+      *) repo_root="" ;;
+    esac
+    if [[ -n "$repo_root" ]]; then
+      f="$(sync_source_rules_build_dir "$repo_root")/claude-rules.md"
+      if [[ -f "$f" ]]; then
+        if ((src_count > 0)); then
+          printf '\n---\n\n' >>"$tmp"
+        fi
+        printf '<!-- source: %s -->\n\n' "$repo_root" >>"$tmp"
+        cat "$f" >>"$tmp"
+        src_count=$((src_count + 1))
+      fi
+    fi
+  fi
 
   if ((src_count == 0)); then
     rm -f "$tmp" "$out"

@@ -84,7 +84,6 @@ run_setup setup-kitty.sh
 run_setup setup-claude.sh
 run_setup setup-codex.sh
 run_setup setup-opencode.sh
-run_setup setup-pi.sh
 run_setup setup-ollama.sh
 run_setup setup-harness-agents.sh
 run_setup setup-python.sh

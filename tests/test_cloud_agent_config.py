@@ -8,14 +8,17 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run(source, home, *, success=True, codex_home=None):
+def run(source, home, *, success=True, codex_home=None, source_arg=None):
     env = dict(os.environ)
     env.pop("CODEX_HOME", None)
     env["PATH"] = str(source.parent / "guard-bin") + os.pathsep + env["PATH"]
     if codex_home:
         env["CODEX_HOME"] = str(codex_home)
-    result = subprocess.run(["bash", str(source / "scripts/install-cloud-agent-config.sh"),
-                             "--home", str(home)], env=env, capture_output=True, text=True)
+    command = ["bash", str(source / "scripts/install-cloud-agent-config.sh"),
+               "--home", str(home)]
+    if source_arg:
+        command += ["--source", str(source_arg)]
+    result = subprocess.run(command, env=env, capture_output=True, text=True)
     assert (result.returncode == 0) == success, result.stdout + result.stderr
     return result
 
@@ -26,14 +29,41 @@ def main():
         # Copy the actual checkout into a different cloud-like path, with spaces.
         source = tmp / "workspace" / "dotfiles checkout"
         source.mkdir(parents=True)
-        for name in ("scripts", "skills", "rules"):
-            shutil.copytree(ROOT / name, source / name)
+        # Keep this fixture independent of the workstation's payload.  The
+        # standalone skills source remains the explicit cloud input after the
+        # workstation moves its own skills/rules elsewhere.
+        shutil.copytree(ROOT / "scripts", source / "scripts")
+        fixture_skills = {
+            "mattpocock/productivity/grilling",
+            "mattpocock/engineering/domain-modeling",
+            "mikedelafuente/advising",
+            "mikedelafuente/agent-council",
+            "mikedelafuente/advise-with-docs",
+            "mikedelafuente/review-changes",
+            "mikedelafuente/adversarial-code-review",
+            "mattpocock/productivity/wait-what",
+        }
+        for relative in fixture_skills:
+            directory = source / "skills" / relative
+            directory.mkdir(parents=True)
+            (directory / "SKILL.md").write_text(f"# {directory.name}\n")
+        (source / "skills/mikedelafuente/agent-council/references").mkdir()
+        (source / "skills/mikedelafuente/agent-council/references/record.md").write_text("record\n")
+        (source / "rules").mkdir()
+        (source / "rules/ponytail.md").write_text(
+            "---\nalwaysApply: true\n---\n# Ponytail, lazy senior dev mode\n")
         guard = source.parent / "guard-bin"
         guard.mkdir()
         for command in ("pacman", "yay", "sudo", "systemctl", "gsettings", "git", "curl", "wget"):
             sentinel = guard / command
             sentinel.write_text("#!/bin/sh\necho 'Forbidden cloud install side effect' >&2\nexit 97\n")
             sentinel.chmod(0o755)
+        standalone = tmp / "standalone source"
+        shutil.copytree(source / "skills", standalone / "skills")
+        shutil.copytree(source / "rules", standalone / "rules")
+        standalone_home = tmp / "standalone cloud user"
+        run(source, standalone_home, source_arg=standalone)
+        assert (standalone_home / ".agents/skills/advising").is_symlink()
         home = tmp / "cloud-user"
         target = home / ".agents/skills"
         target.mkdir(parents=True)

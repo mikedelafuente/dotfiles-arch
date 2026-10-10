@@ -136,6 +136,34 @@ with `dfa-sync-sources`. No basename-based clone selection occurs.
 
 ## Activation, interruption and rollback
 
+### Registered source ownership handoffs
+
+The primary checkout can declare data ownership moves in
+`.dfa-source-handoffs.json`:
+
+```json
+{"version": 1, "moves": [
+  {"from": "skills", "to": "skills", "source": "https://github.com/mikedelafuente/skills"}
+]}
+```
+
+This declaration neither acquires nor registers a source. Each disappeared primary
+artifact must have an exact relative replacement in one manually registered
+standard source with the declared origin. Missing registration or replacement
+blocks deployment. The move reuses the original installed B/L inputs against the
+replacement I, then records the replacement origin and baseline in the new
+manifest. Local edits merge normally; competing edits block the entire generation.
+An already deployed replacement must have its baseline intact and no local edit
+or override of its own, otherwise both copies need explicit reconciliation.
+
+The manifest's `override_artifact` retains the original persistent override-store
+key. Use the **new** manifest artifact key with `dfa-deploy override` and `capture`;
+override edits/removal still address that original key, including after rollback.
+Retained generations keep the previous ownership and home links for rollback.
+Never remove a replacement snapshot before the old source has contracted and the
+human has verified the handoff. A missing registered source blocks further
+deployment while the installed generation stays usable.
+
 Deployment takes an exclusive nonblocking lock, stages and validates, rechecks source
 and live bytes/modes and home link ownership, then journals the activation before
 switching `config`. Executables resolve their real generation and use libraries
@@ -200,7 +228,7 @@ copy only their configured supplied tree, rejecting broken/external links.
 | `dfa-update-system`, npm/app/weekly/NinjaOne maintenance | Backend scripts and owned package/app state | Installed backend dependencies; native/vendor acquisition keeps existing owners |
 | `dfa-check-dotfiles` | Source lint tree | Installed complete scripts/migrations/helper tree |
 | `dfa-migrate`, link/post-link/bootstrap/sync | Repository migrations and unconditional linking | Installed migrations; source entrypoints stage before linking/setup |
-| Pi models/settings/agents/extensions | `pi/**`, extra extensions roots; imported TS modules | Installed `pi/**`/extra closure; auth/models-store remain machine-local |
+| Pi models/settings/agents/extensions/prompts | Primary `pi/**`, registered standard-source `pi/models.json`, `pi/settings.json`, `pi/{agents,prompts}/**`, and extension roots | Retained-generation links; auth/models-store and credential/runtime files remain machine-local |
 | Claude/Cursor/Codex/Pi skill folders | Recursive source skill parent links and relative support paths | Discovered installed parents and support closure; protected collision policy retained |
 | Cursor rules, Claude imports, Codex/Pi/OpenCode global guidance | Raw sources and generated rules-build artifacts | Installed generated normalized rules and direct installed-copy/source instructions |
 | `dfa-sync-sources` | Source paths in registration | Machine-local source registry retained; deploy owns activation/pruning of manifested targets |

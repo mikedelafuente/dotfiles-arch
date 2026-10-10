@@ -292,6 +292,9 @@ class Deployment:
         for key in manifest["artifacts"]:
             if Path(key).is_absolute() or ".." in Path(key).parts:
                 raise Pending("Invalid artifact provenance; restore a recorded generation")
+            override_key = manifest["artifacts"][key].get("override_artifact", key)
+            if not isinstance(override_key, str) or not override_key or Path(override_key).is_absolute() or ".." in Path(override_key).parts:
+                raise Pending("Invalid override provenance; restore a recorded generation")
         for source in manifest["sources"]:
             if not re.fullmatch(r"primary|[0-9a-f]{16}", source.get("id", "")) or not Path(source.get("path", "")).is_absolute():
                 raise Pending("Invalid source provenance; restore a recorded generation")
@@ -360,6 +363,7 @@ class Deployment:
     def inventory(self, primary, incoming):
         artifacts, links, sources = {}, {}, []
         roots, overwritable, rules_bodies = [], [], []
+        rule_entries = []
         pi = lexical(os.environ.get("PI_CODING_AGENT_DIR", self.home / ".pi/agent"))
         codex = lexical(os.environ.get("CODEX_HOME", self.home / ".codex"))
         def add_link(target, relative, legacy):
@@ -459,6 +463,34 @@ class Deployment:
                     elif relative.parts[0] == "pi" and "extensions" not in relative.parts:
                         add_link(pi / relative.relative_to("pi"), key, src)
             staged = incoming / prefix
+            if kind == "standard" and (staged / "pi").is_dir():
+                settings = read_json(pi / "settings.json", {})
+                if not isinstance(settings, dict) or not isinstance(settings.get("packages", []), list):
+                    raise Pending("Invalid Pi package settings; preserve and reconcile them before source sync")
+                legacy_skill_paths = {str(self.home / ".claude/skills"), str(codex / "skills")}
+                for value in settings.get("skills", []) if isinstance(settings.get("skills", []), list) else []:
+                    if isinstance(value, str) and value.replace("$HOME", str(self.home)).replace("~", str(self.home), 1) in legacy_skill_paths:
+                        raise Pending("Pi settings also load cross-harness skills; remove those legacy paths with the standalone owner before generation syncing")
+                package = read_json(staged / "package.json", {})
+                for entry in settings.get("packages", []):
+                    value = entry.get("source") if isinstance(entry, dict) else entry
+                    if not isinstance(value, str):
+                        continue
+                    if value.startswith("npm:"):
+                        match = re.match(r"npm:((?:@[^/]+/)?[^@]+)", value)
+                        duplicate = isinstance(package, dict) and match and match[1] == package.get("name")
+                    elif value.startswith(("git:", "git+", "github:", "https://", "http://", "ssh://")):
+                        raw = value.removeprefix("git:").removeprefix("git+")
+                        if raw.startswith("github:"):
+                            raw = "https://github.com/" + raw.removeprefix("github:")
+                        parsed = urlsplit(raw if "://" in raw else "https://" + raw)
+                        remote = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.split("@", 1)[0], "", ""))
+                        duplicate = clean_url(remote) == source["url"]
+                    else:
+                        local = Path(value.replace("~", str(self.home), 1) if value.startswith("~/") else value)
+                        duplicate = (local if local.is_absolute() else pi / local).resolve() == path
+                    if duplicate:
+                        raise Pending(f"Native Pi package duplicates registered source data: {path}; remove that native resource package explicitly before generation syncing")
             skills = staged / "skills" if kind == "standard" else staged if kind == "skills-root" else None
             if skills and skills.is_dir():
                 roots.append(skills)
@@ -471,6 +503,25 @@ class Deployment:
                 for entry in sorted(extensions.iterdir()):
                     key = entry.relative_to(incoming).as_posix()
                     add_link(pi / "extensions" / entry.name, key, path / entry.relative_to(staged))
+            # Standard sources may carry Pi data beside skills/rules.  Skills and
+            # prompts are discovered by their native locations; the remaining
+            # shared Pi files are linked from the retained generation below.
+            if kind == "standard":
+                pi_root = staged / "pi"
+                if pi_root.is_dir():
+                    for entry in sorted(pi_root.rglob("*")):
+                        if not (entry.is_file() or entry.is_symlink()):
+                            continue
+                        relative = entry.relative_to(pi_root)
+                        if relative.parts[0] == "extensions":
+                            continue
+                        if relative.parts[0] not in {"agents", "prompts"} and relative.parts not in {
+                                ("models.json",), ("settings.json",)}:
+                            continue
+                        key = prefix + (Path("pi") / relative).as_posix()
+                        if key in artifacts:
+                            add_link(pi / relative, key, path / "pi" / relative)
+
             rules = staged / "rules" if kind == "standard" else staged if kind == "rules-root" else None
             if rules and rules.is_dir():
                 for rule in sorted(rules.iterdir()):
@@ -486,16 +537,28 @@ class Deployment:
                         body = parts[2]
                     elif rule.suffix == ".md":
                         continue
-                    key = f"generated/rules/{name}/{rule.stem}.mdc"
-                    out = incoming / key; out.parent.mkdir(parents=True, exist_ok=True)
-                    out.write_text(text)
-                    artifacts[key] = {"source": None, "origin": str(path / rule.relative_to(staged)),
-                                      "incoming": identity(out)}
-                    slug = str(path).lstrip("/").replace("/", "-")
-                    add_link(self.home / ".cursor/rules" / (rule.stem + ".mdc"), key,
-                             self.home / ".config/dotfiles-arch/rules-build" / slug / "mdc" / (rule.stem + ".mdc"))
-                    if fields.get("alwaysApply", "").strip() == "true":
-                        rules_bodies.append(f"<!-- source: {path} -->\n\n{body}\n")
+                    rule_entries.append((name, path, rule, text, fields, body, staged))
+        # Registered extras are applied first so the primary source remains the
+        # final rule authority.  De-duplicate by basename across every consumer.
+        ordered_rules = [entry for entry in rule_entries if entry[0] != "primary"]
+        ordered_rules += [entry for entry in rule_entries if entry[0] == "primary"]
+        selected_rules = {}
+        for entry in ordered_rules:
+            selected_rules[entry[2].stem] = entry
+        for entry in ordered_rules:
+            name, path, rule, text, fields, body, staged = entry
+            if selected_rules[rule.stem] is not entry:
+                continue
+            key = f"generated/rules/{name}/{rule.stem}.mdc"
+            out = incoming / key; out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text)
+            artifacts[key] = {"source": None, "origin": str(path / rule.relative_to(staged)),
+                              "incoming": identity(out)}
+            slug = str(path).lstrip("/").replace("/", "-")
+            add_link(self.home / ".cursor/rules" / (rule.stem + ".mdc"), key,
+                     self.home / ".config/dotfiles-arch/rules-build" / slug / "mdc" / (rule.stem + ".mdc"))
+            if fields.get("alwaysApply", "").strip() == "true":
+                rules_bodies.append(f"<!-- source: {path} -->\n\n{body}\n")
         alias_key = "home/.local/bin/rebind-window-push"
         if alias_key in artifacts:
             add_link(self.home / ".local/bin/rebind-monitor-moves", alias_key, primary / alias_key)
@@ -569,6 +632,50 @@ class Deployment:
                     if (path.is_file() or path.is_symlink()) and lexical(path) not in known:
                         raise Pending(f"Unmanaged legacy descendant preserved: {path}; track it explicitly or move it outside the managed folder before migration")
 
+    def source_handoffs(self, incoming, artifacts, sources, old, tree):
+        """Explicit primary-source moves reuse old B/L and persistent override keys."""
+        for key in artifacts.keys() & old["artifacts"].keys():
+            if "override_artifact" in old["artifacts"][key]:
+                artifacts[key]["override_artifact"] = old["artifacts"][key]["override_artifact"]
+        config = read_json(incoming / ".dfa-source-handoffs.json", {"version": 1, "moves": []})
+        if not isinstance(config, dict) or config.get("version") != 1 or not isinstance(config.get("moves"), list):
+            raise Pending("Invalid source handoff configuration")
+        moves = {}
+        for move in config["moves"]:
+            if not isinstance(move, dict) or set(move) != {"from", "to", "source"}:
+                raise Pending("Invalid source handoff entry")
+            for field in ("from", "to"):
+                value = move[field]
+                if not isinstance(value, str) or not value or Path(value).is_absolute() or any(p in {"..", "."} for p in value.split("/")):
+                    raise Pending("Unsafe source handoff path")
+            destinations = [s for s in sources[1:] if s["type"] == "standard" and s["url"] == move["source"]]
+            for old_key, item in old["artifacts"].items():
+                source_backed = item.get("source") == "primary" and Path(old_key).is_relative_to(move["from"])
+                generated_rule = move["from"] == "rules" and move["to"] == "rules" and old_key.startswith("generated/rules/primary/")
+                if old_key in artifacts or not (source_backed or generated_rule):
+                    continue
+                if len(destinations) != 1:
+                    raise Pending("Source handoff requires exactly one manually registered replacement source; restore/register it before deploying")
+                if generated_rule:
+                    relative = Path("generated/rules") / destinations[0]["id"] / Path(old_key).name
+                    new_key = relative.as_posix()
+                else:
+                    relative = Path(move["to"]) / Path(old_key).relative_to(move["from"])
+                    new_key = f"extras/{destinations[0]['id']}/{relative.as_posix()}"
+                if new_key not in artifacts:
+                    raise Pending(f"Replacement source is missing handoff artifact: {relative}")
+                if new_key in moves or old_key in moves.values():
+                    raise Pending("Ambiguous source handoff; retain the original source and resolve duplicate identities")
+                if new_key in old["artifacts"]:
+                    destination_base = identity(tree.parent / "baseline" / new_key)
+                    if destination_base != old["artifacts"][new_key]["baseline"] or identity(tree / new_key) != destination_base:
+                        raise Pending(f"Replacement artifact also has local edits or an altered baseline: {new_key}; reconcile both copies before handoff")
+                    if (self.root / "overrides" / new_key).exists():
+                        raise Pending(f"Replacement artifact also has an override: {new_key}; reconcile both overrides before handoff")
+                moves[new_key] = old_key
+                artifacts[new_key]["override_artifact"] = item.get("override_artifact", old_key)
+        return moves
+
     def deploy(self, primary, locked=False):
         with nullcontext() if locked else self.locked():
             tree, old = self.current()
@@ -582,11 +689,12 @@ class Deployment:
             registry_before = identity(registry)
             try:
                 artifacts, links, sources = self.inventory(primary, incoming)
+                moves = self.source_handoffs(incoming, artifacts, sources, old, tree)
                 # A content-derived staging key gives repeated identical conflicts identical evidence paths.
                 state = {"incoming": artifacts, "sources": sources, "previous": old,
                          "live": {key: identity(tree / key) for key in old["artifacts"]} if tree else {},
                          "baseline": {key: identity(tree.parent / "baseline" / key) for key in old["artifacts"]} if tree else {},
-                         "overrides": {key: identity(self.root / "overrides" / key) for key in artifacts},
+                         "overrides": {key: identity(self.root / "overrides" / artifacts[key].get("override_artifact", key)) for key in artifacts},
                          "targets": {target: {"link": identity(Path(target)) if not Path(target).is_dir() or Path(target).is_symlink() else "directory",
                                      "content": identity(Path(target).resolve()) if Path(target).is_file() else None}
                                      for target in links}}
@@ -612,10 +720,12 @@ class Deployment:
                         snapshots[target] = self.link_snapshot(target, info, old["links"])
                 if not tree:
                     self.preserve_legacy_directories(links, snapshots, artifacts)
-                observed = {}
-                for key in sorted(artifacts.keys() | old["artifacts"].keys()):
-                    live = (tree / key) if tree else stage / "absent-live" / key
-                    base = (tree.parent / "baseline" / key) if tree else stage / "absent-base" / key
+                observed = {key + ":replacement": {"path": str(tree / key), "identity": identity(tree / key)}
+                            for key in moves if key in old["artifacts"]}
+                for key in sorted((artifacts.keys() | old["artifacts"].keys()) - set(moves.values())):
+                    old_key = moves.get(key, key)
+                    live = (tree / old_key) if tree else stage / "absent-live" / key
+                    base = (tree.parent / "baseline" / old_key) if tree else stage / "absent-base" / key
                     inc = incoming / key
                     if not tree:
                         # A legacy layout's Git HEAD is trusted source B/I; its working
@@ -635,9 +745,9 @@ class Deployment:
                                     break
                     observed[key] = {"path": str(live), "identity": identity(live)}
                     try:
-                        if tree and key in old["artifacts"] and identity(base) != old["artifacts"][key]["baseline"]:
+                        if tree and old_key in old["artifacts"] and identity(base) != old["artifacts"][old_key]["baseline"]:
                             raise Pending("Missing or altered source baseline; recover a retained generation")
-                        override = self.root / "overrides" / key
+                        override = self.root / "overrides" / artifacts.get(key, old["artifacts"].get(old_key, {})).get("override_artifact", key)
                         if override.exists():
                             if key not in artifacts or not override.is_file() or override.is_symlink():
                                 raise Pending("Override no longer has an incoming managed artifact")
@@ -1002,7 +1112,7 @@ class Deployment:
                     known.update(read_json(inventories[-1])["artifacts"])
             if key not in known or Path(key).is_absolute() or ".." in Path(key).parts:
                 raise Pending("Select a manifested or initial-pending artifact key")
-            dest = self.root / "overrides" / key
+            dest = self.root / "overrides" / known[key].get("override_artifact", key)
             safe_parents(dest, self.root)
             if file is None:
                 dest.unlink(missing_ok=True)

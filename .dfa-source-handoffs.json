@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "moves": [
+    {
+      "from": "skills",
+      "to": "skills",
+      "source": "https://github.com/mikedelafuente/skills"
+    },
+    {
+      "from": "rules",
+      "to": "rules",
+      "source": "https://github.com/mikedelafuente/skills"
+    },
+    {
+      "from": "pi",
+      "to": "pi",
+      "source": "https://github.com/mikedelafuente/skills"
+    }
+  ]
+}

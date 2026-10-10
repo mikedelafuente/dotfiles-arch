@@ -105,7 +105,7 @@ belong to `dfa-update-system`; NVM files to standalone Node setup after pin upda
 Node LTS to `nvm install --lts` with an explicitly selected default. See the
 [full command/source/version/update matrix and unverified paths](PACKAGES.md#shared-shell-and-core-cli-distro-slice).
 
-Standalone `setup-claude.sh`, `setup-codex.sh`, `setup-pi.sh`, and
+Standalone `setup-claude.sh`, `setup-codex.sh`, and
 `setup-opencode.sh` now support both hosts after user-owned Node setup. Ubuntu
 opencode uses stable `opencode-ai` through user npm; Arch retains native packages.
 Codex setup retains the selected official ChatGPT desktop application: guarded
@@ -159,7 +159,7 @@ dfa-weekly                        # dfa-daily + forced updates + orphan preview 
 dfa-install-ninjaone             # standalone, work machines: hidden vendor URL prompt (native Ubuntu DEB / Arch repackaging)
 dfa-update-ninjaone              # weekly health/repair for owned installs; IT-managed agents checked read-only
 dfa-uninstall-ninjaone           # terminal + type remove; Ubuntu retains SentinelOne unless --remove-sentinelone is separately confirmed
-dfa-sync-sources add /path/to/repo # optional: extra rules/skills/extensions repo; then dfa-sync-extensions && dfa-sync-skills && dfa-sync-rules
+dfa-sync-sources add /path/to/repo # manual standard resource source: skills/rules and full shared Pi data; then dfa-deploy deploy
 dfa-update-system                 # after link-dotfiles; or:
 bash scripts/update-system.sh
 bash scripts/update-system.sh --yes        # native updates; Arch requires a clean AUR scan
@@ -285,15 +285,25 @@ With `--yes`, pass `--profile` if none is saved yet. `--cleanup` only previews; 
 
 ### Pi configuration
 
-Shared Pi configuration lives under [`pi/`](pi/) and is linked into `~/.pi/agent` by
-`link-dotfiles.sh` (settings and model configuration). Pi extensions, including the
-[remote control](pi/extensions/), are synced from `pi/extensions/` plus
-configured extra sources by `dfa-sync-extensions`. See the [remote-control operator
-guide](pi/extensions/remote-control/README.md) for setup and operation. Pi's machine-local
-credentials and
-runtime model catalog — `auth.json` and `models-store.json` — remain local; the model store is
-not symlinked because Pi updates its timestamps. Global `AGENTS.md` is generated from the
-repository's synced rules and linked by `sync-rules.sh`.
+[skills](https://github.com/mikedelafuente/skills) owns all opt-in Pi installation,
+updates, health checks, repair and shared resources. Dotfiles does not install or
+update Pi; an existing Pi CLI remains available to the generic harness launcher.
+Use that owner's `bin/pi-setup install --resources generation` for the workstation
+resource route. Native package loading and generation loading are mutually exclusive.
+
+Register the source manually when ready for a separately authorized live cutover:
+
+```bash
+dfa-sync-sources add /path/to/skills --type standard
+```
+
+Any normal resource sync then deploys the registered source through complete
+retained generations: skills, rules, models/settings, custom agents, prompts and
+extensions. Source setup scripts are never executed. Credentials, runtime model
+stores and local edits stay protected. Primary `skills/` and `rules/` are empty
+slots for final overrides; a duplicate skill requires its losing source to be
+explicitly overwritable. See [handoff trial](docs/validation/skills-pi-source-handoff.md)
+and [deployment](docs/deployment.md) before changing an existing source mapping.
 
 ---
 
@@ -511,6 +521,8 @@ dotfiles-arch/
 ├── NOTES.md               ← WiFi, archinstall, NVIDIA, sync details
 ├── CLAUDE.md              ← shared architecture and agent guidance
 ├── AGENTS.md              ← symlink to CLAUDE.md for other agents
+├── skills/                ← empty primary skill slot (.gitkeep)
+├── rules/                 ← empty primary rule slot (.gitkeep)
 ├── .cursor/rules/         ← repo conventions for AI agents
 ├── prepare-archinstall.sh ← guided disk/hostname/gfx_driver prep, before archinstall
 ├── post_install.sh        ← minimal post-archinstall (chains into bootstrap.sh)
@@ -558,15 +570,15 @@ lenses, disputes use independent agents with a fixed debate budget. Accepted Q/A
 skill invocations, not shell commands. Install through `dfa-sync-skills`.
 BA and TPM check existing research first; project councils save reusable findings
 in `docs/market-research/` by default unless explicitly told not to store research.
-See [examples and limits](skills/mikedelafuente/agent-council/references/examples.md).
+See [examples and limits](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/agent-council/references/examples.md).
 
 Personal workflows: `/ask-mike` chooses an entrypoint; `/council-handoff spec|tickets`
 carries accepted decisions into Matt's original workflow; `/build-with-ponytail`
 adds simplicity guidance and combined final `/review-changes`. Skills are grouped
-by source under `skills/{mattpocock,ponytail,mikedelafuente}` and installed under
+in the standalone skills repository and installed under
 their original names. Dotfiles-arch has final skill priority; duplicate replacement requires the losing
 source to allow overwrites (`dfa-sync-sources add <path> --overwritable true`).
-Protected duplicates stop sync before links change. See [imports and update review](skills/README.md).
+Protected duplicates stop sync before links change. See [imports and update review](https://github.com/mikedelafuente/skills/blob/main/skills/README.md).
 
 Factory entrypoints: `/setup-dark-factory` accepts project council/guidance and
 tracker conventions; `/dark-factory-idea` turns intent or prototype feedback into
@@ -575,10 +587,10 @@ independent checks and pauses for hands-on trial. `/dark-factory-supervisor`
 reconciles finite wakes through an accepted runner, and `/dark-factory-retro`
 analyzes private evidence with separately authorized synthetic publication.
 These skills create no schedules or live runs during installation. See
-[factory contracts](skills/mikedelafuente/dark-factory/references/contracts.md)
+[factory contracts](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/dark-factory/references/contracts.md)
 for authority, optional budgets, adapters, recovery and validation limits. Initial
 factory runs use uncapped observe-only calibration with durable per-item token,
-time and attempt records; [usage reports](skills/mikedelafuente/dark-factory/references/metrics.md)
+time and attempt records; [usage reports](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/dark-factory/references/metrics.md)
 aggregate project history by model, effort and phase for later tuning.
 
 `dfa-sync-sources` manager option **5** toggles skill overwrites for an existing
@@ -591,15 +603,15 @@ next to the working project. Add this command to the existing cloud setup script
 keeping the project's existing setup commands:
 
 ```bash
-bash /workspace/dotfiles-arch/scripts/install-cloud-agent-config.sh --home "$HOME"
+bash /workspace/dotfiles-arch/scripts/install-cloud-agent-config.sh --source /workspace/skills --home "$HOME"
 ```
 
 Requires Bash, Python 3.8+, and ordinary shell utilities (`awk`, `mktemp`, `whoami`);
 no Arch packages, sudo, network calls, desktop config, or agent CLI installation.
-The checkout must remain available during the task. The installer derives source
-paths from its own checkout and links complete skill folders into
+The checkout must remain available during the task. Pass the separately available skills checkout with `--source`; no source is acquired or
+registered automatically. The installer links complete skill folders into
 `<home>/.agents/skills`; no laptop paths or Trellis skill copies are used.
-It reads only this checkout, not the laptop's extra sync sources.
+It reads only the explicit source, not the laptop's extra sync sources.
 
 Shared `rules/` files with `alwaysApply: true` are flattened through the existing
 rule field/body readers into a managed block in `$CODEX_HOME/AGENTS.md` (default
@@ -608,7 +620,7 @@ This is the shared global baseline used by workstation rule sync; the repository
 root `AGENTS.md`/`CLAUDE.md` describes workstation setup and is not a project-agnostic
 baseline. Neither that file nor `.cursor/rules/` is copied into the working project.
 Existing text outside the managed block and project `AGENTS.md` files stay intact.
-Reruns update the block and prune only removed skills owned by this checkout.
+Reruns update the block and prune only removed skills owned by the selected source.
 Unrelated skill collisions, global AGENTS symlinks, malformed managed blocks, and
 nonempty global `AGENTS.override.md` fail without replacing user content.
 

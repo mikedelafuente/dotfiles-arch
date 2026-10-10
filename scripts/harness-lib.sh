@@ -4,7 +4,6 @@ harness_npm_package() {
   case "$1" in
     claude) echo @anthropic-ai/claude-code ;;
     codex) echo @openai/codex ;;
-    pi) echo @earendil-works/pi-coding-agent ;;
     opencode) echo opencode-ai ;;
     *) return 1 ;;
   esac
@@ -106,11 +105,7 @@ ensure_harness_cli() {
         esac ;;
 
     esac
-    if [[ "$harness" == pi ]]; then
-      npm install -g --ignore-scripts "$package" || return $?
-    else
-      npm install -g "$package" || return $?
-    fi
+    npm install -g "$package" || return $?
   fi
   command -v "$harness" &>/dev/null || { print_error_message "$harness installation failed"; return 1; }
   [[ "$(harness_installed_owner "$harness")" == "$owner" ]] || return 1
