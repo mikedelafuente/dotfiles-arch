@@ -408,6 +408,9 @@ def full_repository():
         stamp = home / ".config/dotfiles-arch/.dotfiles_schema_version"
         assert stamp.read_text().strip() == "5"
         installed = home / ".local/share/workstation/config"
+        # The installed manager must identify the edit checkout, not its runtime.
+        listed = run(str(installed / "scripts/sync-sources.sh"), "list").stdout
+        assert f"Primary (always, standard): {source}" in listed, listed
         assert (home / ".packages.md").read_text() == (source / "PACKAGES.md").read_text()
         assert (home / ".pi/agent/models-store.json").exists() is False
         assert not (home / ".pi/agent/auth.json").exists()
@@ -546,6 +549,9 @@ def full_repository():
                    CODEX_HOME=str(home / ".codex"), PI_CODING_AGENT_DIR=str(home / ".pi/agent"))
         # Installed helper dependency closure works after its source disappears.
         source.rename(temp / "removed checkout")
+        missing = subprocess.run(["bash", str(installed / "scripts/sync-sources.sh"), "list"],
+                                 env=env, capture_output=True, text=True)
+        assert missing.returncode != 0 and "dfa-deploy rebind" in missing.stderr
         helper = installed / "home/.local/bin/dfa-check-dotfiles"
         check = subprocess.run(["bash", str(helper)], env=env, capture_output=True, text=True)
         assert check.returncode == 0, check.stdout + check.stderr
