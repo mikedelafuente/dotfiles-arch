@@ -3,7 +3,7 @@
 #
 # Pop Shell tiling and Mutter cannot share the same chords (double-fire snap-back).
 # - tile-by-default true  → Pop Shell tile-move-*-global (move in layout; edge hops monitor)
-# - tile-by-default false / accepted Pop gap → Mutter half-snap + monitor moves
+# - tile-by-default false / Ubuntu / accepted Pop gap → Mutter half-snap + monitor moves
 #
 # Usage:
 #   rebind-window-push           # apply once
@@ -20,20 +20,23 @@ CHORD_RIGHT="['<Primary><Super>Right']"
 CHORD_UP="['<Primary><Super>Up']"
 CHORD_DOWN="['<Primary><Super>Down']"
 
-# Pop Shell supports through GNOME 51. Above it, use the explicitly accepted native
-# fallback even if an old Pop schema remains installed (also guards autostart).
+# Ubuntu and shells above GNOME 51 use native moves even if an old Pop schema
+# remains installed. This also guards the autostart watcher.
 GNOME_VERSION="$(gnome-shell --version | sed -nE 's/^GNOME Shell ([0-9]+(\.[0-9]+)*).*$/\1/p')"
 [[ "$GNOME_VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || {
   echo 'rebind-window-push: cannot determine installed GNOME Shell version' >&2
   exit 1
 }
 POP_AVAILABLE=true
-if [[ "${GNOME_VERSION%%.*}" -gt 51 ]]; then
+WORKSTATION_DISTRO="${WORKSTATION_DISTRO:-$(. /etc/os-release; printf '%s' "$ID")}"
+if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+  POP_AVAILABLE=false
+elif [[ "${GNOME_VERSION%%.*}" -gt 51 ]]; then
   POP_AVAILABLE=false
   echo "rebind-window-push: accepted Pop Shell gap on GNOME $GNOME_VERSION; using native window moves" >&2
 fi
 
-# Pop's Ubuntu recipe installs a per-user schema. On the supported target,
+# The GNOME 51 Pop pin installs a per-user schema. On the supported Arch target,
 # missing required schema/keys still fail before either owner is rebound.
 POP_SETTINGS=(gsettings)
 POP_SCHEMA_DIR="$HOME/.local/share/gnome-shell/extensions/pop-shell@system76.com/schemas"

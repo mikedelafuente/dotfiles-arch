@@ -7,7 +7,7 @@
 # - Dark theme preferences
 # - Catppuccin GTK theme (Mocha variant)
 # - Catppuccin icon theme (Papirus)
-# - Dash to Panel (always-visible top app bar)
+# - Dash to Panel on Arch; bundled dock/tiling/tray on Ubuntu
 # - GNOME Tweaks and Extensions support
 # --------------------------
 
@@ -68,9 +68,9 @@ print_info_message "Machine type: $MACHINE_TYPE"
 print_info_message "Installing GNOME tools and utilities"
 ensure_native_pkgs \
     gnome-tweaks \
-    gnome-shell-extensions \
     dconf-editor \
     gnome-characters
+if [[ "$WORKSTATION_DISTRO" == arch ]]; then ensure_native_pkgs gnome-shell-extensions; fi
 if [[ "$WORKSTATION_DISTRO" == arch ]]; then ensure_native_pkgs python; else ensure_native_pkgs python3; fi
 ensure_gnome_extensions "$GNOME_SHELL_VERSION" || exit 1
 
@@ -296,44 +296,51 @@ print_warning_message "New extensions need a log out/in before GNOME Shell disco
 # Dash to Panel — full-width top bar, small centered icons, every monitor
 # --------------------------
 
-DTP_SCHEMA="org.gnome.shell.extensions.dash-to-panel"
-print_info_message "Configuring Dash to Panel (always-visible top bar)"
+if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+    # Reuse Ubuntu's dock; its hotkeys otherwise steal our workspace shortcuts.
+    print_info_message "Keeping Ubuntu Dock and Tiling Assistant"
+    gnome_extension_setting ubuntu-dock@ubuntu.com org.gnome.shell.extensions.dash-to-dock hot-keys false
+    gnome_extension_setting ubuntu-dock@ubuntu.com org.gnome.shell.extensions.dash-to-dock disable-overview-on-startup true
+else
+    DTP_SCHEMA="org.gnome.shell.extensions.dash-to-panel"
+    print_info_message "Configuring Dash to Panel (always-visible top bar)"
 
-# Always show the panel; put it on every monitor.
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide false
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" multi-monitors true
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-favorites true
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-favorites-all-monitors true
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-running-apps true
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" stockgs-keep-dash false
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" stockgs-keep-top-panel false
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-element-positions-monitors-sync true
+    # Always show the panel; put it on every monitor.
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide false
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" multi-monitors true
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-favorites true
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-favorites-all-monitors true
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" show-running-apps true
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" stockgs-keep-dash false
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" stockgs-keep-top-panel false
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-element-positions-monitors-sync true
 
-# Full-width top panels; small height; centered along the edge.
-# Per-monitor JSON uses index "0" (+ sync) so secondary displays inherit.
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-position TOP
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-size 32
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-positions '{"0":"TOP"}'
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-lengths '{"0":100}'
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-anchors '{"0":"MIDDLE"}'
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-sizes '{"0":32}'
+    # Full-width top panels; small height; centered along the edge.
+    # Per-monitor JSON uses index "0" (+ sync) so secondary displays inherit.
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-position TOP
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-size 32
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-positions '{"0":"TOP"}'
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-lengths '{"0":100}'
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-anchors '{"0":"MIDDLE"}'
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-sizes '{"0":32}'
 
-# Taskbar icons centered; Activities hidden; clock/system tray on the right.
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-element-positions \
-  '{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"centerMonitor"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
+    # Taskbar icons centered; Activities hidden; clock/system tray on the right.
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" panel-element-positions \
+      '{"0":[{"element":"showAppsButton","visible":true,"position":"stackedTL"},{"element":"activitiesButton","visible":false,"position":"stackedTL"},{"element":"leftBox","visible":true,"position":"stackedTL"},{"element":"taskbar","visible":true,"position":"centerMonitor"},{"element":"centerBox","visible":true,"position":"stackedBR"},{"element":"rightBox","visible":true,"position":"stackedBR"},{"element":"dateMenu","visible":true,"position":"stackedBR"},{"element":"systemMenu","visible":true,"position":"stackedBR"},{"element":"desktopButton","visible":true,"position":"stackedBR"}]}'
 
-# Compact icons
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" appicon-margin 4
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" appicon-padding 2
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" tray-padding 2
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" status-icon-padding 2
+    # Compact icons
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" appicon-margin 4
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" appicon-padding 2
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" tray-padding 2
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" status-icon-padding 2
 
-# Do not steal Super+Q (close) or Super+1–9 (workspaces).
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" hot-keys false
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" shortcut "[]"
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" shortcut-text ''
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide-key-toggle "[]"
-gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide-key-toggle-text ''
+    # Do not steal Super+Q (close) or Super+1–9 (workspaces).
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" hot-keys false
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" shortcut "[]"
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" shortcut-text ''
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide-key-toggle "[]"
+    gnome_extension_setting dash-to-panel@jderose9.github.com "$DTP_SCHEMA" intellihide-key-toggle-text ''
+fi
 
 # GPaste uses the same D-Bus/user-service name on both distros. Never substitute
 # another clipboard app or report success when its required service is absent.
@@ -598,12 +605,20 @@ if [[ "$GNOME_POP_SHELL_AVAILABLE" == true ]]; then
     print_info_message "  - Pop Shell float focused window: Super+G"
     print_info_message "  - Pop Shell tile adjustment mode: Super+Escape"
 else
-    print_warning_message "  - Accepted gap: Pop Shell tiling and Super+Y/G/Escape unavailable on GNOME $GNOME_SHELL_VERSION"
+    if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+        print_info_message "  - Ubuntu Tiling Assistant retained; Pop Shell Super+Y/G/Escape shortcuts skipped"
+    else
+        print_warning_message "  - Accepted gap: Pop Shell tiling and Super+Y/G/Escape unavailable on GNOME $GNOME_SHELL_VERSION"
+    fi
 fi
 print_info_message "  - Switch windows: Alt+Tab"
 print_info_message ""
 print_info_message "Application Launchers:"
-print_info_message "  - Top app bar (Dash to Panel): always visible, every monitor"
+if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+    print_info_message "  - App dock: Ubuntu Dock (distro settings retained)"
+else
+    print_info_message "  - Top app bar (Dash to Panel): always visible, every monitor"
+fi
 print_info_message "  - App Launcher: Super+Space"
 print_info_message "  - Terminal: Super+Return"
 print_info_message "  - File Explorer: Super+E"
@@ -612,8 +627,8 @@ print_info_message "  - Clipboard history (GPaste): Super+V"
 print_info_message "  - Emoji picker: Super+."
 print_info_message "  - Screenshot UI: Super+Shift+S (or Print)"
 print_info_message ""
-print_warning_message "Log out and back in so GNOME reloads validated extensions (Dash to Panel, GPaste, AppIndicator)."
-print_warning_message "Until then the top app bar / Super+V / tray icons may not work."
+print_warning_message "Log out and back in so GNOME reloads validated extensions."
+print_warning_message "Until then the app bar/dock / Super+V / tray icons may not work."
 if [[ "$GNOME_POP_SHELL_AVAILABLE" == true ]]; then
     print_warning_message "Pop Shell / Super+Y also requires a log out/in."
 fi

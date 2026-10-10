@@ -122,7 +122,7 @@ Shell fuzzy keys: **Ctrl+R** history · **Ctrl+T** files · **Alt+C** cd into a 
 
 ### …tile windows / move to another monitor
 
-Pop Shell shortcuts below require a compatible shell (GNOME 50–51). Above
+Pop Shell shortcuts below require Arch with a compatible shell (GNOME 50–51). Above
 GNOME 51, its accepted gap retains native half-snap/monitor moves; Super+Y,
 Super+G and Super+Escape are unavailable.
 
@@ -136,7 +136,9 @@ Super+G and Super+Escape are unavailable.
 | **Super+1…9** | Jump to workspace |
 | **Super+Shift+1…9** | Move window to workspace |
 
-Top app bar (Dash to Panel) is always visible on every monitor — small centered icons, full width.
+Arch: Dash to Panel is always visible on every monitor, with small centered icons.
+Ubuntu: bundled Dock/Tiling Assistant; native half-snap/monitor moves remain,
+while Pop Shell Super+Y/G/Escape shortcuts are skipped.
 
 ### …update packages safely (instead of raw yay -Syu)
 

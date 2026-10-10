@@ -4,7 +4,7 @@ gnome_extension_recipe() {
   local shell="${3:-}"
   if [[ "$2" == pop && "${shell%%.*}" == 51 ]]; then
     case "$1" in
-      arch|ubuntu) echo 'pop-shell@system76.com pop-31f04c3 pinned'; return 0 ;;
+      arch) echo 'pop-shell@system76.com pop-31f04c3 pinned'; return 0 ;;
     esac
   fi
   case "$1:$2" in
@@ -14,10 +14,9 @@ gnome_extension_recipe() {
     arch:panel) echo 'dash-to-panel@jderose9.github.com gnome-shell-extension-dash-to-panel native' ;;
     arch:clipboard) echo 'GPaste@gnome-shell-extensions.gnome.org gpaste native' ;;
     ubuntu:tray) echo 'ubuntu-appindicators@ubuntu.com gnome-shell-ubuntu-extensions native' ;;
+    ubuntu:dock) echo 'ubuntu-dock@ubuntu.com gnome-shell-ubuntu-extensions native' ;;
+    ubuntu:tiling) echo 'tiling-assistant@ubuntu.com gnome-shell-ubuntu-extensions native' ;;
     ubuntu:clipboard) echo 'GPaste@gnome-shell-extensions.gnome.org gnome-shell-extension-gpaste native' ;;
-    ubuntu:pop) echo 'pop-shell@system76.com pop-7898b65 pinned' ;;
-    ubuntu:overview) echo 'no-overview@fthx overview-9246cc6 pinned' ;;
-    ubuntu:panel) echo 'dash-to-panel@jderose9.github.com panel-v74 pinned' ;;
     *) return 1 ;;
   esac
 }
@@ -47,15 +46,6 @@ install_gnome_extension_pin() (
     pop-31f04c3)
       url=https://codeload.github.com/pop-os/shell/tar.gz/31f04c32d2fbf92afcd3dd5194ac16755008bae2
       sha=e25e0f2e1f558a2a63cd6b1a948e6c429f3512a199681ed0509613e77b132f82; kind=tar ;;
-    pop-7898b65)
-      url=https://codeload.github.com/pop-os/shell/tar.gz/7898b65c20735057faf0797f8ed056704ca55f0d
-      sha=f1c4679dadf0d32054a180d65b3b543a3877c43e23f509328598322c3e143296; kind=tar ;;
-    overview-9246cc6)
-      url=https://codeload.github.com/fthx/no-overview/tar.gz/9246cc6efba01729a3e19ca898018ab5e98a26b9
-      sha=126117235b7644c049f3a8d8fd371053c620fab04258dede3d64cf2dbe5b043e; kind=tar ;;
-    panel-v74)
-      url='https://github.com/home-sweet-gnome/dash-to-panel/releases/download/v74/dash-to-panel%40jderose9.github.com_v74.zip'
-      sha=a4344e3143b37aafd1dff71d2daec30a953f55a44fd606e3fe10d46ee1c1582a; kind=zip ;;
     *) return 1 ;;
   esac
   root="$USER_HOME_DIR/.local/share/dotfiles-arch/gnome"
@@ -101,11 +91,17 @@ install_gnome_extension_pin() (
 ensure_gnome_extensions() {
   local version="$1" app recipe uuid package owner target path daemon_package client skips installed=false
   local -a required=() apps=(pop overview tray panel clipboard)
-  skips="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" skips "$version")" || return 1
-  # Consumed by setup-gnome.sh; skip only the explicitly accepted newer-shell gap.
+  skips="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" skips "$version" "$WORKSTATION_DISTRO")" || return 1
+  # Consumed by setup-gnome.sh; Ubuntu uses its bundled dock/tiling instead.
   # shellcheck disable=SC2034
   GNOME_POP_SHELL_AVAILABLE=true
-  if [[ "$skips" == pop-shell@system76.com ]]; then
+  if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
+    # shellcheck disable=SC2034
+    GNOME_POP_SHELL_AVAILABLE=false
+    apps=(dock tiling tray clipboard)
+    print_info_message "Using Ubuntu Dock, Tiling Assistant and AppIndicators; skipping Pop Shell, Dash to Panel and No Overview"
+  elif [[ "$skips" == pop-shell@system76.com ]]; then
+    # shellcheck disable=SC2034
     GNOME_POP_SHELL_AVAILABLE=false
     apps=(overview tray panel clipboard)
     print_warning_message "Accepted feature gap: Pop Shell skipped on GNOME $version (supported through GNOME 51); native window moves remain available"
@@ -156,13 +152,7 @@ ensure_gnome_extensions() {
       native) ensure_native_pkgs "$package" || return $? ;;
       aur) ensure_yay_pkgs "$package" || return $? ;;
       pinned)
-        if [[ "$WORKSTATION_DISTRO" == arch ]]; then
-          ensure_native_pkgs curl ca-certificates python glib2 || return $?
-          if [[ "$app" == pop ]]; then ensure_native_pkgs typescript || return $?; fi
-        else
-          ensure_native_pkgs curl ca-certificates python3 libglib2.0-bin || return $?
-          if [[ "$app" == pop ]]; then ensure_native_pkgs node-typescript || return $?; fi
-        fi
+        ensure_native_pkgs curl ca-certificates python glib2 typescript || return $?
         install_gnome_extension_pin "$uuid" "$package" "$version" || return 1 ;;
       *) return 1 ;;
     esac
@@ -187,15 +177,11 @@ ensure_gnome_extensions() {
   enabled="$(gsettings get org.gnome.shell enabled-extensions)" || return 1
   disabled="$(gsettings get org.gnome.shell disabled-extensions)" || return 1
   lists="$(python3 "$DF_SCRIPT_DIR/gnome_desktop.py" lists "$WORKSTATION_DISTRO" "$version" "$enabled" "$disabled" "${required[@]}")" || return 1
-  if [[ "$GNOME_POP_SHELL_AVAILABLE" == false ]]; then
-    gnome-extensions disable pop-shell@system76.com 2>/dev/null || true
-  fi
-  if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then
-    local conflict
-    for conflict in ubuntu-dock@ubuntu.com tiling-assistant@ubuntu.com ding@rastersoft.com appindicatorsupport@rgcjonas.gmail.com; do
-      gnome-extensions disable "$conflict" 2>/dev/null || true
-    done
-  fi
+  local conflict
+  while IFS= read -r conflict; do
+    [[ -n "$conflict" ]] || continue
+    gnome-extensions disable "$conflict" 2>/dev/null || true
+  done <<<"$skips"
   gsettings set org.gnome.shell disabled-extensions "${lists#*$'\n'}" || return 1
   gsettings set org.gnome.shell enabled-extensions "${lists%%$'\n'*}" || return 1
   gsettings set org.gnome.shell disable-user-extensions false || return 1
