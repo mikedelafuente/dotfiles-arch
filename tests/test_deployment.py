@@ -249,6 +249,11 @@ def full_repository():
         (legacy / "manifest.json").write_text(json.dumps({"version": 1, "sources": sources,
             "links": {k: {"artifact": v} for k,v in links.items()}}))
         (legacy / "tree/home/.bashrc").write_text("# preserved installed change\n")
+        old_manager = ("from pathlib import Path\nimport os, sys\n"
+            "folder = (Path(os.environ['HOME']) / '.local/share/workstation/config').resolve()\n"
+            "if folder.name != 'tree' or folder.parent.parent.name != 'generations':\n"
+            "    sys.exit('Deployment config link is foreign')\n")
+        (legacy / "tree/scripts/deployment.py").write_text(old_manager)
         installed.unlink(); installed.symlink_to(legacy / "tree")
         shutil.rmtree(state_root / "blue")
         stamp.write_text("5\n")
@@ -263,6 +268,13 @@ def full_repository():
         assert stamp.read_text() == "6\n" and not legacy.exists()
         assert installed.resolve() == state_root / "green"
         assert (state_root / "previous/home/.bashrc").read_text() == "# preserved installed change\n"
+        # The legacy controller rejects blue/green. Its exact bytes must be retained,
+        # while installed maintenance uses a compatible controller after rollback.
+        subprocess.run(["python3", str(CLI), "rollback"], env=env, check=True, capture_output=True)
+        status = subprocess.run(["bash", str(home / ".local/bin/dfa-deploy"), "status"], env=env, capture_output=True, text=True)
+        assert status.returncode == 0, status.stdout + status.stderr
+        assert (installed / ".dfa/legacy-deployment.py").read_text() == old_manager
+        subprocess.run(["python3", str(CLI), "rollback"], env=env, check=True, capture_output=True)
         # Daily acquires/deploys before dependent steps; all external effects are supplied stubs.
         guard = temp / "daily stubs"; guard.mkdir()
         logfile = temp / "daily.log"

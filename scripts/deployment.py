@@ -214,7 +214,7 @@ class Deployment:
             return folder, state
         raise Pending("Deployment config link is foreign")
 
-    def source_name(self, path, kind, used):
+    def source_name(self, path, used):
         base = re.sub(r"[^a-zA-Z0-9_-]+", "-", path.name).strip("-") or "source"
         name = base
         number = 2
@@ -228,8 +228,8 @@ class Deployment:
         write_json(folder / ".dfa/links.json", {target: info["artifact"] for target, info in links.items()})
 
     def source(self, explicit=None):
-        _, manifest = self.current()
-        previous = manifest["sources"][0] if manifest["sources"] else None
+        _, state = self.current()
+        previous = state["sources"][0] if state["sources"] else None
         path = Path(explicit).resolve() if explicit else Path(previous["path"]) if previous else None
         if path is None or not (path / "scripts/sync.sh").is_file():
             raise Pending("Source checkout unavailable; restore it or run dfa-deploy rebind /actual/checkout. Installed tools remain usable")
@@ -247,8 +247,8 @@ class Deployment:
     def source_path(self, identifier):
         if identifier == "primary":
             return self.source()
-        _, manifest = self.current()
-        origin = next((s for s in manifest["sources"] if s["id"] == identifier), None)
+        _, state = self.current()
+        origin = next((s for s in state["sources"] if s["id"] == identifier), None)
         if origin is None:
             raise Pending("Select a recorded source ID from dfa-deploy status")
         path = Path(origin["path"])
@@ -265,7 +265,7 @@ class Deployment:
         _, installed = self.current()
         previous_ids = {}
         for source in installed["sources"][1:]:
-            name = self.source_name(Path(source["path"]), source["type"], previous_ids.values()) if installed.get("legacy") else source["id"]
+            name = self.source_name(Path(source["path"]), previous_ids.values()) if installed.get("legacy") else source["id"]
             previous_ids[(source["path"], source["type"])] = name
         previous_ids.update(getattr(self, "rebound_sources", {}))
         config = self.home / ".config/dotfiles-arch/sync-sources"
@@ -288,7 +288,7 @@ class Deployment:
                     for source in installed["sources"][1:]:
                         if source["path"] == str(path) and source["type"] == kind:
                             self.source_path(source["id"])
-                name = previous_ids.get((str(path), kind), self.source_name(path, kind, previous_ids.values()))
+                name = previous_ids.get((str(path), kind), self.source_name(path, previous_ids.values()))
                 if name in {s["id"] for s in installed["sources"][1:]} and name not in getattr(self, "rebound_sources", {}).values():
                     self.source_path(name)
                 if (path, kind) in {(p, k) for p, k, _, _ in entries}:
@@ -676,7 +676,7 @@ class Deployment:
                     for source in old["sources"]:
                         entry = dict(source)
                         if source["id"] != "primary":
-                            entry["id"] = self.source_name(Path(source["path"]), source["type"], [s["id"] for s in backup_sources])
+                            entry["id"] = self.source_name(Path(source["path"]), [s["id"] for s in backup_sources])
                             for prefix in ("extras", "generated/rules"):
                                 old_path = self.stage / "backup" / prefix / source["id"]
                                 if old_path.exists():
@@ -686,6 +686,13 @@ class Deployment:
                                     info["artifact"] = info["artifact"].replace(f"{prefix}/{source['id']}/", f"{prefix}/{entry['id']}/", 1)
                         backup_sources.append(entry)
                     self.save_state(self.stage / "backup", backup_sources, backup_links)
+                    manager = self.stage / "backup/scripts/deployment.py"
+                    current_manager = Path(__file__).resolve()
+                    if manager.is_file() and manager.read_bytes() != current_manager.read_bytes():
+                        # v5 cannot read blue/green after rollback. Keep its original as backup data.
+                        shutil.copy2(manager, self.stage / "backup/.dfa/legacy-deployment.py")
+                        manager.unlink()
+                        copy_file(current_manager, manager)
                 transaction = {"previous": str(tree) if tree else None, "next": str(next_folder),
                                "backup_before": link_value(self.previous), "backup_after": str(backup) if backup else None,
                                "links": snapshots, "desired": {k: v["artifact"] for k,v in links.items()},
@@ -714,6 +721,7 @@ class Deployment:
                 print(f"Deployed {next_folder.name}; installed copy: {self.active}; previous backup: {self.previous if backup else 'none'}")
                 if old.get("legacy"):
                     print("Migrated to blue/green. Installed edits and override effects are in the backup; future deploys replace them from source.")
+                    print("The backup uses the blue/green manager; its original controller, when different, is archived in .dfa/legacy-deployment.py.")
             finally:
                 if not self.journal.exists() and self.stage.exists():
                     shutil.rmtree(self.stage)
@@ -972,9 +980,9 @@ def main():
         elif args.command == "status":
             if (deployment.root / "transaction.json").exists():
                 raise Pending("Interrupted activation; run dfa-deploy recover before migration/stamping")
-            tree, manifest = deployment.current()
-            print(json.dumps({"tree": str(tree) if tree else None, "sources": manifest["sources"],
-                              "previous": link_value(deployment.previous), "layout": "legacy" if manifest.get("legacy") else "blue-green"}, indent=2))
+            tree, state = deployment.current()
+            print(json.dumps({"tree": str(tree) if tree else None, "sources": state["sources"],
+                              "previous": link_value(deployment.previous), "layout": "legacy" if state.get("legacy") else "blue-green"}, indent=2))
         else:
             print("dfa-deploy deploy|update|source [--source PATH] [--dry-run]\n"
                   "dfa-deploy deploy [--committed] (default: local working files; no fetch)\n"

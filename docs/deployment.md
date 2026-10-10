@@ -107,6 +107,10 @@ backup but are not reapplied on later deploys. Migration reads legacy opaque IDs
 only to locate and translate existing data; no hashes are computed or retained in
 new deployment records. Failure preserves the old usable installation and does not
 advance the schema stamp. Migration of an already blue/green layout is a no-op.
+The backup keeps a blue/green-compatible deployment controller so maintenance
+works after rollback. Its original controller bytes are retained as inert backup
+data in `.dfa/legacy-deployment.py`; other installed files keep their original bytes.
+Recover an outstanding v5 activation with the installed v5 manager before migration.
 
 Daily ordering: refresh repositories → acquire/deploy the primary source → at most
 one restart into updated helpers → migrations → native/app updates → resource sync.
