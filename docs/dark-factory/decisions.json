@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 2,
+  "revision": 3,
   "project": "mikedelafuente/dotfiles-arch",
   "kind": "decision-ledger",
   "status": "proposed",
@@ -25,6 +25,17 @@
       "observed_at": "2026-10-10T00:10:17.097208+00:00",
       "subject": "initial calibration budget/reporting choice only; separate action authority and runtime admission still required",
       "receipt_verification": "pending accepted verifier"
+    },
+    {
+      "id": "DF-Q3",
+      "question": "What replaces GitHub milestone grouping for future approved changes?",
+      "answer": "Parent issue with sub-issues (Recommended)",
+      "status": "accepted-by-user",
+      "source": "direct human response to the grouping clarification in this chat",
+      "observed_at": "2026-10-10T05:25:10.045112+00:00",
+      "subject": "future grouping convention only; not full resolver/charter/action authority",
+      "receipt_verification": "pending accepted verifier",
+      "supersedes": "DF-Q1 grouping choice; retain original answer and historical milestone runs"
     }
   ],
   "existing_direction": [
@@ -51,12 +62,13 @@
     },
     {
       "id": "DF-P2",
-      "value": "Native milestone + sub-issue + dependency resolver, bounded to 100 members / depth 8",
+      "value": "Native parent GitHub issue + recursive sub-issues + dependency resolver, bounded to 100 selected members including parent / depth 8",
       "alternatives": [
-        "explicit issue set",
-        "existing wayfinder map with accepted fallback body links"
+        "dependency-linked independent issues (not selected)",
+        "historical native milestone grouping (superseded for future work)"
       ],
-      "dissent": []
+      "dissent": [],
+      "previous_value": "Native milestone + sub-issue + dependency resolver, bounded to 100 members / depth 8"
     },
     {
       "id": "DF-P3",
@@ -68,19 +80,20 @@
     }
   ],
   "unanswered": [
-    "first delivery goal/spec and selected milestone exact IDs",
+    "first delivery goal/spec and selected parent issue exact IDs",
     "acceptance of charter/council/guidance/ADR/resolver/budgets",
     "separate authority and verifier acceptance",
     "runtime adapter gaps in coordination record",
     "optional scheduling/publication/notification permissions"
   ],
   "supersession": {
-    "superseded_id": "decision-ledger revision 1 budget proposal",
-    "reason": "User requested uncapped calibration and end-of-run statistics",
+    "superseded_id": "decision-ledger revision 2 active grouping",
+    "git_commit": "63cb998577483441da89cf6687bd026278c75094",
+    "reason": "User selected parent issues with native sub-issues and dependency links",
     "impacted_requirements": [
-      "token/time budget policy",
-      "runner usage reporting",
-      "finite-budget controller compatibility"
+      "target lookup",
+      "hierarchy membership",
+      "ticket closure and trial accounting"
     ]
   },
   "assumptions": [

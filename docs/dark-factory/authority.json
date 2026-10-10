@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 3,
+  "revision": 4,
   "project": "mikedelafuente/dotfiles-arch",
   "kind": "authority",
   "status": "proposed",
@@ -97,7 +97,7 @@
       "seconds": null,
       "attempts": null
     },
-    "enclosing_accounting": "Accumulate all coordinator, council, research, worker, evaluator, repair and retro usage under the same milestone/run lineage. Null means no user-set token/time maximum, not zero or a fabricated finite limit. Resumes retain usage; unknown telemetry is marked unavailable."
+    "enclosing_accounting": "Accumulate all coordinator, council, research, worker, evaluator, repair and retro usage under the same parent-issue/run lineage. Null means no user-set token/time maximum, not zero or a fabricated finite limit. Resumes retain usage; unknown telemetry is marked unavailable."
   },
   "scoring": "ambiguity, integration, consequence, validation each 0..2; sum 0..8. Tier is a heuristic, not measured quality.",
   "stop_rules": [
@@ -125,7 +125,7 @@
   "reporting": {
     "frequency": "after every completed, blocked or interrupted calibration run",
     "grouping": [
-      "milestone",
+      "parent issue",
       "run",
       "ticket",
       "phase",
