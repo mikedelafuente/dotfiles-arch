@@ -417,7 +417,7 @@ font setup also refreshes before checking exact installed family names.
 | Package | Purpose | Related commands |
 |---------|---------|------------------|
 | `gnome-tweaks` | Appearance and behavior tweaks | `gnome-tweaks` |
-| `gnome-shell-extensions` | Base extension set | — |
+| `gnome-shell-extensions` (Arch only) | Base extension set; Ubuntu keeps its bundled extensions | — |
 | `dconf-editor` | Inspect/edit gsettings | `dconf-editor` |
 | `power-profiles-daemon` | Balanced/performance power profiles | `powerprofilesctl`; driven by `MACHINE_TYPE` |
 | `gnome-characters` | Emoji / special character picker | Super+. |
@@ -454,16 +454,16 @@ extension failures still fail setup.
 
 | Feature | Arch source | Ubuntu 26.04 source | Update owner |
 |---|---|---|---|
-| Tweaks, base extensions, dconf inspector, emoji picker | `gnome-tweaks`, `gnome-shell-extensions`, `dconf-editor`, `gnome-characters` | Same native package names | pacman / APT |
-| Pop Shell tiling (GNOME 50–51 support; accepted skip above 51) | GNOME 50: scanned `gnome-shell-extension-pop-shell-git` AUR; GNOME 51: verified `31f04c3` pin, native `typescript`/`glib2` | [System76 source commit `7898b65`](https://github.com/pop-os/shell/tree/7898b65c20735057faf0797f8ed056704ca55f0d), declares GNOME 45–50; GNOME 51 selects `31f04c3`; verified SHA-256 archive, compiled with native `node-typescript` and `libglib2.0-bin` | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
-| No Overview at login | Scanned `gnome-shell-extension-no-overview` AUR | [Upstream commit `9246cc6`](https://github.com/fthx/no-overview/tree/9246cc6efba01729a3e19ca898018ab5e98a26b9), declares GNOME 48–51; verified SHA-256 archive | Scanned AUR / maintainer-reviewed pin, applied by setup/sync |
+| Tweaks, base extensions, dconf inspector, emoji picker | `gnome-tweaks`, `gnome-shell-extensions`, `dconf-editor`, `gnome-characters` | Native Tweaks/dconf/Characters; skip `gnome-shell-extensions` (Ubuntu already bundles its desktop extensions) | pacman / APT |
+| Tiling | GNOME 50: scanned `gnome-shell-extension-pop-shell-git` AUR; GNOME 51: verified `31f04c3` pin, native `typescript`/`glib2`; accepted Pop skip above 51 | Bundled Tiling Assistant in `gnome-shell-ubuntu-extensions`; skip Pop Shell and its compiler dependencies | Scanned AUR / reviewed Arch pin; Ubuntu APT |
+| No overview at login | Scanned `gnome-shell-extension-no-overview` AUR | Bundled Ubuntu Dock `disable-overview-on-startup=true`; skip No Overview | Scanned AUR / Ubuntu APT |
 | AppIndicator tray | `gnome-shell-extension-appindicator`, UUID `appindicatorsupport@rgcjonas.gmail.com` | [`gnome-shell-ubuntu-extensions`](https://packages.ubuntu.com/resolute/gnome-shell-ubuntu-extensions), UUID `ubuntu-appindicators@ubuntu.com` | pacman / APT |
-| Dash to Panel | `gnome-shell-extension-dash-to-panel` | [Upstream v74](https://github.com/home-sweet-gnome/dash-to-panel/releases/tag/v74), declares GNOME 46–51; ZIP checked against GitHub's SHA-256 release digest; absent from the resolute native catalog | pacman / maintainer-reviewed pin, applied by setup/sync |
+| App bar/dock | `gnome-shell-extension-dash-to-panel` | Bundled Ubuntu Dock; skip Dash to Panel | pacman / Ubuntu APT |
 | GPaste clipboard/history | `gpaste` | [`gpaste-2`](https://packages.ubuntu.com/resolute/gpaste-2), [`gnome-shell-extension-gpaste`](https://packages.ubuntu.com/resolute/gnome-shell-extension-gpaste), `gir1.2-gpaste-2`; native 45.3-5 includes GNOME 50 support patch | pacman / APT |
 | Balanced/performance profile provider | `power-profiles-daemon` | Same native package; preserve installed TLP, tuned/tuned-ppd or System76 providers and masked/inactive services | pacman / APT; external policies retain their owner |
 | Theme/icons/fonts | See shared appearance recipes above | Same shared appearance recipes | Native package manager / maintainer pins as documented above |
 
-Pinned extension archives on both distros live under `~/.local/share/dotfiles-arch/gnome/` with
+Pinned Arch extension archives live under `~/.local/share/dotfiles-arch/gnome/` with
 marked version directories and protected links into the standard per-user
 GNOME extension directory. Pin changes require a reviewed source/checksum change;
 repo updates followed by setup/sync apply them. Native extensions and the GPaste
@@ -471,13 +471,31 @@ daemon follow ordinary `dfa-update-system` updates. No downloaded installer,
 Pop `local-install`/shortcut-reset script, forced compatibility patch, or PPA is used.
 Pop's separate launcher is disabled: Super+Space retains GNOME's app grid.
 
-On Ubuntu, setup disables the conflicting Ubuntu Dock, Tiling Assistant and
-Desktop Icons NG, plus the alternate upstream AppIndicator UUID. It retains
-unrelated extensions including Canonical security/prompting extensions.
-Extension schemas are read from their installed local or system directories;
-`rebind-window-push` also supports the local Pop schema. Above GNOME 51 it applies
-native shortcuts without reading/writing Pop settings and exits rather than
-watching tiling. On GNOME 50–51, a missing required Pop schema/key still fails.
+On Ubuntu, setup reuses the bundled Ubuntu Dock, Tiling Assistant and
+AppIndicators from `gnome-shell-ubuntu-extensions`. It skips Pop Shell, Dash to
+Panel, No Overview and the extra `gnome-shell-extensions` bundle. Previously
+installed replacement extensions (including the upstream AppIndicator UUID) are
+disabled without deleting packages or files. Dock/tiling/tray are enabled even if
+an earlier DFA setup disabled them. Desktop Icons NG and unrelated extensions,
+including Canonical prompting/security extensions, keep their enabled/disabled
+state. The dock's `hot-keys=false` leaves Super+1–9 for workspaces;
+`disable-overview-on-startup=true` replaces No Overview. Dock layout and Tiling
+Assistant preferences remain distro/user-owned. GPaste, Tweaks, dconf inspector
+and Characters add separate capabilities; native package helpers skip packages
+already installed (Characters is an Ubuntu desktop recommendation).
+
+Evidence checked 2026-10-10: [Ubuntu desktop dependencies](https://packages.ubuntu.com/resolute/ubuntu-desktop),
+[bundled extension files](https://packages.ubuntu.com/resolute/all/gnome-shell-ubuntu-extensions/filelist),
+[Ubuntu Dock schema](https://github.com/micheleg/dash-to-dock/blob/ubuntu-dock-109ubuntu2/schemas/org.gnome.shell.extensions.dash-to-dock.gschema.xml).
+Pop Shell/Tiling Assistant and Dash to Panel/Ubuntu Dock overlap window and panel
+ownership; setup uses Ubuntu's providers to avoid those competing owners. The
+upstream AppIndicator UUID duplicates Ubuntu's tray. The generic extension bundle
+is redundant here, rather than a demonstrated package dependency conflict.
+
+Extension schemas are read from their installed local or system directories.
+`rebind-window-push` uses native shortcuts on Ubuntu and above GNOME 51 without
+reading/writing Pop settings; `--watch` applies once and exits. On Arch GNOME
+50–51, a missing required Pop schema/key still fails.
 GPaste 51 removes the cosmetic `max-displayed-history-size` key; setup reports
 and skips that optional setting, retaining the required 100-item history and Super+V.
 
@@ -494,8 +512,10 @@ Read-only vendor/package metadata establishes source feasibility. Installation,
 TypeScript compilation, extension loading, GSettings, panel/clipboard/tiling,
 services, audio, lid, USB wake and hardware behavior remain unverified.
 `tests/test_gnome_decisions.py` supplies version, extension-list, policy/service
-and archive facts in temporary state; it was written and left unrun under the
-validation restriction. Only direct Bash syntax/ShellCheck checks were executed.
+and archive facts in temporary state, including Ubuntu native acquisition,
+replacement disabling, dock settings and package skips. These checks and
+`tests/test_sync_error_regressions.py` (Ubuntu autostart without Pop) passed;
+Bash syntax/ShellCheck checks passed. No workstation setup was executed.
 
 ## Languages and runtimes
 
@@ -1362,9 +1382,9 @@ that an upstream project can never add a safe updater.
 | just / mkcert (devcontainer) | Native `just`, `mkcert` | APT; no self-update selected | Host recipes/certificate generator / N |
 | DNS / certificate utilities (devcontainer) | Native `bind9-dnsutils`, `libnss3-tools` | APT; no self-update selected | dig/certutil; systemd-resolved policy retained / N |
 | OpenVPN3 (devcontainer) | Native `openvpn3-client` | APT; no self-update selected | Native resolute source; existing VPN owner / N |
-| GNOME / Tweaks / Characters / dconf inspector / base extensions | Installed GNOME50; native `gnome-tweaks`, `gnome-characters`, `dconf-editor`, `gnome-shell-extensions` | APT; no self-update selected | GNOME50 accepted target; Ubuntu installed-desktop prerequisite / N |
-| GPaste / tray | Native `gpaste-2`, `gnome-shell-extension-gpaste`, `gir1.2-gpaste-2`, `gnome-shell-ubuntu-extensions` | APT; extension/content refresh is not GNOME binary self-update | GNOME-compatible metadata/schema; Ubuntu tray UUID / N |
-| Pop Shell / No Overview / Dash to Panel | Reviewed System76/fthx pins / Dash v74 digest | Pin + setup/sync; extensions do not self-update app binaries | Declared shell compatibility; Pop supports 50–51; only skip above51 accepted / P |
+| GNOME / Tweaks / Characters / dconf inspector | Installed GNOME50; native `gnome-tweaks`, `gnome-characters`, `dconf-editor`; skip the extra base extension bundle | APT; no self-update selected | GNOME50 accepted target; Ubuntu installed-desktop prerequisite / N |
+| GPaste / bundled dock, tiling and tray | Native `gpaste-2`, `gnome-shell-extension-gpaste`, `gir1.2-gpaste-2`, `gnome-shell-ubuntu-extensions` | APT; extension/content refresh is not GNOME binary self-update | GNOME-compatible metadata/schema; Ubuntu tray UUID / N |
+| Pop Shell / No Overview / Dash to Panel | Skipped on Ubuntu; bundled dock/tiling cover these roles | Ubuntu APT owns bundled extensions | Pop-only Super+Y/G/Escape unavailable; native half-snap/monitor moves retained |
 | Power / audio / lid / USB-wake dependencies | Native power-profiles-daemon, existing PipeWire/WirePlumber/systemd/udev | APT or existing IT owner; no self-update selected | Existing providers/masks/policies retained / N, M |
 | Adwaita Sans / Noto / Emoji / Liberation / fontconfig | Native font packages listed above | APT; no self-update selected | Exact shared font families / N |
 | Adwaita Mono | Verified GNOME49 font archive | Pin + font setup/sync | Exact unpatched Adwaita Mono / P |

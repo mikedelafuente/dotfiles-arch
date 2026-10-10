@@ -10,8 +10,8 @@ import sys
 import tarfile
 import zipfile
 
-CONFLICTS = ["ubuntu-dock@ubuntu.com", "tiling-assistant@ubuntu.com", "ding@rastersoft.com",
-             "appindicatorsupport@rgcjonas.gmail.com"]
+UBUNTU_REPLACEMENTS = ["pop-shell@system76.com", "dash-to-panel@jderose9.github.com",
+                       "no-overview@fthx", "appindicatorsupport@rgcjonas.gmail.com"]
 
 
 def extension_compatible(metadata, uuid, shell):
@@ -22,7 +22,9 @@ def extension_compatible(metadata, uuid, shell):
             and shell.split(".")[0] in versions)
 
 
-def accepted_extension_skips(shell):
+def accepted_extension_skips(shell, distro="arch"):
+    if distro == "ubuntu":
+        return UBUNTU_REPLACEMENTS
     # Accepted Pop Shell gap above our GNOME 51 support; no other feature is exempt.
     if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", shell) and int(shell.split(".")[0]) > 51:
         return ["pop-shell@system76.com"]
@@ -37,13 +39,12 @@ def string_list(raw):
 
 
 def extension_lists(enabled, disabled, required, distro, shell=""):
-    skipped = accepted_extension_skips(shell)
-    conflicts = (CONFLICTS if distro == "ubuntu" else []) + skipped
+    skipped = accepted_extension_skips(shell, distro)
     required = [v for v in required if v not in skipped]
-    enabled = [v for v in string_list(enabled) if v not in conflicts]
+    enabled = [v for v in string_list(enabled) if v not in skipped]
     disabled = [v for v in string_list(disabled) if v not in required]
     return (list(dict.fromkeys(enabled + required)),
-            list(dict.fromkeys(disabled + conflicts)))
+            list(dict.fromkeys(disabled + skipped)))
 
 
 def merge_shortcuts(existing, required):
@@ -125,7 +126,7 @@ if __name__ == "__main__":
         print(repr(enabled))
         print(repr(disabled))
     elif operation == "skips":
-        print("\n".join(accepted_extension_skips(args[0])))
+        print("\n".join(accepted_extension_skips(*args)))
     elif operation == "shortcuts":
         print(repr(merge_shortcuts(args[0], args[1:])))
     elif operation == "remove-shortcut":

@@ -29,20 +29,25 @@ def main():
     assert skips("51.0") == []
     assert skips("52.0") == ["pop-shell@system76.com"]
     assert skips("unknown") == []
+    assert skips("50.1", "ubuntu") == api["UBUNTU_REPLACEMENTS"]
+    assert skips("52.0", "ubuntu") == api["UBUNTU_REPLACEMENTS"]
     assert not compatible({"uuid": "x", "shell-version": ["50"]}, "x", "51")
 
     assert compatible({"uuid": "pop-shell@system76.com", "shell-version": ["50", "51"]},
                       "pop-shell@system76.com", "51.0")
 
-    required = ["pop-shell@system76.com", "ubuntu-appindicators@ubuntu.com"]
+    required = ["ubuntu-dock@ubuntu.com", "tiling-assistant@ubuntu.com", "ubuntu-appindicators@ubuntu.com"]
     enabled, disabled = api["extension_lists"](
         "['ubuntu-dock@ubuntu.com', 'tiling-assistant@ubuntu.com', 'ding@rastersoft.com', "
-        "'snapd-prompting@canonical.com', 'user-extension', 'appindicatorsupport@rgcjonas.gmail.com']",
-        "@as ['pop-shell@system76.com', 'user-disabled']", required, "ubuntu",
+        "'snapd-prompting@canonical.com', 'user-extension', 'pop-shell@system76.com', "
+        "'dash-to-panel@jderose9.github.com', 'no-overview@fthx', 'appindicatorsupport@rgcjonas.gmail.com']",
+        "@as ['pop-shell@system76.com', 'ubuntu-dock@ubuntu.com', 'tiling-assistant@ubuntu.com', "
+        "'user-disabled']", required, "ubuntu",
     )
-    assert enabled == ["snapd-prompting@canonical.com", "user-extension", *required]
-    assert disabled == ["user-disabled", "ubuntu-dock@ubuntu.com", "tiling-assistant@ubuntu.com",
-                        "ding@rastersoft.com", "appindicatorsupport@rgcjonas.gmail.com"]
+    assert enabled == [*required[:2], "ding@rastersoft.com", "snapd-prompting@canonical.com",
+                       "user-extension", required[2]]
+    assert disabled == ["pop-shell@system76.com", "user-disabled", *api["UBUNTU_REPLACEMENTS"][1:]]
+    assert api["extension_lists"]("[]", "['ding@rastersoft.com']", required, "ubuntu")[1][0] == "ding@rastersoft.com"
     assert api["extension_lists"](repr(enabled), repr(disabled), required, "ubuntu") == (enabled, disabled)
     assert api["extension_lists"]("['ubuntu-dock@ubuntu.com']", "[]", ["pop-shell@system76.com"], "arch")[0] == [
         "ubuntu-dock@ubuntu.com", "pop-shell@system76.com"]
@@ -57,6 +62,23 @@ def main():
         "/user/shortcut/", "/dfa/shortcut/"]
     # Run the actual shortcut reconciliation with supplied settings only.
     setup = (ROOT / "scripts/setup-gnome.sh").read_text()
+    tools = setup.split('# Install GNOME Tools', 1)[1].split('# Change how sound power works', 1)[0]
+    panel = setup.split('if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then\n    # Reuse Ubuntu', 1)[1].split('# GPaste uses', 1)[0]
+    panel = 'if [[ "$WORKSTATION_DISTRO" == ubuntu ]]; then\n    # Reuse Ubuntu' + panel
+    for distro in ("arch", "ubuntu"):
+        result = subprocess.run(["bash", "-eu", "-c", r'''
+print_info_message() { :; }
+ensure_native_pkgs() { printf '%s\n' "$@"; }
+ensure_gnome_extensions() { :; }
+gnome_extension_setting() { echo "$1:$3=$4"; }
+''' + tools + panel], env=dict(os.environ, WORKSTATION_DISTRO=distro, GNOME_SHELL_VERSION="50.1"),
+            capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert ("gnome-shell-extensions" in result.stdout.splitlines()) == (distro == "arch")
+        assert ("dash-to-panel@" in result.stdout) == (distro == "arch")
+        if distro == "ubuntu":
+            assert "ubuntu-dock@ubuntu.com:hot-keys=false" in result.stdout
+            assert "ubuntu-dock@ubuntu.com:disable-overview-on-startup=true" in result.stdout
     shortcut_block = setup.split("# Update the custom keybindings list", 1)[1].split("\n", 1)[1].split("# Screenshot UI", 1)[0]
     retired = "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom5/"
     for command in ("/usr/bin/voxtype record toggle", "/user/custom-command", ""):
@@ -111,7 +133,8 @@ gsettings() {
         for distro, app, recipe in (
             ("ubuntu", "tray", "ubuntu-appindicators@ubuntu.com gnome-shell-ubuntu-extensions native"),
             ("ubuntu", "clipboard", "GPaste@gnome-shell-extensions.gnome.org gnome-shell-extension-gpaste native"),
-            ("ubuntu", "pop", "pop-shell@system76.com pop-7898b65 pinned"),
+            ("ubuntu", "dock", "ubuntu-dock@ubuntu.com gnome-shell-ubuntu-extensions native"),
+            ("ubuntu", "tiling", "tiling-assistant@ubuntu.com gnome-shell-ubuntu-extensions native"),
             ("arch", "pop", "pop-shell@system76.com gnome-shell-extension-pop-shell-git aur"),
         ):
             result = subprocess.run(["bash", "-eu", "-o", "pipefail", "-c",
@@ -120,12 +143,68 @@ gsettings() {
                 env=env, capture_output=True, text=True)
             assert result.returncode == 0 and result.stdout.strip() == recipe, result.stderr
             assert "Forbidden command" not in result.stdout + result.stderr
-        for distro in ("arch", "ubuntu"):
+        for distro in ("arch",):
             result = subprocess.run(["bash", "-eu", "-c",
                 'source "$1"; gnome_extension_recipe "$2" pop 51.0', "decide",
                 str(ROOT / "scripts/gnome-lib.sh"), distro], env=env, capture_output=True, text=True)
             assert result.returncode == 0, result.stderr
             assert result.stdout.strip() == "pop-shell@system76.com pop-31f04c3 pinned"
+        for app in ("pop", "overview", "panel"):
+            result = subprocess.run(["bash", "-eu", "-c",
+                'source "$1"; gnome_extension_recipe ubuntu "$2" 51.0', "decide",
+                str(ROOT / "scripts/gnome-lib.sh"), app], env=env, capture_output=True, text=True)
+            assert result.returncode == 1, result.stderr
+        # Run the real Ubuntu acquisition/list flow with supplied native metadata.
+        extensions = Path(temp) / "extensions"
+        for uuid in (*required, "GPaste@gnome-shell-extensions.gnome.org"):
+            path = extensions / uuid
+            path.mkdir(parents=True)
+            (path / "metadata.json").write_text(json.dumps({"uuid": uuid, "shell-version": ["50"]}))
+        result = subprocess.run(["bash", "-eu", "-o", "pipefail", "-c", r'''
+source "$DF_SCRIPT_DIR/gnome-lib.sh"
+print_info_message() { :; }
+print_error_message() { echo "$*" >&2; }
+native_package_installed() { return 0; }
+core_cli_source_allowed() { return 0; }
+readlink() { echo /usr/bin/gpaste-client; }
+ensure_native_pkgs() {
+    for package in "$@"; do
+        case "$package" in
+            gnome-shell-ubuntu-extensions|gnome-shell-extension-gpaste|gpaste-2|gir1.2-gpaste-2) ;;
+            *) echo "Unexpected package: $package" >&2; return 97 ;;
+        esac
+    done
+}
+gnome_extension_path() { echo "$USER_HOME_DIR/extensions/$1"; }
+dpkg-query() {
+    local package=gnome-shell-ubuntu-extensions
+    [[ "$2" != *GPaste@* ]] || package=gnome-shell-extension-gpaste
+    echo "$package: $2"
+}
+gsettings() {
+    case "$1:$3" in
+        get:enabled-extensions) echo "['ubuntu-dock@ubuntu.com', 'pop-shell@system76.com', 'user-extension']" ;;
+        get:disabled-extensions) echo "['tiling-assistant@ubuntu.com']" ;;
+        set:enabled-extensions|set:disabled-extensions) echo "$3=$4" ;;
+        set:disable-extension-version-validation|set:disable-user-extensions) ;;
+        *) return 97 ;;
+    esac
+}
+gnome-extensions() { echo "disable=$2"; }
+ensure_gnome_extensions 50.1
+[[ "$GNOME_POP_SHELL_AVAILABLE" == false ]]
+'''], env=dict(env, USER_HOME_DIR=temp, WORKSTATION_DISTRO="ubuntu", DF_SCRIPT_DIR=str(ROOT / "scripts")),
+            capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "Forbidden command" not in result.stdout + result.stderr
+        assert "disable=ubuntu-dock@ubuntu.com" not in result.stdout
+        assert "disable=tiling-assistant@ubuntu.com" not in result.stdout
+        assert "disable=ding@rastersoft.com" not in result.stdout
+        assert "disable=pop-shell@system76.com" in result.stdout
+        assert "disable=dash-to-panel@jderose9.github.com" in result.stdout
+        output_lists = dict(line.split("=", 1) for line in result.stdout.splitlines() if "-extensions=" in line)
+        assert all(uuid in api["string_list"](output_lists["enabled-extensions"]) for uuid in required)
+        assert "user-extension" in api["string_list"](output_lists["enabled-extensions"])
         archive = Path(temp) / "extension.zip"
         metadata = {"uuid": "x", "shell-version": ["50"]}
         with zipfile.ZipFile(archive, "w") as supplied:

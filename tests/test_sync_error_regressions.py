@@ -108,6 +108,13 @@ grep -F "tile-move-left-global ['<Primary><Super>Left']" "$USER_HOME_DIR/rebind-
 ! grep -F 'extensions.pop-shell' "$USER_HOME_DIR/rebind-calls"
 grep -F "toggle-tiled-left ['<Primary><Super>Left']" "$USER_HOME_DIR/rebind-calls"
 ''')
+        (Path(temp) / "rebind-calls").unlink(missing_ok=True)
+        check("Ubuntu keeps native moves without Pop, including autostart", "WORKSTATION_DISTRO=ubuntu\nSHELL_FACT=50.1\n" +
+              rebind.replace('rebind-window-push")', 'rebind-window-push" --watch)') + '''
+! grep -F 'extensions.pop-shell' "$USER_HOME_DIR/rebind-calls"
+grep -F "toggle-tiled-left ['<Primary><Super>Left']" "$USER_HOME_DIR/rebind-calls"
+grep -F "move-to-monitor-left ['<Primary><Super>Up']" "$USER_HOME_DIR/rebind-calls"
+''')
 
         stage = runpy.run_path(str(ROOT / "scripts/gnome_desktop.py"))["stage_extension"]
         archive = Path(temp) / "pop.tar"

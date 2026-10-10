@@ -339,7 +339,7 @@ Everything else in the stack is shared (including Docker and `gh` used by the de
 | **Containers** | Docker, Compose, Buildx, lazydocker (`lzd`), minikube, kubectl, k9s |
 | **Apps** | TablePlus, Postman, Spotify, Obsidian, ZSA Keymapp (Moonlander) |
 | **Fonts** | Adwaita Sans/Mono (GNOME UI), Noto + Liberation fallbacks, Meslo / Ubuntu / Fira Code / JetBrains Mono / Hack Nerd Fonts |
-| **Desktop** | GNOME, compatible Pop Shell (tiling off by default; accepted gap above GNOME 51), Dash to Panel (top bar), No Overview, AppIndicator, GPaste, Papirus + Catppuccin GTK |
+| **Desktop** | GNOME; Arch: compatible Pop Shell, Dash to Panel, No Overview, AppIndicator; Ubuntu: bundled Dock/Tiling Assistant/tray; shared GPaste, Papirus + Catppuccin GTK |
 
 Standalone `scripts/setup-{python,rust,golang,php,ruby}.sh` now select native
 packages for Arch / Ubuntu 26.04, check capabilities, and report source
@@ -353,8 +353,8 @@ and update behavior has only read-only/static validation.
 
 ### GNOME extras (via `setup-gnome.sh`)
 
-- Compatible Pop Shell (GNOME 50–51 support): no gaps / no hint radius; active hint on; auto-tiling **off** by default — toggle with Super+Y
-- Dash to Panel: always-visible full-width top bar on every monitor (small centered app icons)
+- Arch: compatible Pop Shell (GNOME 50–51 support): no gaps / no hint radius; active hint on; auto-tiling **off** by default — toggle with Super+Y
+- Arch: Dash to Panel: always-visible full-width top bar on every monitor (small centered app icons)
 - Skip Activities overview at login
 - Clipboard history (GPaste)
 - Tray icons (AppIndicator)
@@ -369,13 +369,17 @@ including the new widget orientation API. GNOME 50 keeps its existing source.
 Above GNOME 51, setup skips Pop acquisition/settings, disables any old Pop
 extension, and retains native half-snap/monitor moves; Super+Y/G/Escape are unavailable. Other required extension metadata must support the installed shell;
 missing settings, acquisition failures and source conflicts still fail setup.
-On GNOME 50, Pop Shell retains those same checks. Ubuntu uses native
-GPaste/AppIndicator and verified pinned Pop Shell, No Overview and Dash to Panel
-sources. See [GNOME sources/update owners](PACKAGES.md#shared-gnome-sources-and-update-owners).
-Ubuntu Dock, Tiling Assistant and Desktop Icons NG are disabled to avoid panel
-and Pop Shell conflicts; unrelated extensions and custom shortcut-list entries
-are retained. Log out/in after extension installation. Desktop runtime behavior
-has not been verified; validation is limited to read-only metadata/static checks.
+On Arch GNOME 50, Pop Shell retains those same checks. Ubuntu keeps its bundled
+Dock, Tiling Assistant, AppIndicators and Desktop Icons, skipping Pop Shell,
+Dash to Panel, No Overview and the extra base extension bundle. Previously
+installed replacement extensions are disabled; their files/packages remain.
+The dock's native setting skips the startup overview, and its number hotkeys are
+disabled so Super+1–9 still switches workspaces. Ubuntu retains native half-snap
+and monitor moves; Pop's Super+Y/G/Escape shortcuts are unavailable. GPaste,
+Tweaks and Characters remain shared. See [GNOME sources/update owners](PACKAGES.md#shared-gnome-sources-and-update-owners).
+Unrelated extensions and custom shortcut-list entries are retained. Log out/in
+after extension changes. Offline decision checks and shell lint pass; desktop
+runtime behavior remains unverified.
 
 ### Power policy (`MACHINE_TYPE`)
 
@@ -448,7 +452,7 @@ is unverified. Archive service status/logs: `systemctl --user status ollama` /
 | **Super+Y** | Toggle Pop Shell tiling (rebinds Super+Ctrl+Arrows) |
 | **Alt+Tab** | Switch windows |
 
-Pop Shell shortcuts and tiled behavior require a compatible shell (GNOME 50–51).
+Pop Shell shortcuts and tiled behavior require Arch with a compatible shell (GNOME 50–51).
 Above GNOME 51, the accepted gap leaves only native half-snap and monitor moves.
 
 ### tmux (prefix = **Ctrl+B**)
@@ -484,7 +488,7 @@ Agents: `dev --tmux <dir> --agent <harness>` (`claude`, `codex`, or `opencode`) 
 | `mvup` / `mvdown` / `mvst` | Mullvad connect / disconnect / status |
 | `check` | Syntax + shellcheck the repo scripts |
 | `orphans` | Preview native removal candidates; `dfa-remove-orphans --remove` separately confirms removal |
-| `rebind-window-push` | Keep Super+Ctrl+Arrows on compatible Pop Shell (tiled) or Mutter (floating / accepted gap above GNOME 51) |
+| `rebind-window-push` | Keep Super+Ctrl+Arrows on compatible Pop Shell (tiled) or Mutter (floating / Ubuntu / accepted gap above GNOME 51) |
 | `gs` `ga` `gc` `gp` `gpush` … | Git aliases (diffs paged through delta) |
 | `welcome` | Shell cheat sheet |
 | `aliases` | Aliases + key bindings |
