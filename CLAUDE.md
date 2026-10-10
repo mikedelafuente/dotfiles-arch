@@ -1,317 +1,94 @@
 # Repository agent guidance
 
-This file provides guidance to AI agents working with code in this repository. `AGENTS.md`
-is a symlink to this file so Claude Code, Codex, Pi, Cursor, and other agents share one
-source of truth.
-
-## Installed deployment boundary (schema v5)
-
-For deployment, migration, source moves, local overrides, capture, rollback or daily
-ordering, read [docs/deployment.md](docs/deployment.md). Managed runtime links target
-`~/.local/share/workstation/config`, backed by complete installed generations. Use
-`dfa-deploy source` to locate and verify the actual shared edit checkout before
-editing shared configuration. If source/provenance is unavailable, stop shared
-source edits and restore/rebind the checkout. Intentional local differences use
-`dfa-deploy override`; selected source improvements use `dfa-deploy capture`.
-Normal deployment preserves local edits with deterministic script-only merges and
-blocks the entire generation on conflict. Run verification with temporary fixtures;
-implementation does not authorize current-workstation migration/deployment.
-
-## Before you change anything
-
-- Architecture and script behavior: this file
-- Why a package is installed: [PACKAGES.md](PACKAGES.md)
-- User-facing flows and shortcuts: [README.md](README.md) · [REFRESHER.md](REFRESHER.md)
-- Enforced conventions: [.cursor/rules/](.cursor/rules/)
-  - `dotfiles-arch.mdc` — stack, orchestration, bootstrap config keys, AUR safety
-  - `docs-and-commands.mdc` — where every new command/alias/shortcut/package gets documented
-  - `setup-scripts.mdc` — script header, idempotency, package helpers
-
-## Non-negotiables
-
-1. Read/write saved settings only via `load_bootstrap_config` / `write_bootstrap_config`
-   (`FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` multi-select, `SETUP_PROFILE` primary,
-   `INSTALL_NVIDIA`, `MACHINE_TYPE`).
-2. Use `USER_HOME_DIR`; machines have different usernames.
-3. AUR installs go through the IoC-scanning helpers. Do not add `curl | bash` installers.
-4. Scripts must be safe to re-run — `sync.sh` runs all of them every time.
-5. Document new user-facing commands in `home/.welcome.md`, `aliases()`, and `PACKAGES.md`.
-
-## Distro integration boundaries
-
-- Common header detection rejects unsupported hosts before writes; no saved distro selection.
-- Keep one additive runner and setup order. Required setup/link/hook/update failures reach final status.
-- Child processes retain errexit; mutation helpers use explicit return/exit guards when statuses are captured.
-- Successful update stamps require all requested native/app updates; keep legacy Arch stamps and schema state.
-- Link only absent or repository-owned targets. Preserve real files/foreign links and report conflicts.
-- Keep driver flavor, managed agents, package holds/pins and automatic security updates. Cleanup previews;
-  terminal + typing `remove` separately authorizes removals, never `--yes` alone.
-- App source/version/update decisions: [PACKAGES.md](PACKAGES.md) and [source audit](docs/ubuntu-source-update-audit.md).
-  Validation/runtime claims: [integration inventory](docs/ubuntu-integration-validation.md).
-
-## Style
-
-Answer briefly: lead with the answer, with no narration or recap. Use inline code for
-commands and paths; omit pleasantries and filler. Shared style rules belong to the [skills owner](https://github.com/mikedelafuente/skills/tree/main/rules).
-
-## Project Overview
-
-Rolling Arch Linux and installed Ubuntu 26.04 LTS dotfiles and setup automation on x86_64/amd64 for a **GNOME (Wayland)** development workstation with Kitty, tmux, Neovim, Claude Code, and Codex. Profiles distinguish **work** vs **personal** apps; the shared stack is the same on every machine.
-
-Includes:
-
-- **Bootstrap / sync**: Orchestrated installers with saved user config
-- **Modular `setup-*.sh` scripts**: Per-tool installers
-- **Symlinked dotfiles**: `home/` and `config/` linked into `$HOME`
-- **archinstall template**: `user_configuration.json` (Btrfs + LUKS + Snapper, GNOME + GDM)
-
-## Repository Structure
-
-```
-dotfiles-arch/
-├── scripts/
-│   ├── bootstrap.sh              # Full new-machine orchestration
-│   ├── sync.sh                   # Bring an existing machine up to date
-│   ├── run-profile-setup.sh      # Shared setup-* list (bootstrap + sync)
-│   ├── post-link-hooks.sh        # After link-dotfiles (fc-cache, GNOME checklist)
-│   ├── dotheader.sh              # Common header (SCRIPT_DIR, USER_HOME_DIR)
-│   ├── fn-lib.sh                 # Shared helpers (print, packages, nvm, hardware)
-│   ├── link-dotfiles.sh          # Link installed home/config and registered resource data
-│   ├── migrate.sh                # Run pending migrations/ up to the repo's schema version
-│   └── setup-*.sh                # Individual tool setup scripts
-├── home/                         # Dotfiles for ~/
-│   ├── .bashrc
-│   ├── .packages.md              # → ../PACKAGES.md (shown by `packages`)
-│   └── .local/bin/               # Helpers (code, zed-agent-init, dfa — fzf picker over the dfa-* commands, dfa-repos, dfa-check-dotfiles, dfa-remove-orphans, dfa-sync-dotfiles, dfa-update-system, dfa-refresh-audio, …)
-├── config/                       # ~/.config application configs
-│   ├── git/config                # Shared git settings (~/.gitconfig stays machine-local)
-│   ├── fontconfig/fonts.conf
-│   ├── nvim/
-│   ├── kitty/
-│   ├── bat/config
-│   ├── starship.toml
-│   └── ...
-
-
-├── skills/                       # Empty primary skill override slot (inert placeholder)
-├── rules/                        # Empty primary rule override slot (inert placeholder)
-├── .cursor/rules/                # Repo conventions for AI agents (this repo only — unrelated to rules/)
-├── AGENTS.md                     # Symlink to this file
-├── PACKAGES.md                   # Why each installed package exists
-├── prepare-archinstall.sh        # Guided disk/hostname/gfx_driver prep, before archinstall
-├── post_install.sh               # Minimal post-archinstall (multilib, NVIDIA?, Kitty); chains into bootstrap.sh
-├── user_configuration.json       # archinstall 4.4 template
-└── NOTES.md                      # Install / sync notes
-```
-
-## Common Commands
-
-### Bootstrap (new system)
-
-```bash
-cd /path/to/dotfiles-arch
-bash scripts/bootstrap.sh
-```
-
-Prompts for name, email, **multi-select profiles** (`work`, `personal`, `devcontainer`), **INSTALL_NVIDIA**, and **MACHINE_TYPE** (laptop|desktop; default from `has_battery`), or `--yes` for non-interactive. Then prepares Arch multilib/yay when applicable, runs cooldown-guarded native/app updates, runs the shared setup list, links dotfiles and runs post-link hooks. Ubuntu requires an installed GNOME desktop; disk provisioning stays Arch-only.
-
-### Sync (existing / drifted machine)
-
-```bash
-bash scripts/sync.sh
-# bash scripts/sync.sh --profile work,devcontainer --yes
-```
-
-Always runs guarded native/app updates (Arch pacman + scanned AUR, Ubuntu APT), then setup scripts (unless `--skip-bootstrap`), links, and post-link hooks. `--cleanup` previews native orphans plus Arch obsolete packages; `--remove-obsolete` is Arch-only and needs a terminal plus typing `remove`. Native orphan removal uses `dfa-remove-orphans --remove` separately. User configs/npm packages are preserved. Saved profiles/NVIDIA/machine type are kept silently; pass `--prompt` to re-ask. AUR `--noconfirm` only with `--yes`.
-
-### Individual setups
-
-```bash
-bash scripts/setup-essentials.sh
-bash scripts/setup-neovim.sh
-bash scripts/setup-dev.sh
-bash scripts/setup-gnome.sh
-bash scripts/setup-git.sh "<full-name>" "<email>"
-```
-
-### Link dotfiles
-
-```bash
-bash scripts/link-dotfiles.sh [work|personal]
-```
-
-Profile argument is recorded for reference; linking is shared. Default profile name: `work`.
-
-## Architecture
-
-### Header + library
-
-Every setup script sources `dotheader.sh` → `fn-lib.sh` and uses `USER_HOME_DIR` (respects `$SUDO_USER`). Do **not** hardcode `/home/<user>` — machines use different usernames.
-
-### `home/.local/bin/` helpers
-
-These scripts (`dev`, `zed-agent-init`, `dfa-sync-dotfiles`, `dfa-sync-skills`, `dfa-sync-rules`, `dfa-sync-sources`, `dfa-sync-harness-agents`, `dfa-update-system`, `dfa-update-npm-clis`, `dfa-repos`, `dfa-update-repos`, `dfa-check-dotfiles`, `dfa-remove-orphans`, `dfa-daily`, `dfa-weekly`, …) run from a symlinked `~/.local/bin`, not from inside the repo, so they can't source `dotheader.sh` directly by relative path. Instead they source `dotfiles-arch-lib.sh`, which provides `resolve_dotfiles_arch` (symlink walk-up, then `$DOTFILES_ARCH`, then a list of common clone paths checking for `scripts/sync.sh`) for scripts that need to find the repo root before sourcing anything from `scripts/`; a `KNOWN_HARNESSES` array (kept in sync by hand with the one in `fn-lib.sh`) plus `installed_harnesses`, `resolve_default_harness_command` (reads `DEFAULT_HARNESS`/legacy `DEFAULT_AGENT` from the bootstrap config and confirms its CLI is actually on PATH), and `resolve_or_prompt_default_harness` (same, but falls back gracefully at runtime — silently picks the sole installed harness, interactively asks when several are installed, returns 1 when none are) for `dev --tmux` and `zed-agent-init` to agree on which agent harness to start; and `list_git_repos_under` (find git repos under a root directory, depth 3) shared by `dfa-repos` and `dfa-update-repos` so they can't drift on what counts as a repo.
-
-**fn-lib.sh** includes:
-
-- `print_*` helpers / `fmt_choice` (turquoise prompt defaults)
-- Hardware: `has_nvidia_*`, `has_intel_hardware`, `has_battery`
-- Packages: `native_package_installed`, `ensure_native_pkgs` (distro-native checks/install), Arch-only `ensure_pacman_pkgs`, `ensure_yay_installed` (scanned before makepkg), `ensure_yay_pkgs`, `ensure_multilib_enabled`, `safe_system_upgrade`, `remove_orphaned_packages`
-- AUR IoC scan: `aur_scan_*` / `aur_scan_package_tree` (fail closed if neither `rg` nor `grep`; known-IoC gate, not full audit)
-- NVM: `nvm_dir`, `load_nvm` (`~/.config/nvm`, migrates legacy `~/.nvm`)
-- Config: `load_bootstrap_config`, `write_bootstrap_config` (`printf %q`), `validate_bootstrap_profile`, `normalize_setup_profile`, `normalize_setup_profiles`, `has_setup_profile`, `primary_setup_profile`, `resolve_nvidia_preference`, `normalize_machine_type`, `resolve_machine_type`, `machine_is_laptop`, `resolve_default_harness`
-- Agent harnesses: `KNOWN_HARNESSES` array + `KNOWN_HARNESS_LABELS` (`claude`, `codex`, `opencode`, `pi` today — add a new id/label pair here, and to the matching array in `home/.local/bin/dotfiles-arch-lib.sh`, as each new harness's `setup-*.sh` lands), `installed_harnesses` (which of those are actually on PATH)
-- Cooldown stamps: `record_system_upgrade_stamps`, `system_upgrade_cooldown_expired`
-- Fonts: `refresh_font_cache`
-
-### Orchestration
-
-`bootstrap.sh` and `sync.sh` both call:
-
-1. Guarded system upgrade (`safe_system_upgrade`) — sync always; bootstrap when cooldown expired / multilib just enabled
-2. `run-profile-setup.sh` — single shared setup-* list; continues on error and prints a failure summary
-3. `link-dotfiles.sh`
-4. `post-link-hooks.sh` — `fc-cache` after `fonts.conf` is linked; `migrate.sh`; `sync-skills.sh`; `sync-rules.sh`; GNOME logout checklist
-
-Config reads/writes go through `load_bootstrap_config` / `write_bootstrap_config` (including `setup-nvidia.sh`).
-
-### Bootstrap config
-
-Stored at `~/.config/dotfiles-arch/.dotfiles_bootstrap_config`:
-
-- `FULL_NAME`, `EMAIL_ADDRESS`, `SETUP_PROFILES` (space-separated multi-select),
-  `SETUP_PROFILE` (primary for older readers), `INSTALL_NVIDIA`, `MACHINE_TYPE`,
-  `DEFAULT_HARNESS` (one of `KNOWN_HARNESSES` — `claude`, `codex`, `opencode`, `pi` today —
-  resolved by `setup-dev.sh` — see below; migrated from a config's legacy `DEFAULT_AGENT`
-  key by `load_bootstrap_config` on first read after the rename)
-
-`bootstrap.sh` / `sync.sh` export `MACHINE_TYPE` for the setup scripts; `setup-gnome.sh` also falls back to `load_bootstrap_config` + `has_battery`.
-
-### Profiles
-
-Profiles are **additive** — select any combination (e.g. `work,devcontainer`).
-
-| Profile | Extra setup |
-|---------|-----------------------------------------------|
-| work | Zoom, Slack, Chrome |
-| personal | Steam, Discord, Firefox, Mullvad |
-| devcontainer | just, mkcert, bind/`dig`, OpenVPN 3 (`openvpn3` AUR), Dev Containers extension, systemd-resolved `~test` DNS, inotify watches |
-
-Shared: Kitty, tmux, Claude Code, Codex, opencode, Ollama, Neovim, languages, Docker, Spotify, Obsidian, GNOME/Pop Shell, etc. `run-profile-setup.sh` runs `setup-dev.sh` last, after all profile extras, so profile-installed tools are visible. The header supplies local/cargo process paths; the runner loads validated NVM after Node setup for first-run harness/model/default selection.
-
-### Special cases
-
-- **prepare-archinstall.sh**: Run from the live ISO before archinstall, not from an installed system. Lists block devices via `lsblk` (excluding loop/optical, and `zram` specifically since it reports `TYPE=disk` too but isn't a real wipeable target), prompts for a hostname, and detects the GPU vendor via `has_nvidia_hardware`/`has_amd_gpu_hardware`/`has_intel_gpu_hardware` (`fn-lib.sh`, sourced defensively like `post_install.sh`) to propose one of the six canonical `gfx_driver` values (`archinstall/lib/hardware.py`'s `GfxDriver` enum, tag 4.4 — see `docs/research/archinstall-config-schema.md`), letting the user confirm or override. Requires typing the disk path a second time to confirm before it's willing to select it (the layout wipes the disk). Patches `disk_config.device_modifications[0].device`, `hostname`, and `profile_config.gfx_driver` into `user_configuration.json` via `python3 -c` (present on the ISO because archinstall itself needs it), preserving key order and the rest of the file untouched. `--dry-run` prints the same planned changes without writing. Never reads, writes, or references `user_credentials.json` — the LUKS/user password stays a manual step by deliberate choice.
-- **setup-git.sh**: Requires name + email args (no TTY → must pass args); writes identity into the real, machine-local `~/.gitconfig` (never symlinked). Shared settings live in `config/git/config` → `~/.config/git/config`, which git reads first so local values win; `git config --global`/`gh auth setup-git` also land in `~/.gitconfig`. `ensure_local_gitconfig` (`fn-lib.sh`, also called by `link-dotfiles.sh`) converts the legacy layout — replaces a `~/.gitconfig` symlink into the repo and folds `~/.config/git/identity` into it
-- **setup-node.sh / setup-claude.sh**: NVM at `~/.config/nvm` uses a pinned verified archive and preserves the saved default; user-owned Node 22+ is required for npm harnesses. Claude retains a recognized selected owner (native updater, user npm, or official Ubuntu APT). Ubuntu native acquisition/refresh checks are in `harness-lib.sh`; sources and minimums are in `PACKAGES.md`. Claude setup merges only the `nvim-reveal-edit` `PostToolUse` hook into `~/.claude/settings.json`.
-- **setup-dev.sh**: Installs `tmux`, `lazygit`, `lazydocker` (the `dev --tmux` path; Zed itself comes from `setup-zed.sh`); runs last in `run-profile-setup.sh` (after profile extras) so all harness CLIs are already on PATH; resolves `DEFAULT_HARNESS` via `resolve_default_harness` — auto-picks the one harness CLI installed, prompts with a numbered list (Enter keeps the saved choice if it's still installed, else the first installed one) when 2+ are, leaves it empty when none are — and persists it with `write_bootstrap_config`
-- **setup-gnome.sh**: Ubuntu requires installed `gnome-shell`; Arch skips when absent. Pop Shell supports GNOME 50–51; the accepted gap above it preserves native window moves and removes Super+Y/G/Escape. Other required extension failures still fail; power policy from `MACHINE_TYPE` (`power-profiles-daemon` profile, `/etc/systemd/logind.conf.d/dotfiles-arch-lid.conf` — laptop suspends on battery lid-close but ignores lid on AC/docked, `90-dotfiles-arch-usb-wakeup.rules` for KVM HID wake, audio powersave), falling back to `has_battery`; installs/configures Dash to Panel (always-visible full-width top bar, small centered icons, every monitor); Pop Shell auto-tiling off by default
-- **setup-nvidia.sh**: Installs `nvidia-open-dkms` only when `INSTALL_NVIDIA=true`; never swaps an existing driver flavor; persists via `write_bootstrap_config`
-- **setup-fonts.sh**: Adwaita + Noto + Liberation + Nerd Fonts; GNOME UI uses Adwaita Sans / JetBrainsMono NF
-- **setup-codex.sh**: Shared stack (see below `setup-claude.sh`); Codex CLI via user-level npm (`@openai/codex`, never `sudo npm`), same as Claude. Codex's hook system is experimental and off by default — the script idempotently sets `[features] hooks = true` in `~/.codex/config.toml` (plain sed edit, not a TOML rewrite tool; rewrites the deprecated `codex_hooks` key in place) and merges the `nvim-reveal-edit` `PostToolUse` hook into `~/.codex/hooks.json` (jq, matcher `apply_patch` — Codex's canonical tool_name for every file edit, covering the `Edit`/`Write` matcher aliases too)
-- **Pi (external opt-in)**: [skills](https://github.com/mikedelafuente/skills) owns every Pi installer/updater/health/repair/removal and shared setting. Dotfiles retains generic harness launching and registered-source data syncing only; it never acquires or registers that source automatically.
-- **setup-ollama.sh**: Capability-gated shared setup: require working NVIDIA/CUDA or hardware Vulkan, preserve driver flavor and installed app owner. Arch uses native GPU packages; Ubuntu uses its explicit native/verified-archive recipe. `dfa-update-system` refreshes owned releases without enabling a deliberately disabled service. Model acquisition remains user-owned; sources/update owners and runtime limits are in `PACKAGES.md`.
-- **update-npm-clis.sh**: Updates installed harnesses through their recorded owners: user npm for Claude/Codex and Ubuntu npm opencode, native `claude update` for recognized native Claude, distro updates for Arch opencode and Ubuntu APT Claude. Unknown/shadowing ownership fails; user update policies are retained. `dfa-daily` calls it separately from native/app updates. See `PACKAGES.md` and the source audit for current owners.
-- **setup-harness-agents.sh**: Runs after Codex/opencode/Ollama setup and syncs local `ollama list` models into marker-delimited Codex profiles and the opencode provider. Missing capability-gated Ollama skips; an installed but unavailable Ollama service fails while config is retained. opencode input must be comment-free JSON despite the `.jsonc` suffix. Also exposed as `dfa-sync-harness-agents` in daily maintenance.
-- **setup-devcontainer.sh**: Host-only platform devcontainer prerequisites (Docker/`gh` already shared)
-- **setup-zed.sh**: On Arch only, every run first idempotently removes a stray `~/.local/zed.app` (a manually-installed, self-updating Zed some machines have from before the pacman package existed) and its `~/.local/bin/zed` shim if present — it holds Zed's single-instance lock, so `zed`/`zeditor` can silently be served by that build instead of the pacman-managed one, including a version whose settings schema may not match `config/zed/settings.json`. Then installs `zed` via pacman. Ubuntu retains a recognized official self-updating user install (Vulkan and version contract required); source/config/MIME conflicts fail without replacing it. Settings are linked to `~/.config/zed/settings.json` via `link-dotfiles.sh` (`config/zed/settings.json`), which sets `agent.terminal_init_command` to `zed-agent-init` (`home/.local/bin/`) — a Zed Terminal Thread (Agent Panel → "+" → Terminal) starts this instead of a hardcoded CLI. `zed-agent-init` calls `resolve_or_prompt_default_harness` (`dotfiles-arch-lib.sh`) to exec the same `DEFAULT_HARNESS` CLI that `dev --tmux` starts in its agent pane, so picking a default harness in `setup-dev.sh` covers both launchers — including the same runtime fallback (silently use the sole installed harness, ask when several are installed, plain shell when none are) if the saved default's CLI has gone stale. Unlike the `dev --tmux` setup, no `nvim-reveal-edit`-style hook is needed: the agent CLI runs as a Terminal Thread inside the same Zed window as the editor, so Zed's own file watcher already reflects the agent's edits. `config/zed/keymap.json` binds `Ctrl+Alt+T` to `agent::NewTerminalThread` (jumps straight to a Terminal Thread) since Zed has no settings key for which Agent Panel tab opens by default; it's an addition, not an override, so the existing Agent Panel shortcut still opens Zed's native chat. Also registers Zed as the default handler for every `text/*` MIME type the shared-mime-info database knows about plus a list of source formats the database files under `application/*` — written to `~/.config/mimeapps.list` via `xdg-mime default`, which outranks the packaged desktop entry's own `MimeType` field and survives a pacman upgrade. `text/html` and the calendar/vcard types are excluded so the browser and PIM apps keep them. `inode/directory` is deliberately **not** claimed — folders open in Nautilus, and since an earlier version of this script did claim it (capturing `xdg-open <dir>` and "Open Folder With"), each run hands `inode/directory` back to `org.gnome.Nautilus.desktop` if and only if Zed currently owns it, leaving any other file manager set there alone. `agent_servers.claude-acp` in `config/zed/settings.json` is the Claude Code bridge — Claude Code ships no Zed extension, so its `/ide` command can never bind to Zed, and Zed 1.18 has no settings key for which agent the Agent Panel preselects — it's picked from the panel's new-thread menu
-- **sync-skills.sh**: Generic recursive exact `SKILL.md` discovery uses registered sources first and primary overrides last, then links retained-generation parents into Claude/Cursor/Codex/Pi. Protected duplicate skills block before mutation; losing sources must explicitly permit overwrites. Primary `skills/` is an empty override slot. Shared content and portable checks belong to [skills](https://github.com/mikedelafuente/skills); no upstream downloads occur during sync.
-- **sync-rules.sh**: Registered rules are normalized into retained generations. Primary rules win each basename for every consumer, including generated Claude/Codex/Pi/OpenCode instructions. User content and foreign links remain protected. Primary `rules/` is an empty override slot; project-only `.cursor/rules/` stays here. All resource sync paths converge on deployment; no source scripts execute.
-- **sync-sources.sh**: Manually register standard resource roots or `skills-root`, `rules-root`, `extensions-root` sources. Standard data includes rules/skills and complete supported Pi models/settings/agents/prompts/extensions. Skill `overwritable` defaults false. Missing registered sources block deployment; no automatic acquisition. Config remains `~/.config/dotfiles-arch/sync-sources`.
-- **setup-essentials.sh**: `ESSENTIAL_PACKAGES` is the canonical CLI list — update `PACKAGES.md` in the same change
-- **dfa**: fzf picker over every `dfa-*` command (`home/.local/bin/`), ordered by how often you'd reach for it — daily-driver `dfa-daily` first, then `dfa-weekly`, one-off `dfa-sync-sources` last — with a preview pane spelling out what each does and, for the `dfa-daily` vs `dfa-sync-dotfiles` pair specifically, when to prefer one over the other. `dfa list` prints the same table without fzf; `dfa <name> [args…]` (or its documented alias, e.g. `dfa check`, or the pre-rename `dfa morning`) skips the picker and runs `dfa-<name>` directly, forwarding args. The command table and its descriptions live inline in the script (`DFA_COMMANDS`) — update it whenever a `dfa-*` helper is added, renamed, or its behavior changes enough to change when you'd reach for it
-- **dfa-daily** (formerly `dfa-morning`): Loops `DAILY_STEPS` (`dfa-update-repos`, `dfa-migrate`, `dfa-update-system`, `dfa-update-npm-clis`, `dfa-sync-skills`, `dfa-sync-rules`, `dfa-sync-harness-agents`), forwarding args to each, tracking failures/skips, exiting 1 on required missing commands or child failures (custom missing steps may skip). Special case: snapshots dotfiles-arch's HEAD before the loop; if `dfa-update-repos` moves it forward, runs `dfa-sync-dotfiles` immediately and `exec`s itself once (`_DAILY_RESTARTED` guard caps it at one restart) so the remaining steps run against freshly-synced scripts. This special case lives only here — `dfa-weekly` inherits it for free by calling `dfa-daily` first, rather than duplicating it. `dfa-migrate` (second in `DAILY_STEPS`, right after the pull) applies this and every other rename's migration automatically — see **Schema versions and migrations**
-- **dfa-weekly**: Runs `dfa-daily "$@"` first, then `WEEKLY_STEPS` (`dfa-update-system --force`, `dfa-remove-orphans`, `dfa-update-ninjaone`) — same failure-tracking/exit-1-on-failure pattern as `dfa-daily`. `--force` bypasses `dfa-update-system`'s 24h cooldown so a real upgrade attempt happens at least weekly regardless of what `dfa-daily`'s cooldown-gated runs caught; `dfa-remove-orphans` needs sudo and mutates the installed package set, which is why it's weekly-only rather than a `dfa-daily` step
-- **setup-ninjaone.sh / update-ninjaone.sh / ninjaone-lib.sh / ninjaone/**: Standalone work-profile opt-in; never part of full bootstrap. Ubuntu uses the native vendor DEB; Arch repackages the verified archive with its existing package/unit lifecycle. Installer URLs are credentials: hidden prompt/env/saved mode-600 file, never printed. Retain IT-managed enrollment/agents; weekly health is read-only for those installs. Owned agents retain vendor self-updates; removal needs a terminal and typing `remove`, with Ubuntu SentinelOne separately authorized. See `PACKAGES.md` for the full lifecycle.
-- **dfa-refresh-audio**: Standalone (`home/.local/bin/`, no `dotfiles-arch-lib.sh` dependency). Docking/undocking or resuming from suspend can re-probe the HDA codec without WirePlumber tearing down the old device nodes, leaving duplicate sinks/sources in `wpctl status` and GNOME's speaker/mic quick-settings menus; `systemctl --user restart wireplumber pipewire pipewire-pulse` clears them. `--status` just prints `wpctl status`. Not wired into `dfa-daily` (`DAILY_STEPS`) or `dfa-weekly` since it's dock-event-triggered, not a scheduled step
-- **`dev`**: Opens the target directory in Zed (`exec zeditor <dir>`); reuse-vs-new-window is left to Zed's own `cli_default_open_behavior`. `--tmux` (implied by `--agent`) selects the Neovim session instead. Renamed from `code` in v4 — VS Code is not installed on these machines, and the old name shadowed VS Code's CLI on PATH, so Claude Code's `/ide` probe found this script and reported a successful extension install that never happened (`migrations/v3-to-v4-migration.sh` clears the dangling `~/.local/bin/code` symlink). In `--tmux` mode: creates a tmux session (killing/recreating any existing session for the same directory) with a `code` window (`nvim .` left, ~75%) and starts `nvim --listen <socket> .` (`--force` skips the git-repo requirement); `--agent <harness>` (one of `KNOWN_HARNESSES`; explicit `--agent` fails fast if that CLI isn't installed) or, with no `--agent`, `DEFAULT_HARNESS` from the bootstrap config via `resolve_or_prompt_default_harness` — falling back to whichever harness is actually installed (silently if only one, an interactive numbered prompt if several, a plain shell if none) when the saved default's CLI has gone stale — starts that agent CLI in the split pane and focus lands on that pane; a `lazygit` window is added for git repos when lazygit is installed; a `console` window is always added (plain shell in the project directory). With `--agent claude`, `config/nvim/lua/plugins/claudecode.lua` (`coder/claudecode.nvim`, `provider = "none"`, eager-loaded so its WebSocket/MCP server is up before the agent pane starts) auto-bridges the two: `claude` discovers Neovim via `~/.claude/ide/*.lock` matching cwd, `<leader>as`/`<leader>ab` send a selection/file as context, and Claude can open files/push diffs/read diagnostics through the protocol — `/ide` inside the Claude pane is the manual fallback if it starts before Neovim finishes loading. Separately, for both agents: `nvim-reveal-edit` (`home/.local/bin/`) is registered as a `PostToolUse` hook (see `setup-claude.sh`/`setup-codex.sh` below) — it reads the edited file's path from the hook payload, finds the `--listen` socket named after the enclosing `dev --tmux` session (walking up the file's directory tree), and reveals the file in that Neovim: focuses its window and `:checktime`-reloads it if already open in the current tab, otherwise loads it into the first non-nvim-tree window of that tab — landing like a nvim-tree click rather than a new tab, and never disturbing the tree itself. Silently no-ops outside a `dev --tmux` session
-
-## Key design decisions
-
-1. Modular setup scripts for independent re-runs
-2. Stable installed generations (shared edits in the verified source; local edits/overrides preserved)
-3. Rate-limited native/app updates on bootstrap (1-day cooldown); sync always upgrades
-4. Portable `$HOME` / `$USER_HOME_DIR` paths for multi-username machines
-5. GNOME-first Wayland; compatible Pop Shell, accepted Pop-only gap above GNOME 51
-6. Do not append PATH hacks into the symlinked `~/.bashrc` from setup scripts
-7. User-facing commands are documented where the user looks: `home/.welcome.md`, `aliases()`, `PACKAGES.md`, README/REFRESHER
-
-### Schema versions and migrations
-
-A rename under `home/.local/bin/` leaves a dangling `~/.local/bin` symlink: `link-dotfiles.sh` only creates links for files currently in the repo and never prunes ones whose source moved. Each such change ships a `migrations/vN-to-vM-migration.sh` that removes the stale links and re-links.
-
-- **Recorded version** — `~/.config/dotfiles-arch/.dotfiles_schema_version`, a bare integer. Authoritative once written.
-- **Repo version** — derived from the highest `M` across `migrations/v*-to-vM-migration.sh` (`repo_schema_version`). Adding a migration file bumps the target; there is no constant to keep in sync.
-- **Landmarks** — a machine predating the stamp has no file, so `detect_schema_version_by_landmark` infers its version from which dangling symlink is present: any of the ten pre-`dfa-` names → v1, `dfa-morning` → v2, `code` → v3, none → current. Checked oldest-first, since a v1 machine predates `dfa-morning`. A symlink that still resolves, or a real binary of the same name, is not a landmark.
-- **Runner** — `scripts/migrate.sh` (`dfa-migrate`) walks from the machine's version to the repo's, running each migration in order and re-stamping after each one, so an interrupted run resumes where it stopped. A machine already at the current version still gets its first stamp written. `--dry-run` reports without running or stamping; `--rerun-all` replays from v1. `--yes`/`--force` are accepted and ignored, because `dfa-daily` forwards its own args to every step and `--force` means something else to `dfa-update-system`.
-- **When it runs** — `dfa-migrate` is second in `DAILY_STEPS`, immediately after `dfa-update-repos`, so migrations a pull just introduced apply in the same run. `post-link-hooks.sh` also calls `migrate.sh`, so `bootstrap.sh`/`sync.sh`/`dfa-sync-dotfiles` stamp the version too — the same both-places wiring `sync-skills.sh`/`sync-rules.sh` use.
-
-**Adding a migration:** drop `migrations/v<current>-to-v<current+1>-migration.sh` in, following the existing ones (only ever remove a *dangling* symlink, then call `link-dotfiles.sh`, and stay safe to re-run). The runner picks it up with no other edit.
-
-## Important files
-
-- `README.md` / `REFRESHER.md` — human starting point and short memory jogger
-- `PACKAGES.md` — why each installed package exists; linked to `~/.packages.md` and shown by `packages`
-- `AGENTS.md` + `.cursor/rules/*.mdc` — shared conventions for AI agents (docs, packages, scripts)
-- `scripts/bootstrap.sh` / `scripts/sync.sh` — orchestration
-- `scripts/run-profile-setup.sh` / `scripts/post-link-hooks.sh` — shared runner + post-link
-- `scripts/sync-skills.sh` — recursively discovers `SKILL.md` under dotfiles-arch + extra skill sources and symlinks each parent folder into Claude, Cursor, detected Codex (`$CODEX_HOME/skills`, default `~/.codex/skills`), and Pi, pruning stale links
-- `scripts/sync-rules.sh` — builds/converts `rules/*` from dotfiles-arch + extra repos into `~/.config/dotfiles-arch/rules-build/`, symlinks into `~/.cursor/rules` and (for `alwaysApply` rules) Claude imports plus global `AGENTS.md` files for detected Codex and Pi, pruning stale links
-- `scripts/sync-sources.sh` — manage extra rules/skills source repos (`~/.config/dotfiles-arch/sync-sources`)
-- `scripts/setup-harness-agents.sh` — syncs local Ollama models into Codex's `~/.codex/config.toml` profiles and opencode's `~/.config/opencode/opencode.jsonc` `ollama` provider
-- `scripts/migrate.sh` — runs pending `migrations/` up to the repo's schema version; stamps `~/.config/dotfiles-arch/.dotfiles_schema_version`
-- `scripts/update-system.sh` — guarded native/app update owners; Arch AUR IoC scan, Ubuntu no-removal APT
-- `scripts/fn-lib.sh` — package/nvm/hardware/config/AUR-scan helpers
-- `scripts/setup-gnome.sh` — theme, Pop Shell, Dash to Panel, keybindings, GPaste, AppIndicator, No Overview
-- `scripts/setup-dev.sh` — `dev` launcher deps + `DEFAULT_HARNESS` resolution
-- [Standalone skills/Pi owner](https://github.com/mikedelafuente/skills) — opt-in lifecycle, portable skills/rules/resources and their checks
-- `scripts/link-dotfiles.sh` — deploys complete installed generations and managed home links; registered standard sources provide shared Pi data
-- `prepare-archinstall.sh` — guided disk/hostname/`gfx_driver` prep for `user_configuration.json`, run before archinstall
-- `user_configuration.json` — disk device, hostname, and `gfx_driver` per machine (set by `prepare-archinstall.sh` or by hand)
-- `NOTES.md` — WiFi, USB config, NVIDIA, sync
-
-## Development notes
-
-- Scripts use bash; use `native_package_installed` for install checks, then verify required commands/capabilities
-- Prefer compatible native packages, then scoped official vendor APT sources, then verified explicit recipes with recorded update owners. Arch AUR stays behind `ensure_yay_pkgs` and IoC scanning.
-- Validate shell changes with direct `bash -n <paths>` and `shellcheck -x <paths>`. Decision checks use supplied facts/temp state; leave them unrun when execution is constrained. Setup/update/cleanup/service/GNOME/driver/VM workflows are workstation operations, never code-validation tests.
-- Config persistence: `~/.config/dotfiles-arch/` (includes `.dotfiles_schema_version` — see **Schema versions and migrations**)
-- Dotfiles link to `$USER_HOME_DIR`, not root’s home when run with sudo
-- Overview at login: `no-overview@fthx` plus optional `hide-gnome-overview` autostart fallback
-- Always do work on a branch, never commit directly to `main`
-- Once a PR is merged, delete both the local and remote branch and check out `main`
-
-## Verify
-
-After shell changes, run:
-
-```bash
-bash -n scripts/<changed-file>.sh
-shellcheck -x scripts/<changed-file>.sh   # static checks; CI uses scripts/check.sh
-```
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues via the `gh` CLI (repo: `mikedelafuente/dotfiles-arch`). See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
-
-<!-- dark-factory-navigation:start -->
-
-### Dark factory
-
-For factory planning, execution, evaluation, resume or retro, load
-[`docs/dark-factory/setup.json`](docs/dark-factory/setup.json), then its hashed
-charter, council, guidance, tracker, ADR and authority pointers. Revision 5 is
-proposed: require current human acceptance and separate action authority before
-relying on it autonomously; preserve approval and hands-on trial pauses.
-
-<!-- dark-factory-navigation:end -->
+`AGENTS.md` links here. Shared guidance for Claude Code, Codex, Pi and Cursor.
+Arch Linux / installed Ubuntu 26.04 LTS, x86_64/amd64, GNOME Wayland workstation.
+
+## Read when relevant
+
+- Deployment, migration, source moves, overrides, capture, rollback or daily ordering:
+  [docs/deployment.md](docs/deployment.md).
+- Packages, acquisition and update owners: [PACKAGES.md](PACKAGES.md).
+  Ubuntu source decisions: [source audit](docs/ubuntu-source-update-audit.md).
+  Runtime evidence and limits: [integration inventory](docs/ubuntu-integration-validation.md).
+- User commands, shortcuts and flows: [README.md](README.md), [REFRESHER.md](REFRESHER.md).
+- Script conventions: [.cursor/rules/setup-scripts.mdc](.cursor/rules/setup-scripts.mdc).
+  Documentation requirements: [.cursor/rules/docs-and-commands.mdc](.cursor/rules/docs-and-commands.mdc).
+  Platform/config rules: [.cursor/rules/dotfiles-arch.mdc](.cursor/rules/dotfiles-arch.mdc).
+- Issues: [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
+  Triage: [docs/agents/triage-labels.md](docs/agents/triage-labels.md).
+  Glossary/ADRs: [docs/agents/domain.md](docs/agents/domain.md).
+
+## Shared source and deployment
+
+- Before shared edits, run `dfa-deploy source`; edit only the verified checkout.
+  Missing source/provenance: stop shared edits and restore/rebind. For extra sources,
+  use `dfa-deploy source --source-id ID`. Installed copies are never source checkouts.
+- Runtime links use `~/.local/share/workstation/config`, backed by installed generations.
+  Current deployment preserves local edits and blocks the whole generation on conflict.
+  Intentional local differences use `dfa-deploy override`; source review uses
+  `dfa-deploy capture`, which neither commits nor pushes.
+- Verify using temporary fixtures. Implementation does not authorize deployment,
+  migration, package changes, services, GNOME/driver changes or VM operations on this workstation.
+
+## Implementation rules
+
+- Scripts must be idempotent: sync re-runs every setup. Reuse existing helpers.
+- Setup scripts source `dotheader.sh` → `fn-lib.sh`; use `USER_HOME_DIR`, including under sudo.
+  Installed helpers in `home/.local/bin/` resolve runtime through `dotfiles-arch-lib.sh`
+  before loading scripts. Source operations use deployment provenance.
+- Saved settings use only `load_bootstrap_config` / `write_bootstrap_config`.
+  Profiles are additive (`work`, `personal`, `devcontainer`); `SETUP_PROFILES` stores
+  selections, `SETUP_PROFILE` stays the compatible primary. Honor `MACHINE_TYPE`;
+  use hardware fallback when unset. `DEFAULT_HARNESS` replaces legacy `DEFAULT_AGENT`.
+- Detect unsupported hosts before writes. Disk provisioning and AUR are Arch-only.
+- Native packages: `native_package_installed` / `ensure_native_pkgs`, then verify
+  required executables/capabilities. Prefer compatible native packages, scoped official
+  vendor APT sources, then verified recipes with explicit update owners.
+- AUR: `ensure_yay_installed` / `ensure_yay_pkgs` with IoC scanning; fail closed.
+  No raw AUR install bypasses or `curl | bash`. Preserve installed owner, driver flavor,
+  managed agents, holds/pins, update policies and automatic security updates.
+- Link only absent or repository-owned targets. Preserve foreign files/links and report conflicts.
+  Git identity stays in real machine-local `~/.gitconfig`; shared settings use `config/git/config`.
+  Never append PATH edits to shared `home/.bashrc` from setup scripts.
+- Required setup/link/hook/update failures reach final status. Keep child Bash errexit;
+  mutation helpers need explicit return/exit guards when callers capture statuses.
+  Write successful update stamps only after all requested native/app updates succeed.
+- Cleanup previews first. Removal requires a terminal and typing `remove`; `--yes` alone
+  never authorizes it. NinjaOne is separate work-profile opt-in; installer URLs are secrets.
+- `prepare-archinstall.sh` is live-ISO-only. Require repeated disk-path confirmation;
+  exclude nonphysical disks. Never read/write `user_credentials.json`.
+
+## Ownership and orchestration
+
+- Setup order lives only in `scripts/run-profile-setup.sh`: upgrade → setup → links →
+  post-link hooks. `setup-dev.sh` runs last so harness selection sees installed tools.
+- `dfa-weekly` delegates daily work to `dfa-daily`. Keep the daily deployment restart
+  bounded to one; do not duplicate it. Preserve cooldowns and schema stamps.
+- [Standalone skills/Pi owner](https://github.com/mikedelafuente/skills) owns portable
+  skills/rules/resources and all Pi installation/update/repair/removal/settings.
+  This repo owns generic launching and registered-source syncing; no automatic acquisition.
+- Primary `skills/` and `rules/` are empty override slots; `.cursor/rules/` is project-only.
+  Registered sources must exist. Primary content wins, but protected skill duplicates
+  block before mutation unless losing sources allow overwrites. Sync never executes source scripts.
+- New harness IDs/labels must agree in `scripts/fn-lib.sh` and
+  `home/.local/bin/dotfiles-arch-lib.sh`. Reuse shared default-harness resolution for launchers.
+
+## Migrations and documentation
+
+- Helper renames ship an idempotent `migrations/vN-to-vM-migration.sh`: remove only
+  dangling legacy links, then relink. Preserve real files and resolving foreign links.
+  Repo schema derives from migration filenames; stamp only successful steps.
+  `--dry-run` makes no writes; `--rerun-all` is workstation work, never a validation command.
+- Document changed commands/aliases/shortcuts/packages in the same change, following
+  the documentation rules above. User entry points include `home/.welcome.md`, `aliases()`,
+  `README.md` / `REFRESHER.md`, and `PACKAGES.md`.
+  Keep `DFA_COMMANDS` aligned with helper behavior and `ESSENTIAL_PACKAGES` with the package catalog.
+
+## Verification and Git
+
+- Shell changes: `bash -n <paths>` and `shellcheck -x <paths>`; CI uses `scripts/check.sh`.
+  Run relevant decision checks with supplied facts and temporary state. Report unrun checks.
+- Work on a feature branch; never commit directly to `main`.
+  After merging, delete local/remote feature branches and return to clean `main`.
+- Answer briefly: result first, commands/paths in inline code, no filler.
+  Shared style: [skills owner](https://github.com/mikedelafuente/skills/tree/main/rules).

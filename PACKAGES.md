@@ -883,13 +883,6 @@ or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
 agent prompts, not shell commands. See [examples](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/agent-council/references/examples.md).
 Personal `/ask-mike`, `/council-handoff spec|tickets`, `/build-with-ponytail`, and
 `/review-changes` compose unchanged upstream skills without additional packages.
-`/setup-dark-factory`, `/dark-factory-idea`, `/dark-factory`,
-`/dark-factory-supervisor` and `/dark-factory-retro` add bounded project contracts,
-versioned idea approval, independent acceptance and prototype trial pauses.
-Their local control seam uses the existing Python standard library; no runner,
-tracker plugin or scheduler is installed. Actual adapter configuration, schedules,
-actions and synthetic retro publication require accepted project authority.
-See [factory contracts](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/dark-factory/references/contracts.md).
 `dfa-sync-skills` discovers nested skill folders and gives dotfiles-arch final
 priority. `dfa-sync-sources add <path> --overwritable true` allows duplicate
 replacement from that source; false is the default and blocks replacement before

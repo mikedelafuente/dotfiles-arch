@@ -2,9 +2,8 @@
 
 Research date/access date for all URLs: 2026-10-09. Status: proposed advice.
 Scope: ideas for this repository's Arch/Ubuntu GNOME workstation workflows.
-Existing README, PACKAGES, deployment guidance and council proposal were reused.
-No accepted factory record was changed; this note grants no implementation,
-publication, deployment or scheduling permission.
+Existing README, PACKAGES and deployment guidance were reused.
+This note grants no implementation, publication, deployment or scheduling permission.
 
 ## Suggested council instruction
 
