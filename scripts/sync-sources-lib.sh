@@ -4,7 +4,8 @@
 # Expects fn-lib.sh (print_*, bootstrap_config_dir) to be loaded.
 #
 # Each configured source has a type:
-#   standard    — repo root has rules/, skills/, and/or extensions/ under it
+#   standard    — repo root has rules/, skills/, extensions/, and/or supported
+#                  pi/ data (models.json, settings.json, agents/, prompts/)
 #                  (Pi's own repo may use pi/extensions/),
 #                 same layout as dotfiles-arch itself.
 #   skills-root — the path itself IS a folder of nested skill dirs (no skills/
@@ -147,7 +148,7 @@ write_sync_source_repos() {
   mkdir -p "$dir"
   {
     echo "# Extra rules/skills source repos, one per line: path | type:path"
-    echo "# Types: standard (default, has rules/ + skills/ + extensions/ subdirs;"
+    echo "# Types: standard (default, has rules/ + skills/ + extensions/ + supported pi/ data;"
     echo "# skills-root (path is itself a folder of nested skill dirs), rules-root"
     echo "# dotfiles-arch uses pi/extensions/), rules-root (path is itself a flat folder"
     echo "# of *.mdc files), extensions-root (path is itself a flat folder of Pi extensions)."
@@ -211,8 +212,10 @@ add_sync_source_repo() {
   write_sync_source_repos
   case "$type" in
     standard)
-      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" && ! -d "$normalized/pi/extensions" ]]; then
-        print_warning_message "No rules/, skills/, extensions/, or pi/extensions/ under $normalized — nothing to sync until you add them"
+      if [[ ! -d "$normalized/rules" && ! -d "$normalized/skills" && ! -d "$normalized/extensions" && ! -d "$normalized/pi/extensions" \
+        && ! -f "$normalized/pi/models.json" && ! -f "$normalized/pi/settings.json" \
+        && ! -d "$normalized/pi/agents" && ! -d "$normalized/pi/prompts" ]]; then
+        print_warning_message "No rules/, skills/, extensions/, or supported pi/ data under $normalized — nothing to sync until you add them"
       fi
       ;;
     skills-root)
@@ -878,7 +881,8 @@ build_pi_agents_file() {
   out="$(pi_agents_build_file)"
   tmp="$(mktemp)"
 
-  for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+  # Extras come first so the primary source is the final instruction authority.
+  for ((i=1; i<${#SYNC_SOURCE_REPOS_ALL[@]}; i++)); do
     repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
     repo_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
     case "$repo_type" in
@@ -894,6 +898,25 @@ build_pi_agents_file() {
     cat "$f" >>"$tmp"
     src_count=$((src_count + 1))
   done
+  if ((${#SYNC_SOURCE_REPOS_ALL[@]} > 0)); then
+    repo_root="${SYNC_SOURCE_REPOS_ALL[0]}"
+    repo_type="${SYNC_SOURCE_REPOS_ALL_TYPES[0]}"
+    case "$repo_type" in
+      standard | rules-root) ;;
+      *) repo_root="" ;;
+    esac
+    if [[ -n "$repo_root" ]]; then
+      f="$(sync_source_rules_build_dir "$repo_root")/claude-rules.md"
+      if [[ -f "$f" ]]; then
+        if ((src_count > 0)); then
+          printf '\n---\n\n' >>"$tmp"
+        fi
+        printf '<!-- source: %s -->\n\n' "$repo_root" >>"$tmp"
+        cat "$f" >>"$tmp"
+        src_count=$((src_count + 1))
+      fi
+    fi
+  fi
 
   if ((src_count == 0)); then
     rm -f "$tmp" "$out"

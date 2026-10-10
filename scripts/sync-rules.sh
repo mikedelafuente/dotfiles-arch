@@ -66,7 +66,7 @@ for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
   build_sync_source_rules "${SYNC_SOURCE_REPOS_ALL[$i]}" "${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
 done
 
-for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
+for ((i=1; i<${#SYNC_SOURCE_REPOS_ALL[@]}; i++)); do
   repo_root="${SYNC_SOURCE_REPOS_ALL[$i]}"
   source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[$i]}"
   if ! { rules_dir="$(sync_source_effective_dir "$repo_root" "$source_type" rules)" && [[ -d "$rules_dir" ]]; }; then
@@ -75,6 +75,12 @@ for i in "${!SYNC_SOURCE_REPOS_ALL[@]}"; do
   fi
   sync_rules_from_repo "$repo_root" "$source_type" "$TARGET_DIR"
 done
+# The primary source owns the final rule name when an extra source collides.
+if ((${#SYNC_SOURCE_REPOS_ALL[@]} > 0)); then
+  repo_root="${SYNC_SOURCE_REPOS_ALL[0]}"
+  source_type="${SYNC_SOURCE_REPOS_ALL_TYPES[0]}"
+  sync_rules_from_repo "$repo_root" "$source_type" "$TARGET_DIR"
+fi
 
 prune_managed_symlinks "$TARGET_DIR" rules
 

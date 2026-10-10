@@ -363,6 +363,7 @@ class Deployment:
     def inventory(self, primary, incoming):
         artifacts, links, sources = {}, {}, []
         roots, overwritable, rules_bodies = [], [], []
+        rule_entries = []
         pi = lexical(os.environ.get("PI_CODING_AGENT_DIR", self.home / ".pi/agent"))
         codex = lexical(os.environ.get("CODEX_HOME", self.home / ".codex"))
         def add_link(target, relative, legacy):
@@ -474,6 +475,25 @@ class Deployment:
                 for entry in sorted(extensions.iterdir()):
                     key = entry.relative_to(incoming).as_posix()
                     add_link(pi / "extensions" / entry.name, key, path / entry.relative_to(staged))
+            # Standard sources may carry Pi data beside skills/rules.  Skills and
+            # prompts are discovered by their native locations; the remaining
+            # shared Pi files are linked from the retained generation below.
+            if kind == "standard":
+                pi_root = staged / "pi"
+                if pi_root.is_dir():
+                    for entry in sorted(pi_root.rglob("*")):
+                        if not (entry.is_file() or entry.is_symlink()):
+                            continue
+                        relative = entry.relative_to(pi_root)
+                        if relative.parts[0] == "extensions":
+                            continue
+                        if relative.parts[0] not in {"agents", "prompts"} and relative.parts not in {
+                                ("models.json",), ("settings.json",)}:
+                            continue
+                        key = prefix + (Path("pi") / relative).as_posix()
+                        if key in artifacts:
+                            add_link(pi / relative, key, path / "pi" / relative)
+
             rules = staged / "rules" if kind == "standard" else staged if kind == "rules-root" else None
             if rules and rules.is_dir():
                 for rule in sorted(rules.iterdir()):
@@ -489,16 +509,28 @@ class Deployment:
                         body = parts[2]
                     elif rule.suffix == ".md":
                         continue
-                    key = f"generated/rules/{name}/{rule.stem}.mdc"
-                    out = incoming / key; out.parent.mkdir(parents=True, exist_ok=True)
-                    out.write_text(text)
-                    artifacts[key] = {"source": None, "origin": str(path / rule.relative_to(staged)),
-                                      "incoming": identity(out)}
-                    slug = str(path).lstrip("/").replace("/", "-")
-                    add_link(self.home / ".cursor/rules" / (rule.stem + ".mdc"), key,
-                             self.home / ".config/dotfiles-arch/rules-build" / slug / "mdc" / (rule.stem + ".mdc"))
-                    if fields.get("alwaysApply", "").strip() == "true":
-                        rules_bodies.append(f"<!-- source: {path} -->\n\n{body}\n")
+                    rule_entries.append((name, path, rule, text, fields, body, staged))
+        # Registered extras are applied first so the primary source remains the
+        # final rule authority.  De-duplicate by basename across every consumer.
+        ordered_rules = [entry for entry in rule_entries if entry[0] != "primary"]
+        ordered_rules += [entry for entry in rule_entries if entry[0] == "primary"]
+        selected_rules = {}
+        for entry in ordered_rules:
+            selected_rules[entry[2].stem] = entry
+        for entry in ordered_rules:
+            name, path, rule, text, fields, body, staged = entry
+            if selected_rules[rule.stem] is not entry:
+                continue
+            key = f"generated/rules/{name}/{rule.stem}.mdc"
+            out = incoming / key; out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text)
+            artifacts[key] = {"source": None, "origin": str(path / rule.relative_to(staged)),
+                              "incoming": identity(out)}
+            slug = str(path).lstrip("/").replace("/", "-")
+            add_link(self.home / ".cursor/rules" / (rule.stem + ".mdc"), key,
+                     self.home / ".config/dotfiles-arch/rules-build" / slug / "mdc" / (rule.stem + ".mdc"))
+            if fields.get("alwaysApply", "").strip() == "true":
+                rules_bodies.append(f"<!-- source: {path} -->\n\n{body}\n")
         alias_key = "home/.local/bin/rebind-window-push"
         if alias_key in artifacts:
             add_link(self.home / ".local/bin/rebind-monitor-moves", alias_key, primary / alias_key)

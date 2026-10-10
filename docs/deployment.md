@@ -228,7 +228,7 @@ copy only their configured supplied tree, rejecting broken/external links.
 | `dfa-update-system`, npm/app/weekly/NinjaOne maintenance | Backend scripts and owned package/app state | Installed backend dependencies; native/vendor acquisition keeps existing owners |
 | `dfa-check-dotfiles` | Source lint tree | Installed complete scripts/migrations/helper tree |
 | `dfa-migrate`, link/post-link/bootstrap/sync | Repository migrations and unconditional linking | Installed migrations; source entrypoints stage before linking/setup |
-| Pi models/settings/agents/extensions | `pi/**`, extra extensions roots; imported TS modules | Installed `pi/**`/extra closure; auth/models-store remain machine-local |
+| Pi models/settings/agents/extensions/prompts | Primary `pi/**`, registered standard-source `pi/models.json`, `pi/settings.json`, `pi/{agents,prompts}/**`, and extension roots | Retained-generation links; auth/models-store and credential/runtime files remain machine-local |
 | Claude/Cursor/Codex/Pi skill folders | Recursive source skill parent links and relative support paths | Discovered installed parents and support closure; protected collision policy retained |
 | Cursor rules, Claude imports, Codex/Pi/OpenCode global guidance | Raw sources and generated rules-build artifacts | Installed generated normalized rules and direct installed-copy/source instructions |
 | `dfa-sync-sources` | Source paths in registration | Machine-local source registry retained; deploy owns activation/pruning of manifested targets |
