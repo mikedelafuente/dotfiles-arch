@@ -42,8 +42,8 @@ through `dfa-sync-sources remove`.
 
 Workstation targets are Claude, Cursor, detected Codex (`$CODEX_HOME/skills`,
 default `~/.codex/skills`), and Pi. Run `dfa-sync-skills` after changing the tree.
-For cloud use, keep this checkout available and run
-`bash scripts/install-cloud-agent-config.sh --home "$HOME"`; it installs skills
+For cloud use, supply the source checkout explicitly and run
+`bash scripts/install-cloud-agent-config.sh --source /path/to/skills --home "$HOME"`; it installs skills
 in `.agents/skills` and the shared global rule baseline, without OS setup.
 See [cloud setup](../README.md#shared-agent-config-in-cloud-checkouts).
 

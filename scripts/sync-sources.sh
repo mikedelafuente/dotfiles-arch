@@ -5,7 +5,8 @@
 # dotfiles-arch is always the primary source; this command lists, adds, or
 # removes additional sources synced by dfa-sync-rules, dfa-sync-skills, and
 # dfa-sync-extensions. Each source has a type:
-#   standard    (default) — the path has rules/, skills/, and/or extensions/ subdirs
+#   standard    (default) — the path has rules/, skills/, extensions/, and/or
+#               supported pi/ data (models.json, settings.json, agents/, prompts/)
 #               (dotfiles-arch uses pi/extensions/ for Pi extensions), same layout
 #               as dotfiles-arch itself.
 #   skills-root — the path itself IS a folder of nested skill dirs (no skills/
@@ -304,7 +305,7 @@ EOF
           '~/'*) raw="$USER_HOME_DIR/${raw:2}" ;;
         esac
         cat <<'EOF'
-  1) standard — repo with skills/, rules/, or extensions/ subfolders
+      1) standard — repo with skills/, rules/, extensions/, or supported pi/ data
   2) skills-root — directory containing skill folders recursively
   3) rules-root — directory containing rule files directly
   4) extensions-root — directory containing Pi extensions directly
@@ -414,7 +415,7 @@ Use 'reorder' to change extra sources' relative priority (bottom of the list
 wins when the losing skill source is overwritable).
 
 Types:
-  standard    (default) path has rules/, skills/, and/or extensions/ subdirs
+       standard    (default) path has rules/, skills/, extensions/, and/or supported pi/ data
                (dotfiles-arch uses pi/extensions/ for Pi extensions)
   skills-root path itself is a folder of nested skill dirs
   rules-root  path itself is a flat folder of *.mdc files
