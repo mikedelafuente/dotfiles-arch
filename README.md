@@ -521,6 +521,8 @@ dotfiles-arch/
 ├── NOTES.md               ← WiFi, archinstall, NVIDIA, sync details
 ├── CLAUDE.md              ← shared architecture and agent guidance
 ├── AGENTS.md              ← symlink to CLAUDE.md for other agents
+├── skills/                ← empty primary skill slot (.gitkeep)
+├── rules/                 ← empty primary rule slot (.gitkeep)
 ├── .cursor/rules/         ← repo conventions for AI agents
 ├── prepare-archinstall.sh ← guided disk/hostname/gfx_driver prep, before archinstall
 ├── post_install.sh        ← minimal post-archinstall (chains into bootstrap.sh)

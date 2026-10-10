@@ -199,9 +199,12 @@ def main():
                         "test", str(repo), str(extra), str(targets[0])],
                        env=dict(env, USER_HOME_DIR=str(home)), check=True, capture_output=True)
         assert not managed.is_symlink()
-        # Verify the actual author/category tree, not only synthetic nested folders.
+        # Verify grouped source layout independently of primary shared payload.
         shutil.rmtree(repo / "skills")
-        shutil.copytree(ROOT / "skills", repo / "skills")
+        for group in ("mattpocock/engineering", "mikedelafuente"):
+            marker = repo / "skills" / group / ("fixture-" + group.split("/")[0]) / "SKILL.md"
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("grouped fixture skill\n")
         run()
         expected = {marker.parent.name: marker.parent
                     for marker in (repo / "skills").rglob("SKILL.md")}

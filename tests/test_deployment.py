@@ -384,6 +384,11 @@ def full_repository():
         (source / "scripts/dotheader.sh").write_text(
             '#!/bin/bash\nset -euo pipefail\nUSER_HOME_DIR="$TEST_HOME"\nexport USER_HOME_DIR\n'
             'DF_SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"\n# shellcheck source=/dev/null\nsource "$DF_SCRIPT_DIR/fn-lib.sh"\n')
+        # Synthetic shared data exercises legacy migration after payload contraction.
+        marker = source / "skills/fixture/SKILL.md"
+        marker.parent.mkdir(parents=True, exist_ok=True); marker.write_text("fixture skill\n")
+        state = source / "pi/models-store.json"
+        state.parent.mkdir(parents=True, exist_ok=True); state.write_text("{}\n")
         def git(*args):
             return subprocess.run(["git", "-C", str(source), *args], check=True, capture_output=True)
         git("init", "-b", "main"); git("config", "user.name", "Fixture")

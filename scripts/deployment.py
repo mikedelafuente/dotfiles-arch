@@ -467,6 +467,10 @@ class Deployment:
                 settings = read_json(pi / "settings.json", {})
                 if not isinstance(settings, dict) or not isinstance(settings.get("packages", []), list):
                     raise Pending("Invalid Pi package settings; preserve and reconcile them before source sync")
+                legacy_skill_paths = {str(self.home / ".claude/skills"), str(codex / "skills")}
+                for value in settings.get("skills", []) if isinstance(settings.get("skills", []), list) else []:
+                    if isinstance(value, str) and value.replace("$HOME", str(self.home)).replace("~", str(self.home), 1) in legacy_skill_paths:
+                        raise Pending("Pi settings also load cross-harness skills; remove those legacy paths with the standalone owner before generation syncing")
                 package = read_json(staged / "package.json", {})
                 for entry in settings.get("packages", []):
                     value = entry.get("source") if isinstance(entry, dict) else entry
@@ -475,8 +479,10 @@ class Deployment:
                     if value.startswith("npm:"):
                         match = re.match(r"npm:((?:@[^/]+/)?[^@]+)", value)
                         duplicate = isinstance(package, dict) and match and match[1] == package.get("name")
-                    elif value.startswith(("git:", "https://", "http://", "ssh://")):
-                        raw = value.removeprefix("git:")
+                    elif value.startswith(("git:", "git+", "github:", "https://", "http://", "ssh://")):
+                        raw = value.removeprefix("git:").removeprefix("git+")
+                        if raw.startswith("github:"):
+                            raw = "https://github.com/" + raw.removeprefix("github:")
                         parsed = urlsplit(raw if "://" in raw else "https://" + raw)
                         remote = urlunsplit((parsed.scheme, parsed.netloc, parsed.path.split("@", 1)[0], "", ""))
                         duplicate = clean_url(remote) == source["url"]

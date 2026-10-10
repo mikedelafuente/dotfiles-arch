@@ -9,9 +9,8 @@
 # skills/ subfolder; skills-root sources contribute their own folder directly
 # (see dfa-sync-sources --type). Only ever touches symlinks whose target is a
 # configured source's effective skills dir — real directories elsewhere are
-# left alone. Also prunes the legacy ~/.claude/skills / ~/.codex/skills
-# entries from ~/.pi/agent/settings.json so Pi (which now discovers these
-# skills natively in its own dir) doesn't load each one twice. Safe to re-run.
+# left alone. Pi settings reconciliation belongs to the standalone resource
+# owner; generation preflight blocks duplicate resource routes. Safe to re-run.
 
 CURRENT_FILE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
@@ -110,8 +109,5 @@ for target_dir in "${TARGET_DIRS[@]}"; do
 
   prune_managed_symlinks "$target_dir" skills
 done
-
-print_line_break "Syncing Pi skill paths"
-prune_pi_settings_skill_paths
 
 print_success_message "Skills synced: $SYNC_SKILLS_LINKED_COUNT linked, $SYNC_SKILLS_PRUNED_COUNT pruned"

@@ -89,13 +89,20 @@ def main():
         settings = home / ".pi/agent/settings.json"
         generation = os.readlink(active)
         for package_source in (str(extra), os.path.relpath(extra, settings.parent),
-                               "git:github.com/example/shared@v1", "npm:@example/shared@1.0.0"):
+                               "git:github.com/example/shared@v1", "npm:@example/shared@1.0.0",
+                               "npm:@example/shared", "git+https://github.com/example/shared.git#main",
+                               {"source": "github:example/shared@main"}):
             settings.write_text(json.dumps({"packages": [package_source]}))
             duplicated = subprocess.run(["python3", str(CLI), "deploy", "--source", str(primary)],
                                         env=env, capture_output=True, text=True)
             assert duplicated.returncode != 0 and "duplicates registered source" in duplicated.stderr
             assert os.readlink(active) == generation
             assert json.loads(settings.read_text()) == {"packages": [package_source]}
+        settings.write_text('{"skills":["~/.claude/skills"]}')
+        duplicated = subprocess.run(["python3", str(CLI), "deploy", "--source", str(primary)],
+                                    env=env, capture_output=True, text=True)
+        assert duplicated.returncode != 0 and "cross-harness skills" in duplicated.stderr
+        assert os.readlink(active) == generation
         print("PASS: standard-source Pi data, primary rule precedence, exclusions and no source execution")
 
 

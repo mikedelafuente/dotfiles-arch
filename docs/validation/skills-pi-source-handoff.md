@@ -20,13 +20,17 @@ fixtures and do not deploy, install packages, change services or contact a netwo
 ```bash
 # In dotfiles-arch:
 python3 tests/test_source_handoff.py
+python3 tests/test_generic_consumer.py
 python3 tests/test_deployment.py
 python3 tests/test_skill_sync.py
 python3 tests/test_cloud_agent_config.py
 bash scripts/check.sh
 
 # In skills:
-# Run the portable gate documented in that repository's README.
+python3 tests/test_import_manifest.py
+python3 tests/test_pi_setup.py
+python3 tests/test_dark_factory.py
+node --test pi/extensions/remote-control/*.test.ts
 ```
 
 The handoff check covers clean and locally edited moves, persistent overrides and
@@ -65,3 +69,17 @@ defaults change. Per-agent token/cache/reasoning counters, observed model/effort
 and exclusive active time are unavailable in this runner and are recorded as
 unknown, not estimated. Private run observations and evaluator evidence remain
 outside worker worktrees; publication of these detailed records is not implied.
+
+## Published replacement and machine evidence
+
+The [standalone replacement](https://github.com/mikedelafuente/skills/pull/1)
+was independently accepted and published before primary contraction: payload
+`13827c24d1ea9dbe9e94cad30fc7be8da7f00d2b`, merge
+`bd00537de1d7ae4150980f49a2a7af11da9fd970`. The
+[paired workstation change](https://github.com/mikedelafuente/dotfiles-arch/pull/185)
+contains the handoff implementation and final fixture checkpoint.
+
+All 22 workstation Python suites pass, together with syntax and shellcheck for
+106 Bash files. Standalone inventory, Pi lifecycle and portable dark-factory
+fixtures pass; all 167 supplied portable extension tests pass. Independent
+review reports are private run evidence, separate from the human trial.

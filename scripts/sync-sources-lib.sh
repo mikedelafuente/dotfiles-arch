@@ -34,9 +34,8 @@
 #   - Codex: ~/.codex/skills and ~/.codex/AGENTS.md (or CODEX_HOME), when the
 #     `codex` CLI is detected.
 #   - skills: ~/.pi/agent/skills/<name> (Pi discovers its own global skills dir
-#     natively — no settings needed). A legacy Pi settings `skills` array that
-#     pointed at ~/.claude/skills / ~/.codex/skills is pruned so Pi never
-#     discovers the same skill twice (see prune_pi_settings_skill_paths).
+#     natively — no settings needed). Legacy settings reconciliation belongs
+#     to the standalone resource owner.
 #   - rules: ~/.pi/agent/AGENTS.md — the single raw global agent file Pi reads
 #     at startup. Pi has no @import mechanism, so the alwaysApply bodies of
 #     every active source are concatenated into one regenerated file
@@ -791,75 +790,6 @@ pi_agent_dir() {
 # so the sync follows the directory used by the installed Codex CLI.
 codex_home_dir() {
   echo "${CODEX_HOME:-$USER_HOME_DIR/.codex}"
-}
-
-# ~/.pi/agent/settings.json path (stdout).
-pi_settings_file() {
-  echo "$(pi_agent_dir)/settings.json"
-}
-
-# Remove dfa-managed harness skill dirs from Pi settings' `skills` array.
-# Before Pi gained its own global skills dir, this was wired manually to
-# ~/.claude/skills and ~/.codex/skills; dfa-sync-skills now mirrors the same
-# sources into ~/.pi/agent/skills natively, so leaving those entries would make
-# Pi discover every skill twice and warn about name collisions at each startup.
-# Only ever removes those two exact entries (tilde and $HOME-expanded forms);
-# any other skills entries and all other settings are preserved byte-for-byte
-# apart from re-serialization.
-prune_pi_settings_skill_paths() {
-  local file removed
-  file="$(pi_settings_file)"
-  [[ -f "$file" ]] || return 0
-  if ! command -v python3 &>/dev/null; then
-    print_warning_message "python3 not found — cannot prune Pi settings.json (remove its skills array manually)"
-    return 1
-  fi
-  removed="$(python3 - "$file" <<'PY'
-import json
-import os
-import sys
-
-path = sys.argv[1]
-managed = {"~/.claude/skills", "~/.codex/skills"}
-managed_expanded = {os.path.normpath(os.path.expandvars(os.path.expanduser(p))) for p in managed}
-
-
-def is_managed(value):
-    return (
-        isinstance(value, str)
-        and os.path.normpath(os.path.expandvars(os.path.expanduser(value))) in managed_expanded
-    )
-
-try:
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-except (OSError, ValueError):
-    sys.exit(0)
-
-skills = data.get("skills")
-if not isinstance(skills, list):
-    sys.exit(0)
-
-removed = sorted({s for s in skills if is_managed(s)})
-if not removed:
-    sys.exit(0)
-
-kept = [s for s in skills if not is_managed(s)]
-if kept:
-    data["skills"] = kept
-else:
-    data.pop("skills", None)
-
-with open(path, "w", encoding="utf-8") as fh:
-    json.dump(data, fh, indent=2)
-    fh.write("\n")
-
-print(", ".join(removed))
-PY
-)"
-  if [[ -n "$removed" ]]; then
-    print_info_message "Pruned dfa-managed skill dirs from Pi settings: $removed"
-  fi
 }
 
 # Staging file that becomes Pi's global AGENTS.md (stdout): the alwaysApply

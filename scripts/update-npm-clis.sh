@@ -3,7 +3,7 @@
 # --------------------------
 # Update npm-installed agent CLIs and recognized user-native Claude
 # --------------------------
-# Existing npm Claude, Codex and Pi keep user npm maintenance. New Ubuntu
+# Existing npm Claude and Codex keep user npm maintenance. New Ubuntu
 # Claude uses verified native acquisition; recognized native Claude uses its
 # own updater without NVM/npm or sudo. Visible DISABLE_UPDATES policy defers
 # either Claude owner without changing settings.
@@ -29,7 +29,7 @@ failed=0
 deferred=0
 load_nvm || true
 
-for harness in claude codex pi opencode; do
+for harness in claude codex opencode; do
   if ! command -v "$harness" &>/dev/null; then
     print_info_message "$harness not installed — skip"
     continue
@@ -68,10 +68,7 @@ for harness in claude codex pi opencode; do
   package="$(harness_npm_package "$harness")" || exit 1
   before_version="$("$harness" --version 2>/dev/null || true)"
   print_action_message "Updating $harness ($package) via user npm"
-  # Pi's lifecycle scripts stay blocked on refresh as well as acquisition.
-  npm_args=()
-  [[ "$harness" != pi ]] || npm_args+=(--ignore-scripts)
-  if npm update -g "${npm_args[@]}" "$package"; then
+  if npm update -g "$package"; then
     after_version="$("$harness" --version 2>/dev/null || true)"
     if [[ -n "$after_version" ]]; then
       print_success_message "$harness checked: $before_version -> $after_version"

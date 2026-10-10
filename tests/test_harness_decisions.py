@@ -72,7 +72,7 @@ Signed-By: /usr/share/keyrings/chatgpt-archive-keyring.gpg
         decide(["chatgpt_apt_source_valid", source])
         decide(["chatgpt_apt_source_valid", source.replace("stable", "testing")], ok=False)
         decide(["chatgpt_apt_source_valid", source + "Trusted: yes\n"], ok=False)
-        for entrypoint in ("setup-claude.sh", "setup-codex.sh", "setup-pi.sh", "setup-opencode.sh"):
+        for entrypoint in ("setup-claude.sh", "setup-codex.sh", "setup-opencode.sh"):
             decide(["require_workstation_entrypoint", "ubuntu", entrypoint])
     spec = importlib.util.spec_from_file_location("harness_config", ROOT / "scripts/harness-config.py")
     module = importlib.util.module_from_spec(spec)

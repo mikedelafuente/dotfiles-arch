@@ -51,6 +51,14 @@ def check(mode):
             return result
 
         commit(primary)
+        if mode == "legacy-broken":
+            state.unlink()
+            result = run("deploy", "--source", str(primary), ok=False)
+            assert "Broken models-store link preserved" in result.stderr
+            assert (agent / "models-store.json").is_symlink()
+            assert (agent / "auth.json").read_text() == '{"credential":"private"}\n'
+            assert not (home / ".local/share/workstation/config").exists()
+            return
         run("deploy", "--source", str(primary))
         live = home / ".claude/skills/example/SKILL.md"
         active = home / ".local/share/workstation/config"
@@ -148,6 +156,6 @@ def check(mode):
 
 
 if __name__ == "__main__":
-    for case in ("clean", "edited", "override", "conflict", "preregistered", "dual-edits", "unregistered", "rule-edited", "model-edited"):
+    for case in ("clean", "edited", "override", "conflict", "preregistered", "dual-edits", "unregistered", "rule-edited", "model-edited", "legacy-broken"):
         check(case)
     print("PASS: registered source moves preserve baselines, edits, overrides, conflicts, legacy state and rollback")
