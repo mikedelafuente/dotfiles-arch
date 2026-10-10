@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "human-review-observation",
+  "subject": {
+    "path": "docs/dark-factory/proposals/skills-pi-split-v1/proposal.json",
+    "revision": 2,
+    "sha256": "e5c654c83bf860528a8f1e7cbf4377a11509ef7553cd110fec24fa2d1ddc9d34"
+  },
+  "human_statement": "This looks good.",
+  "source": "Direct human message in current Codex conversation",
+  "recorded_at": "2026-10-10T00:55:20Z",
+  "interpretation": "Human confirms the presented scope and proposal.",
+  "verification_status": "pending accepted trusted verifier",
+  "acceptance_receipt": null,
+  "execution_started": false,
+  "note": "Preserves actual human evidence without inventing an authenticated factory receipt. Idea invocation starts no implementation, commit, publication or deployment."
+}
