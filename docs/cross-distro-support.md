@@ -1,6 +1,6 @@
 # Arch and Ubuntu workstation support
 
-Analysis recorded 2026-10-08; synthesized into [the implementation spec](specs/arch-ubuntu-workstations.md), published as [#139](https://github.com/mikedelafuente/dotfiles-arch/issues/139). This document records analysis and interview decisions; distro support has not been implemented or validated on Ubuntu.
+Analysis recorded 2026-10-08; synthesized into [the implementation spec](specs/arch-ubuntu-workstations.md), published as [#139](https://github.com/mikedelafuente/dotfiles-linux/issues/139). This document records analysis and interview decisions; distro support has not been implemented or validated on Ubuntu.
 
 ## Accepted requirements
 

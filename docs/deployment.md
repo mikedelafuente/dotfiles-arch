@@ -84,6 +84,27 @@ stable `config`, rather than relying on indefinite retention of an old path.
 
 ## Source moves and ownership handoffs
 
+### Repository rename
+
+The GitHub repository is now `mikedelafuente/dotfiles-linux`. Existing checkout
+folders may retain their old name. Keep a recorded origin unchanged until an
+explicit deployment is intended: GitHub redirects the old repository URL, while
+DFA compares the local origin against installed provenance.
+
+To adopt the new origin and deploy after reviewing or committing source changes:
+
+```bash
+cd "$(dfa-deploy source)"
+git remote set-url origin git@github.com:mikedelafuente/dotfiles-linux.git
+dfa-deploy rebind "$PWD" --accept-origin-change
+```
+
+Rebind deploys source files; it is not a metadata-only operation. The rename
+preserves `dfa-*` commands, `DOTFILES_ARCH`, `dotfiles-arch-lib.sh`, existing
+configuration/data paths and ownership markers.
+
+### Source rebinding
+
 Restore an unavailable checkout or run `dfa-deploy rebind /actual/checkout`.
 Rebind verifies Git ancestry and origin; a renamed origin requires
 `--accept-origin-change`. For extra roots, add `--source-id ID`. Never discover a

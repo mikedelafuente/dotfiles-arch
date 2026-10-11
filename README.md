@@ -1,4 +1,11 @@
-# dotfiles-arch
+# dotfiles-linux
+
+Linux workstation dotfiles and setup for Arch Linux and Ubuntu.
+
+The repository was renamed from `dotfiles-arch`. Existing checkout folders,
+`dfa-*` commands, configuration paths and managed ownership markers remain
+compatible; the rename does not migrate workstation state. See
+[origin changes and existing checkouts](docs/deployment.md#repository-rename).
 
 ## Installed DFA copies
 
@@ -157,7 +164,7 @@ Paths use `$HOME` — different usernames on other machines are fine.
 
 ```bash
 dfa-daily                         # dfa-update-repos + dfa-migrate + dfa-update-system + dfa-sync-extensions + dfa-sync-skills + dfa-sync-rules + dfa-sync-harness-agents (edit ~/.local/bin/dfa-daily)
-                              # if dfa-update-repos pulls new dotfiles-arch commits, runs dfa-sync-dotfiles and restarts once
+                              # if dfa-update-repos pulls new dotfiles-linux commits, runs dfa-sync-dotfiles and restarts once
 dfa-weekly                        # dfa-daily + forced updates + orphan preview + native NinjaOne health check
 dfa-install-ninjaone             # standalone, work machines: hidden vendor URL prompt (native Ubuntu DEB / Arch repackaging)
 dfa-update-ninjaone              # weekly health/repair for owned installs; IT-managed agents checked read-only
@@ -255,7 +262,7 @@ Bootstrap then: prepares Arch multilib/yay when applicable → runs a cooldown-g
 On any machine that already has this repo:
 
 ```bash
-cd /path/to/dotfiles-arch
+cd /path/to/dotfiles-linux
 bash scripts/sync.sh
 ```
 
@@ -521,7 +528,7 @@ Neovim: leader is **Space** — full map in `~/.nvim-cheatsheet.md` (`vimcheat`)
 ## Repo map
 
 ```
-dotfiles-arch/
+dotfiles-linux/
 ├── README.md              ← you are here
 ├── REFRESHER.md           ← short memory jogger
 ├── PACKAGES.md            ← what each installed package is for (`packages`)
@@ -592,12 +599,12 @@ source. It displays the current setting; changes apply on the next skill sync.
 
 ### Shared agent config in cloud checkouts
 
-Keep this repository as a second checkout (for example `/workspace/dotfiles-arch`)
+Keep this repository as a second checkout (for example `/workspace/dotfiles-linux`)
 next to the working project. Add this command to the existing cloud setup script,
 keeping the project's existing setup commands:
 
 ```bash
-bash /workspace/dotfiles-arch/scripts/install-cloud-agent-config.sh --source /workspace/skills --home "$HOME"
+bash /workspace/dotfiles-linux/scripts/install-cloud-agent-config.sh --source /workspace/skills --home "$HOME"
 ```
 
 Requires Bash, Python 3.8+, and ordinary shell utilities (`awk`, `mktemp`, `whoami`);

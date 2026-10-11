@@ -1,6 +1,6 @@
 # Ubuntu source and updater audit
 
-Evidence reviewed 2026-10-09 for [#162](https://github.com/mikedelafuente/dotfiles-arch/issues/162).
+Evidence reviewed 2026-10-09 for [#162](https://github.com/mikedelafuente/dotfiles-linux/issues/162).
 The [final source/update matrix](../PACKAGES.md#final-ubuntu-source--update-audit)
 records every selected shared/work/personal/devcontainer application and the
 opt-in endpoint-agent boundary. Per-family package tables there contain the

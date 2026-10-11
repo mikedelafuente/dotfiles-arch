@@ -39,7 +39,7 @@ welcome
 aliases
 
 # Bring this machine up to date with the repo
-cd ~/repos/dotfiles-arch   # or wherever you cloned it
+cd ~/repos/dotfiles-linux   # or wherever you cloned it
 bash scripts/sync.sh
 ```
 
@@ -171,7 +171,7 @@ Shared stack: **Adwaita Sans** (UI/title), **JetBrainsMono Nerd Font** (mono / K
 ### …sync after I changed the repo on another machine
 
 ```bash
-cd /path/to/dotfiles-arch
+cd /path/to/dotfiles-linux
 git pull
 bash scripts/sync.sh
 ```
