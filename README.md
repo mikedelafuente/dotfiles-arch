@@ -312,6 +312,8 @@ resource route. Native package loading and installed-copy loading are mutually e
 
 Register the source manually when ready for a separately authorized live cutover:
 
+Source registration and resource sync work on both Arch and Ubuntu.
+
 ```bash
 dfa-sync-sources add /path/to/skills --type standard
 ```

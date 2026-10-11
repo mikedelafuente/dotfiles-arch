@@ -736,6 +736,7 @@ detect_workstation_distro() {
 require_workstation_entrypoint() {
   local distro="$1" entrypoint="${2##*/}"
   case "$distro:$entrypoint" in
+    ubuntu:sync-sources.sh) return 0 ;;
     ubuntu:bootstrap.sh|ubuntu:sync.sh|ubuntu:run-profile-setup.sh|ubuntu:link-dotfiles.sh) return 0 ;;
     ubuntu:v1-to-v2-migration.sh|ubuntu:v2-to-v3-migration.sh|ubuntu:v3-to-v4-migration.sh) return 0 ;;
     ubuntu:setup-ninjaone.sh|ubuntu:update-ninjaone.sh|ubuntu:uninstall-ninjaone.sh) return 0 ;;
