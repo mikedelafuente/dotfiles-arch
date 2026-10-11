@@ -3,6 +3,10 @@
 DISCORD_BOOTSTRAP_VERSION=1.0.161
 DISCORD_BOOTSTRAP_SHA256=1a486a0cd0dc0e79b952b14dd5e361a8614dc28d1d371cd00ebf37a2ad0ce63d
 
+personal_snap_stable_channel() {
+  [[ "$1" =~ ^latest/stable(/[A-Za-z0-9._-]+)?$ ]]
+}
+
 # Supplied-fact seam: distro, app, source, launcher owner, duplicate, package version.
 personal_app_selection() {
   local distro="$1" app="$2" source="$3" launcher="$4" alternate="$5" version="$6" package owner
@@ -80,7 +84,7 @@ personal_app_installed_selection() {
         || ( -L "$path" && "$(readlink "$path")" == "/snap/bin/$app" ) \
         || ( -z "$path" && -x "/snap/bin/$app" ) \
         || ( "$app" == firefox && "$path" == /usr/bin/firefox && "$version" == *snap* ) ]]; then launcher=owned; fi
-      [[ "$(awk -v app="$app" '$1 == app {print $4}' <<<"$snaps")" == latest/stable ]] || return 1
+      personal_snap_stable_channel "$(awk '$1 == "tracking:" {print $2}' <<<"$info")" || return 1
     fi
   fi
   if command -v flatpak &>/dev/null; then

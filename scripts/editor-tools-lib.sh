@@ -2,8 +2,13 @@
 # Explicit editor/container CLI recipes. Selection consumes facts separately from setup.
 editor_tool_recipe() {
   case "$1" in
-    nvim) echo 'neovim 0.12.0 neovim/neovim-releases' ;;
-    tree-sitter) echo 'tree-sitter-cli 0.26.1 tree-sitter/tree-sitter' ;;
+    nvim) echo 'neovim 0.11.3 neovim/neovim-releases' ;;
+    tree-sitter)
+      if [[ "${EDITOR_NVIM_VERSION:-}" == 0.11.* ]]; then
+        echo 'tree-sitter-cli 0.25.0 tree-sitter/tree-sitter'
+      else
+        echo 'tree-sitter-cli 0.26.1 tree-sitter/tree-sitter'
+      fi ;;
     tmux) echo 'tmux 3.2.0 -' ;;
     lazydocker) echo 'lazydocker 0.20.0 jesseduffield/lazydocker' ;;
     minikube) echo 'minikube 1.0.0 kubernetes/minikube' ;;
@@ -21,6 +26,14 @@ editor_tool_selection() {
   case "$distro" in arch|ubuntu) ;; *) return 1 ;; esac
   recipe="$(editor_tool_recipe "$app")" || return 1
   read -r _package minimum repo <<<"$recipe"
+  if [[ "$app" == tree-sitter && "${EDITOR_NVIM_VERSION:-}" == 0.11.* ]]; then
+    local compatible_version="$installed"
+    [[ "$owner" != none ]] || compatible_version="$candidate"
+    [[ "$compatible_version" == 0.25.* ]] || {
+      print_error_message 'Neovim 0.11 requires tree-sitter CLI 0.25.x; resolve its source explicitly' >&2
+      return 1
+    }
+  fi
   case "$owner" in
     native)
       core_cli_version_at_least "$installed" "$minimum" || {
@@ -189,6 +202,10 @@ editor_native_candidate() {
 ensure_editor_tool() {
   local app="$1" package minimum _repo recipe owner=none version='' candidate='' launcher resolved selected
   local root="$USER_HOME_DIR/.local/share/dotfiles-arch/editor-tools/$app"
+  if [[ "$app" == tree-sitter ]]; then
+    EDITOR_NVIM_VERSION="$(editor_installed_version nvim "$(type -P nvim)")" || return 1
+    export EDITOR_NVIM_VERSION
+  fi
   recipe="$(editor_tool_recipe "$app")" || return 1
   read -r package minimum _repo <<<"$recipe"
   launcher="$(type -P "$app" || true)"
@@ -222,6 +239,10 @@ ensure_editor_tool() {
   fi
   selected="$(editor_tool_selection "$WORKSTATION_DISTRO" "$app" "$owner" "$version" "$candidate")" || return 1
   if [[ "$selected" == upstream ]]; then
+    if [[ "$app" == tree-sitter && "$EDITOR_NVIM_VERSION" == 0.11.* ]]; then
+      print_info_message 'Retaining verified tree-sitter CLI 0.25.x for Neovim 0.11 compatibility'
+      return 0
+    fi
     install_editor_release "$app" || return 1
   else
     ensure_native_pkgs "$package" || return 1
@@ -237,6 +258,30 @@ ensure_editor_tool() {
 }
 
 # Stage and validate a full release before switching the command/runtime together.
+editor_https_fetch() (
+  local attempt status response
+  response="$(mktemp)" || return 1
+  trap 'rm -f "$response"' EXIT
+  for attempt in 1 2 3; do
+    if curl --proto '=https' --proto-redir '=https' --tlsv1.2 --connect-timeout 10 -fsSL "$@" >"$response"; then
+      cat "$response"
+      return $?
+    else
+      status=$?
+    fi
+    case "$status" in
+      5|6|7|28) ;;
+      *) return "$status" ;;
+    esac
+    if [[ "$attempt" == 3 ]]; then
+      print_error_message 'Editor release download failed after three attempts; check DNS/network access and retry setup' >&2
+      return "$status"
+    fi
+    print_warning_message "Transient editor download failure ($status); retrying ($attempt/3)" >&2
+    sleep 2 || return 1
+  done
+)
+
 install_editor_release() (
   local app="$1" _package _minimum repo recipe metadata release version url digest stage current tag
   local base="$USER_HOME_DIR/.local/share/dotfiles-arch/editor-tools"
@@ -250,12 +295,12 @@ install_editor_release() (
   recipe="$(editor_tool_recipe "$app")" || return 1
   read -r _package _minimum repo <<<"$recipe"
   if [[ "$app" == kubectl ]]; then
-    tag="$(curl --proto '=https' --tlsv1.2 -fsSL https://dl.k8s.io/release/stable.txt)" || return 1
+    tag="$(editor_https_fetch https://dl.k8s.io/release/stable.txt)" || return 1
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-    digest="$(curl --proto '=https' --tlsv1.2 -fsSL "https://dl.k8s.io/release/$tag/bin/linux/amd64/kubectl.sha256")" || return 1
+    digest="$(editor_https_fetch "https://dl.k8s.io/release/$tag/bin/linux/amd64/kubectl.sha256")" || return 1
     release="$(kubectl_release_asset "$tag" "$digest")" || return 1
   else
-    metadata="$(curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$repo/releases/latest")" || return 1
+    metadata="$(editor_https_fetch "https://api.github.com/repos/$repo/releases/latest")" || return 1
     release="$(editor_release_asset "$app" "$metadata")" || {
       print_error_message "No verified compatible stable $app release; preserved"; return 1;
     }
@@ -273,7 +318,7 @@ install_editor_release() (
   mkdir -p "$base" || return 1
   stage="$(mktemp -d "$base/.${app}.XXXXXX")" || return 1
   trap 'rm -rf "$stage"' EXIT
-  curl --proto '=https' --tlsv1.2 -fsSL "$url" -o "$stage/artifact" || return 1
+  editor_https_fetch "$url" -o "$stage/artifact" || return 1
   printf '%s  %s\n' "$digest" "$stage/artifact" | sha256sum -c - || return 1
   if [[ "$app" == ollama ]]; then
     zstd -d "$stage/artifact" -o "$stage/ollama.tar" || return 1

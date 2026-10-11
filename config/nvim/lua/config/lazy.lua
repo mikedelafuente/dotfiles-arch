@@ -18,6 +18,8 @@ vim.opt.rtp:prepend(lazypath)
 
 -- Load plugins from lua/plugins/ directory
 require("lazy").setup("plugins", {
+  lockfile = vim.fn.stdpath("config")
+    .. (vim.fn.has("nvim-0.12") == 1 and "/lazy-lock.json" or "/lazy-lock-0.11.json"),
   defaults = {
     lazy = false,  -- Load plugins eagerly by default
   },

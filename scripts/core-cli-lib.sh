@@ -84,6 +84,15 @@ link_core_cli_config() {
   [[ -L "$target" ]] || ln -s "$source" "$target"
 }
 
+# Native executable paths are explicit; Ubuntu iw is an administrative command.
+core_cli_expected_path() {
+  if [[ "$1:$2" == ubuntu:iw ]]; then
+    printf '%s\n' /usr/sbin/iw
+  else
+    readlink -m "/usr/bin/$3"
+  fi
+}
+
 # Install one explicit native recipe; preflight launchers and version before mutation.
 ensure_core_cli() {
   local app="$1" package command owner minimum launcher expected installed=false version
@@ -92,7 +101,7 @@ ensure_core_cli() {
   read -r package command owner minimum <<<"$recipe"
   native_package_installed "$package" && installed=true
   if [[ "$command" != - ]]; then
-    expected="$(readlink -m "/usr/bin/$command")"
+    expected="$(core_cli_expected_path "$WORKSTATION_DISTRO" "$app" "$command")" || return 1
     launcher="$(type -P "$command" || true)"
     [[ -z "$launcher" ]] || launcher="$(readlink -f "$launcher")"
     if ! core_cli_source_allowed "$installed" "$launcher" "$expected" \

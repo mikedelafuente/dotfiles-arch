@@ -30,8 +30,8 @@ A clean, beginner-friendly Neovim setup with LSP support for multiple programmin
 
 These are automatically installed by `setup-neovim.sh`:
 
-- Neovim >= 0.12.0 (stable)
-- tree-sitter CLI >= 0.26.1 (stable; native or verified upstream, never npm)
+- Neovim >= 0.11.3 (stable); 0.11 uses pinned Treesitter compatibility plugins
+- tree-sitter CLI 0.25.x with Neovim 0.11; >= 0.26.1 with Neovim 0.12+
 - Git
 - A C compiler (gcc/clang)
 - Node.js via NVM (run `setup-node.sh` first; setup loads an existing NVM)

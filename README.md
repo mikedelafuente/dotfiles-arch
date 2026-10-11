@@ -136,8 +136,10 @@ sources still report conflicts; no duplicate npm install is added.
 
 The shared editor slice supports `bash scripts/setup-neovim.sh` and
 `bash scripts/setup-dev.sh` on both hosts. Run Node setup first, then load the shared
-shell so `USER_HOME_DIR/.local/bin` is on PATH. Neovim **0.12+**, tree-sitter CLI
-**0.26.1+**, and tmux **3.2+** are required; `dev --tmux` checks these before
+shell so `USER_HOME_DIR/.local/bin` is on PATH. Neovim **0.11.3+** and tmux **3.2+**
+are required. Neovim 0.11 uses pinned Treesitter compatibility plugins and CLI
+**0.25.x**; Neovim 0.12+ uses the current plugins and CLI **0.26.1+**.
+`dev --tmux` checks these before
 recreating a session. Compatible native tools keep their update owner; missing
 tools use verified stable upstream releases when native candidates are too old
 or absent. Existing incompatible/unknown sources and conflicting user configs

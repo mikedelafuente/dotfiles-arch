@@ -47,6 +47,10 @@ def main():
         decide("personal_app_selection", "ubuntu", "firefox", "apt", "owned", "false", "157.0.1", expected="firefox apt")
         decide("personal_app_selection", "ubuntu", "firefox", "snap", "owned", "false", "157.0.1", expected="firefox snap")
         decide("personal_app_selection", "ubuntu", "firefox", "self", "owned", "false", "157.0.1", expected="firefox self")
+        for channel in ("latest/stable", "latest/stable/ubuntu-26.04"):
+            decide("personal_snap_stable_channel", channel)
+        for channel in ("latest/beta", "latest/stable/…", "latest/stable/"):
+            decide("personal_snap_stable_channel", channel, ok=False)
         digest = "a" * 64
         sums = digest + "  linux-x86_64/en-US/firefox-157.0.1.tar.xz"
         decide("firefox_release_asset", "157.0.1", sums, expected="https://archive.mozilla.org/pub/firefox/releases/157.0.1/linux-x86_64/en-US/firefox-157.0.1.tar.xz " + digest)

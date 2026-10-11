@@ -2,7 +2,8 @@
 -- Treesitter Configuration
 -- ============================================================================
 -- Supports both nvim-treesitter `main` (Neovim 0.12+) and legacy `master` checkouts.
--- Prefer `main`; legacy path keeps startup from erroring if Lazy has not updated yet.
+-- Use upstream's frozen master compatibility branch with Ubuntu's Neovim 0.11.
+local modern = vim.fn.has("nvim-0.12") == 1
 
 local parsers = {
   "bash",
@@ -74,10 +75,15 @@ end
 return {
   {
     "nvim-treesitter/nvim-treesitter",
-    branch = "main",
+    branch = modern and "main" or "master",
+    commit = not modern and "cf12346a3414fa1b06af75c79faebe7f76df080a" or nil,
     lazy = false,
     build = ":TSUpdate",
     config = function()
+      if not modern then
+        setup_legacy()
+        return
+      end
       local ok, ts = pcall(require, "nvim-treesitter")
       if ok and type(ts.install) == "function" then
         setup_main()
@@ -94,7 +100,8 @@ return {
 
   {
     "nvim-treesitter/nvim-treesitter-textobjects",
-    branch = "main",
+    branch = modern and "main" or "master",
+    commit = not modern and "5ca4aaa6efdcc59be46b95a3e876300cfead05ef" or nil,
     lazy = false,
     dependencies = { "nvim-treesitter/nvim-treesitter" },
     config = function()
