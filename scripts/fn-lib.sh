@@ -950,8 +950,8 @@ safe_system_upgrade() (
       check_personal_app_owners || return $?
       print_action_message "Updating configured APT sources"
       sudo apt-get update --error-on=any || return $?
-      check_claude_apt_owner || return $?
-      check_chatgpt_apt_owner || return $?
+      check_claude_apt_owner --candidate || return $?
+      check_chatgpt_apt_owner --candidate || return $?
       check_work_app_candidates || return $?
       check_desktop_utility_candidates || return $?
       check_personal_app_candidates || return $?
