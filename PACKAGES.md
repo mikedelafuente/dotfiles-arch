@@ -68,7 +68,7 @@ directly-installed packages are listed; transitive dependencies are not.
 
 ### Shared shell and core CLI distro slice
 
-Implemented for [#143](https://github.com/mikedelafuente/dotfiles-arch/issues/143).
+Implemented for [#143](https://github.com/mikedelafuente/dotfiles-linux/issues/143).
 Standalone `setup-essentials.sh`, `setup-bash.sh`, `setup-git.sh`,
 `setup-github-cli.sh`, and `setup-node.sh` support rolling Arch and Ubuntu 26.04
 on x86_64/amd64. The shared bootstrap/sync entrypoints support both distros; runtime validation remains unverified.
@@ -163,7 +163,7 @@ source feasibility, not successful workstation installation.
 
 ### Neovim and tmux distro slice
 
-Implemented for [#144](https://github.com/mikedelafuente/dotfiles-arch/issues/144).
+Implemented for [#144](https://github.com/mikedelafuente/dotfiles-linux/issues/144).
 Standalone `setup-neovim.sh` and `setup-dev.sh` support rolling Arch and Ubuntu
 26.04 on amd64/x86_64. Shared bootstrap/sync supports both distros.
 
@@ -274,7 +274,7 @@ See the final Ubuntu source/update audit below for all selected owners.
 
 ### Maintenance distro slice
 
-Implemented for [#142](https://github.com/mikedelafuente/dotfiles-arch/issues/142).
+Implemented for [#142](https://github.com/mikedelafuente/dotfiles-linux/issues/142).
 
 | Installed apps / host | App source | Update owner |
 |-----------------------|------------|--------------|
@@ -347,7 +347,7 @@ are run for validation.
 
 ### Shared appearance sources and update owners
 
-Implemented for [#150](https://github.com/mikedelafuente/dotfiles-arch/issues/150).
+Implemented for [#150](https://github.com/mikedelafuente/dotfiles-linux/issues/150).
 `setup-fonts.sh` supports rolling Arch and Ubuntu 26.04; GNOME's appearance
 acquisition uses `ensure_gnome_appearance` from `scripts/appearance-lib.sh`.
 Desktop settings/extension compatibility remains a separate slice.
@@ -602,7 +602,7 @@ no OS-changing workflows, networked tests or VMs are run.
 
 ### Container source and update contract
 
-Implemented for [#148](https://github.com/mikedelafuente/dotfiles-arch/issues/148).
+Implemented for [#148](https://github.com/mikedelafuente/dotfiles-linux/issues/148).
 Standalone `setup-docker.sh`, `setup-minikube.sh` and `setup-devcontainer.sh`
 support rolling Arch and Ubuntu 26.04 x86_64/amd64. The shared profile runner
 keeps Docker/Kubernetes shared and host prerequisites conditional on the additive
@@ -664,7 +664,7 @@ No setup/update/service workflows, networked tests or VM provisioning are run.
 
 ### Desktop utility sources and update owners
 
-Implemented for [#152](https://github.com/mikedelafuente/dotfiles-arch/issues/152).
+Implemented for [#152](https://github.com/mikedelafuente/dotfiles-linux/issues/152).
 The existing shared profile runner selects all five apps on both hosts; standalone
 setup paths are enabled on Ubuntu 26.04 amd64. User preferences, Obsidian vaults,
 database credentials, Postman collections and login state remain user-owned.
@@ -903,7 +903,7 @@ or `/to-tickets`, and use `/bro` for a plain explanation. Skill invocations are
 agent prompts, not shell commands. See [examples](https://github.com/mikedelafuente/skills/blob/main/skills/mikedelafuente/agent-council/references/examples.md).
 Personal `/ask-mike`, `/council-handoff spec|tickets`, `/build-with-ponytail`, and
 `/review-changes` compose unchanged upstream skills without additional packages.
-`dfa-sync-skills` discovers nested skill folders and gives dotfiles-arch final
+`dfa-sync-skills` discovers nested skill folders and gives dotfiles-linux final
 priority. `dfa-sync-sources add <path> --overwritable true` allows duplicate
 replacement from that source; false is the default and blocks replacement before
 links change; see [source groups and updates](https://github.com/mikedelafuente/skills/blob/main/skills/README.md).
@@ -967,7 +967,7 @@ explicitly; do not silently migrate a managed/work installation.
 
 ### Agent harnesses and ChatGPT distro slice
 
-Implemented for [#146](https://github.com/mikedelafuente/dotfiles-arch/issues/146).
+Implemented for [#146](https://github.com/mikedelafuente/dotfiles-linux/issues/146).
 
 | App | Arch source | Ubuntu 26.04 amd64 source | Update owner |
 | --- | --- | --- | --- |
@@ -1125,7 +1125,7 @@ verification. Vendor Linux support is feasibility evidence, not runtime parity.
 
 ### NinjaOne standalone lifecycle — Arch / Ubuntu 26.04
 
-Implemented for [#156](https://github.com/mikedelafuente/dotfiles-arch/issues/156).
+Implemented for [#156](https://github.com/mikedelafuente/dotfiles-linux/issues/156).
 `dfa-install-ninjaone` remains standalone and work-profile gated (`--force` overrides
 that profile check). Bootstrap/profile setup never enrolls security agents.
 
@@ -1280,7 +1280,7 @@ runtime, and Mullvad daemon/account/VPN/DNS/kill-switch behavior.
 
 ## Final Ubuntu source / update audit
 
-Audited 2026-10-09 for [#162](https://github.com/mikedelafuente/dotfiles-arch/issues/162),
+Audited 2026-10-09 for [#162](https://github.com/mikedelafuente/dotfiles-linux/issues/162),
 against every selected setup in the single profile runner and opt-in NinjaOne.
 The detailed per-family source tables above remain the package-purpose catalog.
 [Evidence and disabled-update handling](docs/ubuntu-source-update-audit.md) explain
