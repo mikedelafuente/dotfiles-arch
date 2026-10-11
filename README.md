@@ -44,6 +44,13 @@ This README is the starting point. Detailed install notes live in [NOTES.md](NOT
 
 Ubuntu starts from an installed GNOME desktop with sudo and permission to add software sources. Run `bash scripts/bootstrap.sh` for initial setup, `bash scripts/sync.sh` to refresh, or an individual setup script to repair one app. Selected app sources, requirements, and update owners are in [PACKAGES.md](PACKAGES.md) and the [source/update audit](docs/ubuntu-source-update-audit.md). Install/update/desktop/hardware runtime remains unverified; see the [integration validation inventory](docs/ubuntu-integration-validation.md).
 
+On the first Ubuntu install, bootstrap moves existing regular files at the managed
+top-level dotfile paths (including `.bashrc`, `.profile`, `.inputrc` and `.tmux.conf`)
+into a private `~/.dfa-bootstrap-backup.*` directory before deployment. It prints
+each backup path. Review these backups for personal settings; they are not merged
+automatically. Existing symlinks, directories and application configuration conflicts
+remain protected. Later bootstrap runs with an installed deployment do not move files.
+
 Standalone Kitty: from the checkout, run `bash scripts/setup-kitty.sh`.
 It uses the native `kitty` package, links only Kitty's shared config/theme, and
 retains compatible native installations. Conflicting launchers or user config

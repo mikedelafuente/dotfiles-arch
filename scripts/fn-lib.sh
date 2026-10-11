@@ -1267,3 +1267,24 @@ refresh_font_cache() {
     return 1
   fi
 }
+
+backup_ubuntu_bootstrap_dotfiles() {
+  # Only first-install Ubuntu bootstrap adopts regular top-level dotfiles.
+  # Leave symlinks/directories to deployment's ownership checks.
+  [[ "${WORKSTATION_DISTRO:-}" == ubuntu ]] || return 0
+  local config="$USER_HOME_DIR/.local/share/workstation/config"
+  [[ ! -e "$config" && ! -L "$config" ]] || return 0
+  local name target backup_dir=""
+  local -a files=(.bashrc .inputrc .profile .gitignore_global .nvim-cheatsheet.md
+                  .welcome.md .packages.md .tmux.conf)
+  for name in "${files[@]}"; do
+    target="$USER_HOME_DIR/$name"
+    [[ -f "$target" && ! -L "$target" ]] || continue
+    if [[ -z "$backup_dir" ]]; then
+      backup_dir="$(mktemp -d "$USER_HOME_DIR/.dfa-bootstrap-backup.XXXXXXXX")" || return 1
+      print_info_message "Preserving existing Ubuntu dotfiles in $backup_dir"
+    fi
+    mv -- "$target" "$backup_dir/$name" || return 1
+    print_info_message "Backed up $target to $backup_dir/$name"
+  done
+}

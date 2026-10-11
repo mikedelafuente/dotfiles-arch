@@ -179,6 +179,7 @@ ensure_personal_app() {
       sudo add-apt-repository --yes --component multiverse || return 1
       sudo apt-get update --error-on=any || return 1
       check_steam_candidates || return 1
+      ensure_ubuntu_steam_nvidia_libraries || return 1
       ensure_native_pkgs steam-installer steam-libs-i386:i386 || return 1
       if ! type -P steam &>/dev/null; then
         [[ -x /usr/games/steam && ":$PATH:" == *":$USER_HOME_DIR/.local/bin:"* ]] || return 1
