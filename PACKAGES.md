@@ -1206,6 +1206,11 @@ or replaces unrelated VPN/browser installations. No new command or config key is
 
 Steam setup adds i386 if missing and enables Ubuntu multiverse idempotently with
 `add-apt-repository`; universe and native amd64/i386 indexes must be available.
+Before installing Steam, bootstrap/sync adds `libnvidia-gl-<branch>[-server]:i386`
+when the corresponding amd64 NVIDIA graphics library is installed. Its version
+must match the existing amd64 library; missing candidates, conflicting branches
+or mismatched installed libraries fail with a diagnostic instead of replacing
+the driver. These additional libraries use the native APT update owner.
 Candidate metadata is cross-checked against Ubuntu `resolute` release indexes,
 including official update/security/backport pockets and local Ubuntu mirrors.
 Unexpected pinned candidates or source architecture restrictions fail with a

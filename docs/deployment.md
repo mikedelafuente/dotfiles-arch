@@ -70,6 +70,12 @@ foreign symlinks and redirected parents. Legacy directory links must not hide
 unknown descendants. Installed files inside blue/green are disposable; put
 unmanaged files outside those folders.
 
+First-install Ubuntu bootstrap explicitly relocates existing regular top-level
+managed dotfiles to a private `~/.dfa-bootstrap-backup.*` directory and reports
+each move before deployment. This bootstrap-only exception leaves symlinks,
+directories and application configuration untouched. It does not run once a
+deployment config exists, and deployment/sync retain their normal ownership checks.
+
 Activation journals the old pointer and home links before switching. Recovery
 restores incomplete activations; after a committed switch it finishes cleanup.
 `dfa-deploy recover` uses the same exclusive lock and preserves foreign link or

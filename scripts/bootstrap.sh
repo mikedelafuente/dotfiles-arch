@@ -227,6 +227,7 @@ else
   ensure_native_pkgs python3 || exit 1
 fi
 # Preserve/migrate configuration before setup scripts can create checkout links.
+backup_ubuntu_bootstrap_dotfiles || exit 1
 bash "$DF_SCRIPT_DIR/link-dotfiles.sh" "$(format_setup_profiles)" || exit 1
 DF_SCRIPT_DIR="$(readlink -f "$USER_HOME_DIR/.local/share/workstation/config")/scripts"
 export DF_SCRIPT_DIR

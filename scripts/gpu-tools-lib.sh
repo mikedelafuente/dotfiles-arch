@@ -37,6 +37,57 @@ has_nvidia_packages() {
 
 nvidia_driver_packages() { gpu_installed_nvidia_packages modules; }
 
+gpu_nvidia_module_loaded() { [[ -e /proc/driver/nvidia/version ]]; }
+
+# Select from installed amd64 graphics libraries, retaining the branch/server flavor.
+ubuntu_steam_nvidia_library() {
+  awk '
+    $2 == "amd64" && $4 == "ok" && $5 == "installed" {
+      sub(/:amd64$/, "", $1)
+      if ($1 ~ /^libnvidia-gl-[0-9]+(-server)?$/) {name=$1; version=$3; count++}
+    }
+    END {if (count == 1) print name ":i386", version; else if (count > 1) exit 1}
+  ' <<<"$1"
+}
+
+ensure_ubuntu_steam_nvidia_libraries() {
+  [[ "${WORKSTATION_DISTRO:-}" == ubuntu ]] || return 0
+  local records selected package version candidate installed stack
+  records="$(dpkg-query -W -f='${binary:Package} ${Architecture} ${Version} ${db:Status-Eflag} ${db:Status-Status}\n')" || return 1
+  selected="$(ubuntu_steam_nvidia_library "$records")" || {
+    print_error_message 'Steam: multiple installed NVIDIA graphics branches; resolve the conflict first'
+    return 1
+  }
+  if [[ -z "$selected" ]]; then
+    stack="$(gpu_installed_nvidia_packages)" || return 1
+    if [[ -n "$stack" ]] || gpu_nvidia_module_loaded; then
+      print_error_message 'Steam: NVIDIA stack has no identifiable native amd64 graphics library; existing driver preserved'
+      return 1
+    fi
+    return 0
+  fi
+  read -r package version <<<"$selected"
+  if native_package_installed "$package"; then
+    installed="$(dpkg-query -W -f='${Version}' "$package")" || return 1
+    [[ "$installed" == "$version" ]] || {
+      print_error_message "Steam: $package does not match installed amd64 NVIDIA version $version"
+      return 1
+    }
+    return 0
+  fi
+  candidate="$(apt-cache policy "$package")" || return 1
+  candidate="$(awk '$1 == "Candidate:" {print $2}' <<<"$candidate")"
+  [[ "$candidate" == "$version" ]] || {
+    print_error_message "Steam: $package needs version $version; matching i386 candidate unavailable, driver preserved"
+    return 1
+  }
+  print_info_message "Steam: installing matching NVIDIA 32-bit graphics libraries ($package)"
+  ensure_native_pkgs "$package" || return 1
+  native_package_installed "$package" || return 1
+  installed="$(dpkg-query -W -f='${Version}' "$package")" || return 1
+  [[ "$installed" == "$version" ]] || return 1
+}
+
 # A saved true or --install opts in. Existing stacks are never repaired/replaced.
 nvidia_setup_selection() {
   case "$1" in arch|ubuntu) ;; *) return 1 ;; esac
