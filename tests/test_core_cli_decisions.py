@@ -32,6 +32,8 @@ def main():
                 assert result.stdout.strip() == expected, result.stdout
 
         decide("core_cli_recipe ubuntu fd", "fd-find fdfind native 8.0.0")
+        decide("core_cli_expected_path ubuntu iw iw", "/usr/sbin/iw")
+        decide("core_cli_expected_path arch iw iw", "/usr/bin/iw")
         decide("core_cli_recipe arch fd", "fd fd native 8.0.0")
         decide("core_cli_recipe ubuntu github-cli", "gh gh native 2.0.0")
         decide("core_cli_recipe ubuntu glow", "glow glow charm 1.0.0")

@@ -191,6 +191,7 @@ check_claude_apt_owner() (
   stage="$(mktemp -d)" || return 1
   trap 'rm -rf "$stage"' EXIT
   stage_work_app_key claude "$stage" "$key" || return 1
+  [[ "${1:-}" != --source-only ]] || return 0
   work_app_apt_candidate claude "$(apt-cache policy claude-code)" >/dev/null || return 1
 )
 
@@ -294,5 +295,6 @@ check_chatgpt_apt_owner() (
   stage="$(mktemp -d)" || return 1
   trap 'rm -rf "$stage"' EXIT
   stage_work_app_key chatgpt "$stage" "$key" || return 1
+  [[ "${1:-}" != --source-only ]] || return 0
   work_app_apt_candidate chatgpt "$(apt-cache policy chatgpt)" >/dev/null || return 1
 )

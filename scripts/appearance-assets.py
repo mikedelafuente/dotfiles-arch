@@ -56,7 +56,9 @@ def stage(kind, artifact, dest):
                     continue
                 # UNIX zip symlinks and other special files are never extracted.
                 mode = (member.external_attr >> 16) & 0o170000
-                if mode not in (0, 0o100000) or path.parts[0] != THEME:
+                if mode not in (0, 0o100000) or path.parts[0] not in {
+                    THEME, THEME + "-hdpi", THEME + "-xhdpi"
+                }:
                     raise ValueError("Unexpected GTK archive member")
                 relative = path
                 source = archive.open(member)

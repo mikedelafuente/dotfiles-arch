@@ -56,11 +56,18 @@ def main():
             decide("desktop_ide_zed_version", output, ok=False)
         decide("desktop_ide_selection", "fedora", "zed", "none", "", ok=False)
         decide("editor_tool_selection", "ubuntu", "nvim", "none", "", "0.11.6",
-               expected="upstream")
+               expected="native")
+        env["EDITOR_NVIM_VERSION"] = "0.11.6"
+        decide("editor_tool_selection", "ubuntu", "tree-sitter", "native", "0.25.9", "", expected="native")
+        decide("editor_tool_selection", "ubuntu", "tree-sitter", "none", "", "0.25.9", expected="native")
+        decide("editor_tool_selection", "ubuntu", "tree-sitter", "native", "0.26.1", "", ok=False)
+        decide("editor_tool_selection", "ubuntu", "tree-sitter", "none", "", "0.26.1", ok=False)
+        del env["EDITOR_NVIM_VERSION"]
         for distro in ("arch", "ubuntu"):
             decide("editor_tool_selection", distro, "nvim", "native", "0.12.0", "0.12.5",
                    expected="native")
-            decide("editor_tool_selection", distro, "nvim", "native", "0.11.6", "0.12.5", ok=False)
+            decide("editor_tool_selection", distro, "nvim", "native", "0.11.6", "0.12.5", expected="native")
+            decide("editor_tool_selection", distro, "nvim", "native", "0.11.2", "0.12.5", ok=False)
             decide("editor_tool_selection", distro, "tree-sitter", "none", "", "0.25.9",
                    expected="upstream")
             decide("editor_tool_selection", distro, "tree-sitter", "none", "", "0.26.1",

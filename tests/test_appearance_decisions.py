@@ -95,9 +95,20 @@ def main():
         with zipfile.ZipFile(archive, "w") as supplied:
             supplied.writestr(f"{theme}/index.theme", "[Icon Theme]")
             supplied.writestr(f"{theme}/gtk-3.0/gtk.css", "/* data */")
+            supplied.writestr(f"{theme}-hdpi/xfwm4/themerc", "button_offset=9")
+            supplied.writestr(f"{theme}-xhdpi/xfwm4/themerc", "button_offset=12")
         dest = Path(temp) / "gtk"
         stage("gtk", archive, dest)
         assert (dest / theme / "gtk-3.0/gtk.css").read_text() == "/* data */"
+        for bad_path in ("unrelated/gtk.css", "../escape", "/absolute"):
+            with zipfile.ZipFile(archive, "w") as supplied:
+                supplied.writestr(bad_path, "invalid")
+            try:
+                stage("gtk", archive, Path(temp) / "bad-gtk")
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Unexpected GTK root accepted")
 
 
 if __name__ == "__main__":

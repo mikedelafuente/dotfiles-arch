@@ -236,6 +236,14 @@ PY
   link_core_cli_config "$root/current/keymapp" "$USER_HOME_DIR/.local/bin/keymapp" || return 1
 )
 
+desktop_utility_vendor_desktop() {
+  case "$1" in
+    tableplus) printf '%s\n' /opt/tableplus/tableplus.desktop ;;
+    spotify) printf '%s\n' /usr/share/spotify/spotify.desktop ;;
+    *) return 1 ;;
+  esac
+}
+
 ensure_desktop_utility() {
   local app="$1" selection package owner binary desktop root target
   [[ "$app" != keymapp || ( "$EUID" != 0 && -z "${SUDO_USER:-}" ) ]] || {
@@ -245,6 +253,13 @@ ensure_desktop_utility() {
     print_error_message "Required $app source/launcher/update-owner gap; preserved"; return 1;
   }
   read -r package owner <<<"$selection"
+  if [[ "$WORKSTATION_DISTRO:$owner" == ubuntu:apt && ( "$app" == tableplus || "$app" == spotify ) ]]; then
+    desktop="$(desktop_utility_vendor_desktop "$app")" || return 1
+    core_cli_link_allowed "$desktop" "$USER_HOME_DIR/.local/share/applications/$app.desktop" || {
+      print_error_message "$app desktop override conflict; preserved"
+      return 1
+    }
+  fi
   case "$owner" in
     apt) ensure_work_app "$app" || return 1 ;;
     native) ensure_native_pkgs "$package" || return 1 ;;
@@ -303,7 +318,14 @@ ensure_desktop_utility() {
     if [[ "$WORKSTATION_DISTRO" == arch ]]; then
       pacman -Qlq "$package" | grep -E '^/usr/share/applications/[^/]+\.desktop$' >/dev/null || return 1
     else
-      dpkg-query -L "$package" | grep -E '^/usr/share/applications/[^/]+\.desktop$' >/dev/null || return 1
+      if [[ "$app" == tableplus || "$app" == spotify ]]; then
+        desktop="$(desktop_utility_vendor_desktop "$app")" || return 1
+        dpkg-query -L "$package" | grep -Fx "$desktop" >/dev/null || return 1
+        [[ -f "$desktop" ]] || return 1
+        link_core_cli_config "$desktop" "$USER_HOME_DIR/.local/share/applications/$app.desktop" || return 1
+      else
+        dpkg-query -L "$package" | grep -E '^/usr/share/applications/[^/]+\.desktop$' >/dev/null || return 1
+      fi
     fi
   elif [[ "$owner" == snap ]]; then
     compgen -G "/var/lib/snapd/desktop/applications/${app}_*.desktop" >/dev/null || return 1

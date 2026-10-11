@@ -19,6 +19,17 @@ Deployment uses existing Git, Bash syntax checks and native Python 3.11+
 (`python` on Arch, `python3` on Ubuntu); no added dependency is required.
 Native/app acquisition and update owners keep the contracts below.
 
+Ubuntu bootstrap corrections: `iw` resolves to native `/usr/sbin/iw`; TablePlus
+exports its package-owned `/opt/tableplus/tableplus.desktop` through an owned user
+link. Spotify similarly exports `/usr/share/spotify/spotify.desktop`; its APT
+versions retain their Debian epoch. Editor release downloads (including LazyDocker
+in Docker setup) retry DNS, connection and timeout failures up to three attempts,
+then fail with a network diagnostic; verification remains required. Firefox retains official
+Snap stable branches such as `latest/stable/ubuntu-26.04`. GTK staging accepts the
+HDPI variants in the checksum-pinned Catppuccin archive. Harness APT ownership/key
+checks precede index refresh; candidate checks follow it so stale indexes do not
+block an update. No existing source, driver, hold or update policy is replaced.
+
 
 What every package this repo installs is for, and which command or shortcut it powers.
 
@@ -80,7 +91,7 @@ on x86_64/amd64. The shared bootstrap/sync entrypoints support both distros; run
 | Transfers / `curl`, `wget` | `curl`, `wget` | `curl`, `wget` | Native HTTPS/TLS support |
 | Clipboard / `xsel`, `wl-copy`, `wl-paste` | `xsel`, `wl-clipboard` | `xsel`, `wl-clipboard` | XWayland / Wayland clients |
 | Listing / `eza` | `eza` | `eza` | 0.18+ (`--icons=auto`) |
-| Prompt / `starship` | `starship` | [starship](https://packages.ubuntu.com/resolute/starship) | 1.22+; shared palette/modules |
+| Prompt / `starship` | `starship` | [starship](https://packages.ubuntu.com/resolute/starship) | 1.22+; shared palette/modules; bootstrap deploys a config without the unsupported `cpp`/`pixi` modules |
 | Finder / `fzf` | `fzf` | [fzf](https://packages.ubuntu.com/resolute/fzf) | 0.48+ (`--bash`) |
 | Search / `rg` | `ripgrep` | `ripgrep` | 13+ |
 | Finder / `fd` | `fd` | [fd-find](https://packages.ubuntu.com/resolute/fd-find), `fdfind` | 8+; user executable link to `/usr/bin/fdfind` |
@@ -169,8 +180,8 @@ Standalone `setup-neovim.sh` and `setup-dev.sh` support rolling Arch and Ubuntu
 
 | App / commands | Arch source | Ubuntu 26.04 source | Minimum / update owner |
 |----------------|-------------|---------------------|------------------------|
-| Neovim / `nvim`, `v`, `vim`, `dev --tmux` | Compatible native `neovim` preferred | Native 0.11.6 is insufficient; missing installs use [official stable archives](https://github.com/neovim/neovim-releases/releases) | **0.12.0+**; native package owner or managed upstream refresh via `dfa-update-system` |
-| Treesitter / `tree-sitter`, `:TSUpdate` | Compatible native `tree-sitter-cli` preferred | Native 0.25.9 is insufficient; missing installs use [official stable releases](https://github.com/tree-sitter/tree-sitter/releases) | **0.26.1+**; native package owner or managed upstream refresh via `dfa-update-system`; never npm |
+| Neovim / `nvim`, `v`, `vim`, `dev --tmux` | Compatible native `neovim` preferred | Native 0.11.6 uses pinned Treesitter compatibility plugins; missing installs use [official stable archives](https://github.com/neovim/neovim-releases/releases) | **0.11.3+**; native package owner or managed upstream refresh via `dfa-update-system` |
+| Treesitter / `tree-sitter`, `:TSUpdate` | Compatible native `tree-sitter-cli` preferred | Native 0.25.9 supports the Neovim 0.11 compatibility plugins; missing installs use [official stable releases](https://github.com/tree-sitter/tree-sitter/releases) | **0.25.x** with Neovim 0.11; **0.26.1+** with Neovim 0.12+; native package owner or managed upstream refresh via `dfa-update-system`; never npm |
 | tmux / `tmux`, `dev --tmux` | Native `tmux` | Native `tmux` | **3.2+**; native package owner |
 | Git TUI / `lazygit`, `lzg` | Native `lazygit` | Native Universe `lazygit` | **0.40+**; native package owner and existing core CLI ownership checks |
 | Container TUI / `lazydocker`, `lzd` | [Arch Extra `lazydocker`](https://archlinux.org/packages/extra/x86_64/lazydocker/) | Compatible native candidate if available, otherwise [verified official releases](https://github.com/jesseduffield/lazydocker/releases) | **0.20+**; native package owner or managed upstream refresh via `dfa-update-system` |
@@ -188,8 +199,9 @@ Official GitHub release metadata identified stable Neovim **0.12.5**, tree-sitte
 the numeric floors in the [pinned Treesitter contract](https://github.com/nvim-treesitter/nvim-treesitter/blob/8b98b4470eb326f1c7b50dae79f8c963568e5720/README.md);
 runtime compatibility remains unverified. Selection queries the host's configured
 native candidate metadata instead of hardcoding these facts. Unreadable metadata
-fails; refresh native indexes before setup. No PPA, foreign APT suite, plugin
-downgrade, npm generator, or fallback after failed acquisition is added.
+fails; refresh native indexes before setup. No PPA, foreign APT suite, npm generator, or fallback after failed acquisition is added.
+Neovim 0.11 uses separate `lazy-lock-0.11.json` pins for upstream's frozen
+Treesitter `master` compatibility branches; Neovim 0.12+ retains the current pins.
 
 Compatible native tools stay native. Old existing native tools must be updated by
 their owner or explicitly removed/reselected by the operator. Unknown/shadowing
@@ -198,7 +210,7 @@ directory/link ownership fail without source migration or duplicate installation
 Arch updates retain pacman/AUR scanning; dev setup uses official Extra lazydocker
 rather than initiating an AUR install. User config conflicts fail before setup
 writes. Existing per-file repo links, identical copies, and additional user files
-are retained. Plugins and `lazy-lock.json` remain unchanged.
+are retained. The current-plugin `lazy-lock.json` remains unchanged; Neovim 0.11 selects its separate compatibility lockfile.
 
 Managed releases live at
 `USER_HOME_DIR/.local/share/dotfiles-arch/editor-tools/<command>/<version>`, with
@@ -1346,8 +1358,8 @@ that an upstream project can never add a safe updater.
 | tmux | Native `tmux` | APT; no self-update selected | 3.2+ / N |
 | lazygit | Native Universe `lazygit` | APT; no self-update selected | 0.40+ / N |
 | lazydocker | Compatible native candidate, otherwise official verified release | APT or Refresh; no self-update selected | 0.20+ / N, R |
-| Neovim | Compatible native candidate, otherwise official verified stable archive | APT or Refresh; plugin updates do not update Neovim | 0.12+ / N, R |
-| tree-sitter CLI | Compatible native candidate, otherwise official verified release | APT or Refresh; `:TSUpdate` updates parsers only | 0.26.1+ / N, R |
+| Neovim | Compatible native candidate, otherwise official verified stable archive | APT or Refresh; plugin updates do not update Neovim | 0.11.3+ / N, R |
+| tree-sitter CLI | Compatible native candidate, otherwise official verified release | APT or Refresh; `:TSUpdate` updates parsers only | 0.25.x with Neovim 0.11; 0.26.1+ with Neovim 0.12+ / N, R |
 | Zed | Verified stable user archive; native install retained | Genuine in-app binary updater; retained native APT | 1.18+ / K |
 | Stably Orca | Verified official AppImage; existing compatible DEB retained | AppImage genuinely self-updates; DEB Refresh (banner alone does not install) | AppImage/FUSE2 and normalized launchers / K |
 | Claude Code | Signed stable native binary for missing installs | Genuine startup/background and `claude update`; existing npm uses npm maintenance, scoped APT uses APT | New signed source 2.1.207+; native launcher/layout / K |

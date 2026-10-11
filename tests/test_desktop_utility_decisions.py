@@ -44,6 +44,9 @@ def main():
             decide("desktop_utility_selection", "ubuntu", app, "none", "", "true", "", ok=False)
         decide("desktop_utility_selection", "ubuntu", "spotify", "snap", "owned", "false", "1.2.95",
                expected="spotify snap")
+        decide("desktop_utility_vendor_desktop", "spotify", expected="/usr/share/spotify/spotify.desktop")
+        decide("desktop_utility_vendor_desktop", "tableplus", expected="/opt/tableplus/tableplus.desktop")
+        decide("desktop_utility_vendor_desktop", "unknown", ok=False)
         decide("desktop_utility_selection", "ubuntu", "postman", "self", "owned", "false", "11.71.7",
                expected="postman self")
         decide("desktop_utility_selection", "ubuntu", "postman", "self", "owned", "false", "8.0.0", ok=False)
@@ -62,7 +65,7 @@ def main():
             for bad in (source.replace("https:", "http:"), "# " + source, source + "\n" + source,
                         source.replace(f" signed-by=/usr/share/keyrings/{app}.gpg", "")):
                 decide("work_app_apt_key", app, bad, ok=False)
-            version = "1.2.95.453.g0eeebbed" if app == "spotify" else "1.7.0"
+            version = "1:1.2.95.453.g0eeebbed" if app == "spotify" else "1.7.0"
             candidate = f"  Candidate: {version}\n  Version table:\n     {version} 500\n        500 {url} {suite}/{component} amd64 Packages"
             decide("work_app_apt_candidate", app, candidate, expected=version)
             decide("work_app_apt_candidate", app, candidate.replace(url, "https://example.org"), ok=False)

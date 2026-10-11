@@ -28,7 +28,7 @@ See [ADR 0002](adr/0002-shared-arch-ubuntu-workstations.md) and [the glossary](.
 | Package lifecycle | Replace direct distro assumptions in install/status/remove/update operations and both bootstrap/sync orchestrators. Keep AUR scanning Arch-only. |
 | Executable identity | Ubuntu `fd-find` and `bat` use `fdfind` and `batcat`; preserve commands used by scripts and editor configuration, not only interactive aliases. |
 | Zed | Current cleanup removes the official upstream user installation; restrict that cleanup to its Arch package migration. Normalize `zeditor`/`zed` launchers. |
-| Neovim | LSP config uses 0.11+ APIs, but the pinned Treesitter plugin requires Neovim 0.12+ and tree-sitter CLI 0.26.1+. Ubuntu's 0.11.6/0.25.9 tools require a source exception or a shared plugin compatibility pin. |
+| Neovim | Neovim 0.11.3+ retains native ownership. Neovim 0.11 uses frozen Treesitter compatibility pins and CLI 0.25.x; 0.12+ uses current plugins and CLI 0.26.1+. Ubuntu's native 0.11.6/0.25.9 pair is supported. |
 | GNOME | Validate extensions against the installed shell and guard optional schemas. Check Ubuntu default extensions for conflicts with the shared panel/shortcuts. |
 | System configuration | PHP paths, NVIDIA packages, GPU runtimes, font acquisition, Docker dependencies, and NinjaOne packaging need distro-specific handling. |
 | Maintenance | Existing cooldown stamps are Arch-named; port their semantics and preserve existing Arch state. Some updater/setup failures currently get swallowed. |

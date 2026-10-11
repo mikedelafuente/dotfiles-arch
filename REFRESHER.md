@@ -20,7 +20,8 @@ You have been away. This is the short version. Full detail: [README.md](README.m
 
 Arch / Ubuntu 26.04 editor setup: `bash scripts/setup-node.sh`, then
 `bash scripts/setup-neovim.sh` and `bash scripts/setup-dev.sh` with the shared shell
-loaded. `dev --tmux` requires stable Neovim 0.12+, tree-sitter CLI 0.26.1+, tmux 3.2+.
+loaded. `dev --tmux` requires Neovim 0.11.3+ and tmux 3.2+. Neovim 0.11 uses
+pinned compatibility plugins with tree-sitter CLI 0.25.x; Neovim 0.12+ uses CLI 0.26.1+.
 `dfa-update-system --force` refreshes native tools and known managed upstream editor
 releases. Sources/configs are preserved; resolve conflicts explicitly. Runtime
 validation remains unverified; see [the source/update matrix](PACKAGES.md#neovim-and-tmux-distro-slice).

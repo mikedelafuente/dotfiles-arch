@@ -70,11 +70,12 @@ def apt_key(app, text):
 
 
 def package_version(app, version):
+    normalized = re.sub(r"^[0-9]+:", "", version)
     pattern = r"[0-9]+(?:\.[0-9]+)+(?:\.g[a-f0-9]+)?(?:[-+][A-Za-z0-9.]+)?" if app == "spotify" else r"[0-9]+(?:\.[0-9]+)+(?:[-+][A-Za-z0-9.]+)?"
-    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox", "claude", "chatgpt"} or not re.fullmatch(pattern, version):
+    if app not in {"chrome", "slack", "zoom", "tableplus", "spotify", "obsidian", "mullvad", "firefox", "claude", "chatgpt"} or not re.fullmatch(pattern, normalized):
         raise ValueError("missing stable package version")
     minimum = {"slack": (4, 35, 121), "zoom": (6, 7, 5)}.get(app, (0,))
-    numbers = tuple(map(int, re.split(r"[-+]|\.g", version)[0].split(".")))
+    numbers = tuple(map(int, re.split(r"[-+]|\.g", normalized)[0].split(".")))
     if numbers < minimum:
         raise ValueError(f"{app} package version is incompatible; update through selected owner")
     return version

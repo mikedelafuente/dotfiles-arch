@@ -943,8 +943,8 @@ safe_system_upgrade() (
   case "$WORKSTATION_DISTRO" in
     ubuntu)
       [[ "$assume_yes" != true ]] || flags+=(--yes)
-      check_claude_apt_owner || return $?
-      check_chatgpt_apt_owner || return $?
+      check_claude_apt_owner --source-only || return $?
+      check_chatgpt_apt_owner --source-only || return $?
       check_work_app_owners || return $?
       check_desktop_utility_owners || return $?
       check_personal_app_owners || return $?

@@ -39,7 +39,10 @@ work_app_package_version() {
 }
 
 work_app_apt_candidate() {
-  python3 "$DF_SCRIPT_DIR/work_app_metadata.py" apt-candidate "$1" "$2"
+  python3 "$DF_SCRIPT_DIR/work_app_metadata.py" apt-candidate "$1" "$2" || {
+    print_error_message "$1: cannot verify APT candidate/update owner" >&2
+    return 1
+  }
 }
 
 work_app_apt_key() {

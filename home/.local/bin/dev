@@ -156,6 +156,12 @@ for tool in nvim tree-sitter tmux; do
         echo "Error: $tool $minimum+ required; run dfa-update-system --force and resolve any source conflict"
         exit 1
     }
+    if [[ "$tool" == nvim ]]; then
+        export EDITOR_NVIM_VERSION="$version"
+    elif [[ "$tool" == tree-sitter && "$EDITOR_NVIM_VERSION" == 0.11.* && "$version" != 0.25.* ]]; then
+        echo "Error: Neovim 0.11 requires tree-sitter CLI 0.25.x"
+        exit 1
+    fi
 done
 
 # Tmux-safe session name derived from the directory basename; see
